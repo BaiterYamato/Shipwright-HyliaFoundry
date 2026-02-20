@@ -5,6 +5,11 @@
       "displayName": "Lanterna",
       "slot": "SLOT_STICK",
       "iconAsset": "assets/lanterna_placeholder.png",
+      "modelAsset": "assets/lanterna_square.obj",
+      "modelTextureAsset": "assets/lanterna_placeholder.png",
+      "modelUvOrigin": "auto",
+      "modelTextureFilter": "point",
+      "modelScale": 1.0,
       "agePolicy": "allowChild",
       "useMode": "vanilla",
       "grant": {
