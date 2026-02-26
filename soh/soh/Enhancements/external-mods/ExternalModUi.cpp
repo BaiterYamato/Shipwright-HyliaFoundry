@@ -13,20 +13,54 @@ namespace SOH {
 
 const char* GetExternalModItemSlotName(ExternalModItemSlot slot) {
     switch (slot) {
-        case ExternalModItemSlot::Hookshot:
-            return "SLOT_HOOKSHOT";
         case ExternalModItemSlot::Stick:
             return "SLOT_STICK";
+        case ExternalModItemSlot::Nut:
+            return "SLOT_NUT";
+        case ExternalModItemSlot::Bomb:
+            return "SLOT_BOMB";
         case ExternalModItemSlot::Bow:
             return "SLOT_BOW";
         case ExternalModItemSlot::FireArrow:
             return "SLOT_ARROW_FIRE";
+        case ExternalModItemSlot::DinsFire:
+            return "SLOT_DINS_FIRE";
+        case ExternalModItemSlot::Slingshot:
+            return "SLOT_SLINGSHOT";
+        case ExternalModItemSlot::Ocarina:
+            return "SLOT_OCARINA";
+        case ExternalModItemSlot::Bombchu:
+            return "SLOT_BOMBCHU";
+        case ExternalModItemSlot::Hookshot:
+            return "SLOT_HOOKSHOT";
         case ExternalModItemSlot::IceArrow:
             return "SLOT_ARROW_ICE";
+        case ExternalModItemSlot::FaroresWind:
+            return "SLOT_FARORES_WIND";
+        case ExternalModItemSlot::Boomerang:
+            return "SLOT_BOOMERANG";
+        case ExternalModItemSlot::Lens:
+            return "SLOT_LENS";
+        case ExternalModItemSlot::Bean:
+            return "SLOT_BEAN";
         case ExternalModItemSlot::LightArrow:
             return "SLOT_ARROW_LIGHT";
         case ExternalModItemSlot::Hammer:
             return "SLOT_HAMMER";
+        case ExternalModItemSlot::NayrusLove:
+            return "SLOT_NAYRUS_LOVE";
+        case ExternalModItemSlot::Bottle1:
+            return "SLOT_BOTTLE_1";
+        case ExternalModItemSlot::Bottle2:
+            return "SLOT_BOTTLE_2";
+        case ExternalModItemSlot::Bottle3:
+            return "SLOT_BOTTLE_3";
+        case ExternalModItemSlot::Bottle4:
+            return "SLOT_BOTTLE_4";
+        case ExternalModItemSlot::TradeAdult:
+            return "SLOT_TRADE_ADULT";
+        case ExternalModItemSlot::TradeChild:
+            return "SLOT_TRADE_CHILD";
         default:
             return "UNKNOWN";
     }
@@ -179,6 +213,7 @@ void DrawExternalModControlsSection() {
     }
 
     for (auto& package : packages) {
+        ImGui::PushID(package.manifest.id.c_str());
         ImGui::Separator();
 
         const bool runtimeEnabled = package.runtime.enabled;
@@ -247,6 +282,8 @@ void DrawExternalModControlsSection() {
             ImGui::Text("Hook subscriptions: %zu", package.runtime.hookSubscriptions.size());
             ImGui::TextDisabled("Hook budget/frame: %d used of %d", package.runtime.hookCallsThisFrame,
                                 package.runtime.maxHookCallsPerFrame);
+            ImGui::TextDisabled("WASM calls/frame: %d, budget drops/frame: %d", package.runtime.wasmCallsThisFrame,
+                                package.runtime.wasmBudgetDropsThisFrame);
             for (const auto& subscription : package.runtime.hookSubscriptions) {
                 ImGui::BulletText("%s hook=%s dispatch=%s cooldown=%d", subscription.id.c_str(),
                                   GetExternalModHookTypeName(subscription.hook),
@@ -321,17 +358,21 @@ void DrawExternalModControlsSection() {
             ImGui::Text("Bindings:");
             ImGui::TextDisabled("Tip: map to Mod Action buttons, then bind any keyboard/gamepad key in Settings > Controls > Modifier Buttons.");
             for (const auto& binding : package.runtime.inputBindings) {
+                ImGui::PushID(binding.id.c_str());
                 const auto cvarName = ExternalModManager::BuildBindingCVarName(package.manifest.id, binding.id);
-                const auto label = std::string("Binding: ") + binding.id;
+                const auto label = std::string("Binding: ") + binding.id + "##" + package.manifest.id + "." + binding.id;
                 UIWidgets::CVarBtnSelector(label.c_str(), cvarName.c_str(),
                                            UIWidgets::BtnSelectorOptions()
                                                .DefaultValue(binding.defaultMask)
                                                .Color(UIWidgets::Colors::LightBlue)
                                                .Tooltip("External mod action binding (supports combinations)"));
+                ImGui::PopID();
             }
         } else {
             ImGui::TextDisabled("No input bindings for this mod.");
         }
+
+        ImGui::PopID();
     }
 }
 
