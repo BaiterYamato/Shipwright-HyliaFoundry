@@ -1,5 +1,5 @@
-﻿![Hylian Foundry](docs/foundrytitle.darkmode.png#gh-dark-mode-only)
-![Hylian Foundry](docs/foundrytitle.lightmode.png#gh-light-mode-only)
+﻿![Hylian Foundry](docs/shiptitle.lightmode.png#gh-dark-mode-only)
+![Hylian Foundry](docs/shiptitle.lightmode.png#gh-light-mode-only)
 
 ## Website
 
