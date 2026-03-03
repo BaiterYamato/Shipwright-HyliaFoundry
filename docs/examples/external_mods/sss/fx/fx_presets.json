@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    {
+      "id": "com.sylian.sss:fire_tail_attach",
+      "maxInstances": 32,
+      "actions": [
+        {
+          "action": "fx.spawnEffectSs",
+          "name": "fire",
+          "scale": 0.9,
+          "lifeFrames": 24,
+          "attachFollow": true,
+          "storeKey": "sss_fire_tail"
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss:lightning_burst",
+      "maxInstances": 24,
+      "actions": [
+        {
+          "action": "fx.spawnActorFx",
+          "actorId": 10,
+          "scale": 1.1,
+          "lifeFrames": 12,
+          "storeKey": "sss_lightning_burst"
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss:poison_motes",
+      "maxInstances": 24,
+      "actions": [
+        {
+          "action": "fx.spawnEffectSs",
+          "name": "smoke",
+          "scale": 0.7,
+          "lifeFrames": 28,
+          "attachFollow": true,
+          "storeKey": "sss_poison_motes"
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss:levitation_aura",
+      "maxInstances": 24,
+      "actions": [
+        {
+          "action": "fx.spawnEffectSs",
+          "name": "smoke",
+          "scale": 0.95,
+          "lifeFrames": 22,
+          "attachFollow": true,
+          "storeKey": "sss_levitation_aura"
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss:magic_fire_purple",
+      "maxInstances": 24,
+      "actions": [
+        {
+          "action": "fx.spawnEffectSs",
+          "name": "fire",
+          "scale": 1.2,
+          "lifeFrames": 16,
+          "storeKey": "sss_magic_fire"
+        }
+      ]
+    }
+  ]
+}

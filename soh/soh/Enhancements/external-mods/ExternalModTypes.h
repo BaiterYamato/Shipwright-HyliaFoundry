@@ -195,6 +195,9 @@ struct ExternalModManifest {
     std::string questDefinitions;
     std::string dialogDefinitions;
     std::string sdkGeneratorDefinitions;
+    std::string fxPresetDefinitions;
+    std::string stateDefinitions;
+    std::string spellDefinitions;
     std::vector<std::string> capabilities;
 };
 
@@ -243,6 +246,21 @@ enum class ExternalModActionType {
     SetAimCameraMode,
     SetAimCameraProfile,
     InvokeWasm,
+    FxSpawnEffectSs,
+    FxSpawnActorFx,
+    FxSpawnPreset,
+    FxStopFx,
+    StatesApplyState,
+    StatesClearState,
+    StatesHasState,
+    PlayerGetStateFlags,
+    PlayerSetStateFlag,
+    PlayerClearStateFlag,
+    PlayerSetControlLock,
+    PlayerSetGravityScale,
+    PlayerSetBoostType,
+    PlayerSetDamageResponse,
+    SpellsCastSpell,
 };
 
 enum class ExternalModStatusType {
@@ -318,6 +336,9 @@ struct ExternalModAction {
     std::string projectileProfileId;
     std::string aoeProfileId;
     std::string movementProfileId;
+    std::string fxPresetId;
+    std::string stateId;
+    std::string spellId;
     std::string aimCameraProfileId;
     ExternalModAimCameraMode aimCameraMode = ExternalModAimCameraMode::FirstPerson;
     std::string patchOperation;
@@ -325,6 +346,23 @@ struct ExternalModAction {
     float angle = 0.0f;
     float radius = 0.0f;
     float impulseStrength = 0.0f;
+    std::string fxEffectName;
+    int32_t fxEffectId = -1;
+    int32_t fxActorId = -1;
+    std::string fxOverlayName;
+    float fxScale = 1.0f;
+    int32_t fxLifeFrames = 20;
+    bool fxAttachFollow = false;
+    int32_t fxSpawnEveryFrames = 0;
+    std::string fxStoreKey;
+    std::string fxHandleKey;
+    std::string stateDomain;
+    std::string stateFlag;
+    std::string stateControlMode;
+    bool boolValue = false;
+    bool hasBoolValue = false;
+    float floatValue = 0.0f;
+    bool hasFloatValue = false;
 };
 
 struct ExternalModSceneAction {
@@ -459,6 +497,19 @@ enum class ExternalModAoETargetScope {
     AllWithPlayer,
 };
 
+enum class ExternalModAoEShape {
+    Sphere,
+    Capsule,
+    Box,
+    Cylinder,
+};
+
+enum class ExternalModAoEOrientation {
+    World,
+    OwnerYaw,
+    TargetNormal,
+};
+
 enum class ExternalModFreezeMode {
     LegacyTimer,
     IceTrapNoDamage,
@@ -495,6 +546,9 @@ struct ExternalModStatusDefinition {
     int32_t shakeFrames = 0;
     bool hasFreezeProfile = false;
     ExternalModFreezeProfile freezeProfile;
+    std::vector<std::string> visualsStartFx;
+    std::vector<std::string> visualsLoopFx;
+    std::vector<std::string> visualsEndFx;
     std::vector<ExternalModAction> onApply;
     std::vector<ExternalModAction> onTick;
     std::vector<ExternalModAction> onExpire;
@@ -526,6 +580,9 @@ struct ExternalModUseProfileEffect {
     std::string projectileProfileId;
     std::string aoeProfileId;
     std::string movementProfileId;
+    std::string fxPresetId;
+    std::string stateId;
+    std::string spellId;
     std::string shockwaveOrigin = "player";
     std::array<uint8_t, 4> shockwavePrimColor = { { 255, 255, 255, 255 } };
     std::array<uint8_t, 4> shockwaveEnvColor = { { 200, 200, 200, 255 } };
@@ -560,14 +617,21 @@ struct ExternalModProjectileProfile {
 struct ExternalModAoEProfile {
     std::string id;
     std::string shape = "sphere";
+    ExternalModAoEShape shapeType = ExternalModAoEShape::Sphere;
+    ExternalModAoEOrientation orientationType = ExternalModAoEOrientation::World;
+    std::string orientation = "world";
     ExternalModAoETargetScope targetScope = ExternalModAoETargetScope::AllNonPlayer;
     float range = 0.0f;
     float radius = 0.0f;
     float angle = 0.0f;
+    std::array<float, 3> halfExtents = { { 0.0f, 0.0f, 0.0f } };
+    float height = 0.0f;
+    float capsuleHalfHeight = 0.0f;
     int32_t durationFrames = 1;
     int32_t tickFrames = 0;
     std::vector<ExternalModUseProfileEffect> onEnter;
     std::vector<ExternalModUseProfileEffect> onTick;
+    std::vector<ExternalModUseProfileEffect> onStayTick;
     std::vector<ExternalModUseProfileEffect> onExit;
 };
 
@@ -634,6 +698,28 @@ struct ExternalModAimCameraState {
     bool overShoulderEnabled = false;
     std::string activeProfileId;
     std::string activeProfileOwnerModId;
+};
+
+struct ExternalModFxPresetDefinition {
+    std::string id;
+    int32_t maxInstances = 32;
+    std::vector<ExternalModAction> actions;
+};
+
+struct ExternalModStateDefinition {
+    std::string id;
+    std::string domain = "player";
+    std::vector<std::string> aliases;
+    int32_t defaultDurationFrames = 0;
+    std::vector<ExternalModAction> onApply;
+    std::vector<ExternalModAction> onRemove;
+};
+
+struct ExternalModSpellDefinition {
+    std::string id;
+    std::string targetingProfileId;
+    int32_t cooldownFrames = 0;
+    std::vector<ExternalModUseProfileEffect> effects;
 };
 
 struct ExternalModBehaviorCondition {
@@ -751,6 +837,11 @@ enum class ExternalModHookType {
     OnActorDestroy,
     OnEnemyDefeat,
     OnBossDefeat,
+    OnStatusApplied,
+    OnStatusTick,
+    OnStatusExpired,
+    OnStateApplied,
+    OnStateRemoved,
     OnPlayDestroy,
     OnGameFrameUpdate,
 };
@@ -807,6 +898,9 @@ struct ExternalModRuntime {
     std::vector<ExternalModAoEProfile> aoeProfiles;
     std::vector<ExternalModMovementProfile> movementProfiles;
     std::vector<ExternalModAimCameraProfile> cameraProfiles;
+    std::vector<ExternalModFxPresetDefinition> fxPresets;
+    std::vector<ExternalModStateDefinition> stateDefinitions;
+    std::vector<ExternalModSpellDefinition> spellDefinitions;
     bool hasEffectImpactPosition = false;
     float effectImpactPosX = 0.0f;
     float effectImpactPosY = 0.0f;
@@ -845,6 +939,23 @@ struct ExternalModRuntime {
         int32_t maxStacks = 1;
         ExternalModFreezeProfile freezeProfile;
         uintptr_t freezeShellActorAddress = 0;
+        std::vector<std::string> loopFxHandleKeys;
+    };
+    struct ActiveFxHandleState {
+        int32_t handle = 0;
+        std::string key;
+        uintptr_t actorAddress = 0;
+        int32_t ttlFrames = 0;
+        std::string source;
+    };
+    struct ActiveStateState {
+        uintptr_t actorAddress = 0;
+        int16_t actorId = -1;
+        std::string stateId;
+        std::string domain;
+        std::string sourceModId;
+        int32_t framesRemaining = 0;
+        bool wasAppliedThisFrame = true;
     };
     struct ActiveAoEState {
         std::string profileId;
@@ -875,8 +986,13 @@ struct ExternalModRuntime {
         bool idle = false;
     };
     std::vector<StatusEffectState> statusEffects;
+    std::vector<ActiveFxHandleState> activeFxHandles;
+    std::vector<ActiveStateState> activeStates;
     std::vector<ActiveAoEState> activeAoEs;
     SurfState surfState;
+    int32_t nextFxHandle = 1;
+    std::unordered_map<std::string, int32_t> fxHandleByKey;
+    std::unordered_map<std::string, int32_t> spellCooldownsById;
     std::unordered_map<std::string, std::string> globalBlackboard;
     std::unordered_map<int16_t, std::unordered_map<std::string, std::string>> sceneBlackboard;
     std::vector<std::pair<uint32_t, std::string>> pendingSignals;
@@ -927,6 +1043,9 @@ struct ExternalModHookEventContext {
     int16_t flagType = -1;
     int16_t flagId = -1;
     int16_t healthDelta = 0;
+    std::string statusId;
+    std::string stateId;
+    int32_t stackCount = 0;
 };
 
 struct ExternalModInventoryCellView {

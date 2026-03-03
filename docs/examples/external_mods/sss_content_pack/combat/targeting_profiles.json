@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "com.sylian.sss_content_pack:self",
+      "mode": "self"
+    }
+  ]
+}

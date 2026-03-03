@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "states": [
+    {
+      "id": "com.sylian.sss:flattened",
+      "domain": "player",
+      "aliases": [
+        "flattened"
+      ],
+      "durationFrames": 45,
+      "apply": [
+        {
+          "action": "player.setControlLock",
+          "enabled": true
+        },
+        {
+          "action": "player.setGravityScale",
+          "scale": 1.4
+        }
+      ],
+      "remove": [
+        {
+          "action": "player.setControlLock",
+          "enabled": false
+        },
+        {
+          "action": "player.setGravityScale",
+          "scale": 1.0
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss:input_locked",
+      "domain": "player",
+      "aliases": [
+        "input_locked"
+      ],
+      "durationFrames": 60,
+      "apply": [
+        {
+          "action": "player.setControlLock",
+          "enabled": true
+        }
+      ],
+      "remove": [
+        {
+          "action": "player.setControlLock",
+          "enabled": false
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss:disable_draw",
+      "domain": "player",
+      "aliases": [
+        "disable_draw"
+      ],
+      "durationFrames": 30,
+      "apply": [
+        {
+          "action": "player.setStateFlag",
+          "flag": "frozen"
+        }
+      ],
+      "remove": [
+        {
+          "action": "player.clearStateFlag",
+          "flag": "frozen"
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss:frozen",
+      "domain": "player",
+      "aliases": [
+        "frozen"
+      ],
+      "durationFrames": 90,
+      "apply": [
+        {
+          "action": "player.setStateFlag",
+          "flag": "frozen"
+        },
+        {
+          "action": "player.setControlLock",
+          "enabled": true
+        }
+      ],
+      "remove": [
+        {
+          "action": "player.clearStateFlag",
+          "flag": "frozen"
+        },
+        {
+          "action": "player.setControlLock",
+          "enabled": false
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss:underwater",
+      "domain": "player",
+      "aliases": [
+        "underwater"
+      ],
+      "durationFrames": 120,
+      "apply": [
+        {
+          "action": "player.setGravityScale",
+          "scale": 0.5
+        }
+      ],
+      "remove": [
+        {
+          "action": "player.setGravityScale",
+          "scale": 1.0
+        }
+      ]
+    }
+  ]
+}

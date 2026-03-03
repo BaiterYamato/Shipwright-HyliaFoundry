@@ -22,6 +22,7 @@ The **Sylian Foundry Modloader** loads external mod packages (folder/zip), valid
 - Runtime type: `wasm3-v1`
 - Namespaced IDs required (`modId:*`, with `core:*` reserved for built-ins)
 - Capability-gated files: if capability is declared, required file/path must be valid
+- Dependency graph is enforced (`dependencies[]` with semver ranges)
 
 ## Capability and file map
 
@@ -51,6 +52,9 @@ Use `docs/catalogs.json` as machine-readable source of truth. Common capabilitie
 - `quests.graph.v1` -> `questDefinitions` (`quests/quests.json`)
 - `dialog.nodes.v1` -> `dialogDefinitions` (`dialog/dialogs.json`)
 - `sdk.generators.v1` -> `sdkGeneratorDefinitions` (`sdk/generators.json`)
+- `fx.presets.v1` -> `fxPresetDefinitions` (`fx/fx_presets.json`)
+- `states.catalog.v1` -> `stateDefinitions` (`states/states.json`)
+- `spells.catalog.v1` -> `spellDefinitions` (`spells/spells.json`)
 
 ## Runtime lifecycle
 
@@ -67,6 +71,13 @@ For Ice Trap-like freeze without periodic damage, use:
 - `core:freeze_ice_trap_no_damage`
 
 Or define a custom status with `baseStatus: core:freeze` + `freezeProfile.mode: ice_trap_no_damage`.
+
+### SSS framework examples
+
+- `docs/examples/external_mods/sss`
+- `docs/examples/external_mods/sss_content_pack`
+
+These demonstrate a library-style mod (`com.sylian.sss`) plus a dependent content pack (`dependencies[]` enforced by loader).
 
 ## Safety and failure model
 

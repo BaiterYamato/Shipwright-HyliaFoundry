@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    {
+      "id": "com.sylian.sss_content_pack:firewall_flash",
+      "maxInstances": 32,
+      "actions": [
+        {
+          "action": "fx.spawnEffectSs",
+          "name": "fire",
+          "scale": 1.15,
+          "lifeFrames": 18,
+          "storeKey": "firewall_flash"
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss_content_pack:burn_loop",
+      "maxInstances": 32,
+      "actions": [
+        {
+          "action": "fx.spawnEffectSs",
+          "name": "fire",
+          "scale": 0.9,
+          "lifeFrames": 22,
+          "attachFollow": true,
+          "storeKey": "burn_loop"
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss_content_pack:levitation_pulse",
+      "maxInstances": 24,
+      "actions": [
+        {
+          "action": "fx.spawnEffectSs",
+          "name": "smoke",
+          "scale": 1.0,
+          "lifeFrames": 18,
+          "storeKey": "levitation_pulse"
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss_content_pack:levitation_loop",
+      "maxInstances": 24,
+      "actions": [
+        {
+          "action": "fx.spawnEffectSs",
+          "name": "smoke",
+          "scale": 0.85,
+          "lifeFrames": 24,
+          "attachFollow": true,
+          "storeKey": "levitation_loop"
+        }
+      ]
+    }
+  ]
+}

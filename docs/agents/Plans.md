@@ -537,3 +537,45 @@ This file is the fixed, append-only plan ledger for this repository.
   - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1
   - libultraship
   - docs/agents/Plans.md
+
+## [PLN-20260303-0001] Implement SSS framework and SSS content pack for API v4
+- createdUtc: 2026-03-03T00:18:02Z
+- status: in_progress
+- scope: mixed
+- summary: Deliver SSS library capabilities (fx presets, states, spells), dependency enforcement, and dependent sss_content_pack demos with docs/tooling/runtime reference updates.
+- milestones:
+  1. Add manifest/parser/runtime contracts for fx.presets.v1, states.catalog.v1, spells.catalog.v1
+  2. Implement runtime actions/hooks for FX presets, states API, spells cast, status/state lifecycle events
+  3. Implement dependency resolver with semver range checks and deterministic load order
+  4. Create sss and sss_content_pack example mods and sync runtime mirrors
+  5. Update validator/exported references/docs and run build + smoke validations
+- tags: external-mods, api-v4, sss, content-pack, tooling, docs
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModTypes.h
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+  - docs/examples/external_mods
+  - tools/external_mods/validate_mod.ps1
+  - tools/external_mods/export_runtime_reference.ps1
+
+## [PLN-20260303-0001][UPDATE] 2026-03-03T02:20:25Z
+- status: done
+- note: Completed M1-M10 for SSS rollout: v4 parser/runtime features compiled, tooling/export updated for fx/states/spells, added sss + sss_content_pack examples, synced runtime mirrors, validated mods, and rebuilt Release.
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp,soh/soh/Enhancements/external-mods/ExternalModTypes.h,tools/external_mods/validate_mod.ps1,tools/external_mods/export_runtime_reference.ps1,tools/external_mods/sync_examples_to_runtime.ps1,docs/examples/external_mods/sss/mod.json,docs/examples/external_mods/sss_content_pack/mod.json,docs/catalogs.json,docs/actions.json,docs/events.json
+
+## [PLN-20260303-0001][UPDATE] 2026-03-03T02:24:44Z
+- status: done
+- note: Post-completion finalize-plan-merge attempted and blocked: working tree not clean due dirty libultraship submodule marker.
+- refs:
+  - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1,libultraship,docs/agents/Plans.md
+
+## [PLN-20260303-0002] Fix finalize-plan-merge Root parameter parsing
+- createdUtc: 2026-03-03T02:35:58Z
+- status: in_progress
+- scope: tooling
+- summary: Patch finalize-plan-merge.ps1 Resolve-TargetBranch boolean expression so finalize merge runs without duplicate Root parameter binding errors.
+- milestones:
+  1. Patch script boolean expression and verify finalize command,Run finalize-plan-merge for PLN-20260303-0001 after clean tree,Record updates in ledger and memory
+- tags: agents,git,tooling
+- refs:
+  - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1,docs/agents/Plans.md

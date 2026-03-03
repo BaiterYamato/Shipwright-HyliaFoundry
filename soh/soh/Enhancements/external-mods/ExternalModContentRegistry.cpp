@@ -63,6 +63,21 @@ const ExternalModAimCameraProfile* ExternalModContentRegistry::FindAimCameraProf
     return FindById(runtime.cameraProfiles, profileId);
 }
 
+const ExternalModFxPresetDefinition* ExternalModContentRegistry::FindFxPresetById(const ExternalModRuntime& runtime,
+                                                                                   const std::string& presetId) {
+    return FindById(runtime.fxPresets, presetId);
+}
+
+const ExternalModStateDefinition* ExternalModContentRegistry::FindStateDefinitionById(const ExternalModRuntime& runtime,
+                                                                                       const std::string& stateId) {
+    return FindById(runtime.stateDefinitions, stateId);
+}
+
+const ExternalModSpellDefinition* ExternalModContentRegistry::FindSpellDefinitionById(const ExternalModRuntime& runtime,
+                                                                                       const std::string& spellId) {
+    return FindById(runtime.spellDefinitions, spellId);
+}
+
 void ExternalModContentRegistry::SortPackagesByPriority(std::vector<ExternalModPackage*>& packages) {
     std::sort(packages.begin(), packages.end(),
               [](const ExternalModPackage* lhs, const ExternalModPackage* rhs) {

@@ -43,7 +43,30 @@ function Resolve-CapabilityPathMap {
         "quests.graph.v1" = "questDefinitions"
         "dialog.nodes.v1" = "dialogDefinitions"
         "sdk.generators.v1" = "sdkGeneratorDefinitions"
+        "fx.presets.v1" = "fxPresetDefinitions"
+        "states.catalog.v1" = "stateDefinitions"
+        "spells.catalog.v1" = "spellDefinitions"
     }
+}
+
+function Test-VersionRangeSyntax {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Range
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Range)) {
+        return $true
+    }
+
+    $tokens = $Range.Split(" ", [System.StringSplitOptions]::RemoveEmptyEntries)
+    foreach ($token in $tokens) {
+        if ($token -notmatch '^(>=|>|<=|<)?\d+\.\d+\.\d+$') {
+            return $false
+        }
+    }
+
+    return $true
 }
 
 $resolvedRoot = (Resolve-Path -Path $RepoRoot).Path
@@ -138,6 +161,55 @@ foreach ($modDir in $mods) {
         Write-Error "[validate_mod] $modId entryScript apiVersion mismatch (manifest=$($manifest.apiVersion), script=$($entryJson.apiVersion))"
         $failed++
         continue
+    }
+
+    if ($manifest.PSObject.Properties.Name -contains "dependencies") {
+        if ($null -eq $manifest.dependencies) {
+            # accept null/empty
+        } elseif ($manifest.dependencies -isnot [System.Collections.IEnumerable]) {
+            Write-Error "[validate_mod] $modId dependencies must be array"
+            $failed++
+            continue
+        } else {
+            $depIndex = 0
+            foreach ($dep in $manifest.dependencies) {
+                $depId = ""
+                $depRange = ""
+
+                if ($dep -is [string]) {
+                    $depId = $dep.Trim()
+                } elseif ($dep -ne $null -and $dep.PSObject -ne $null) {
+                    if ($dep.PSObject.Properties.Name -contains "id") { $depId = "$($dep.id)".Trim() }
+                    if ([string]::IsNullOrWhiteSpace($depId) -and ($dep.PSObject.Properties.Name -contains "modId")) {
+                        $depId = "$($dep.modId)".Trim()
+                    }
+
+                    if ($dep.PSObject.Properties.Name -contains "versionRange") {
+                        $depRange = "$($dep.versionRange)"
+                    } elseif ($dep.PSObject.Properties.Name -contains "version") {
+                        $depRange = "$($dep.version)"
+                    }
+                } else {
+                    Write-Error "[validate_mod] $modId dependencies[$depIndex] must be string or object"
+                    $failed++
+                    continue
+                }
+
+                if ([string]::IsNullOrWhiteSpace($depId)) {
+                    Write-Error "[validate_mod] $modId dependencies[$depIndex] missing id/modId"
+                    $failed++
+                    continue
+                }
+
+                if (-not (Test-VersionRangeSyntax -Range $depRange)) {
+                    Write-Error "[validate_mod] $modId dependencies[$depIndex] invalid versionRange syntax: '$depRange'"
+                    $failed++
+                    continue
+                }
+
+                $depIndex++
+            }
+        }
     }
 
     $caps = @()

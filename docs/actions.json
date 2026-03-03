@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-02-25T20:21:27Z",
+    "generatedUtc":  "2026-03-03T02:15:20Z",
     "apiVersion":  4,
     "actions":  [
                     {
@@ -173,6 +173,66 @@
                     {
                         "category":  "camera",
                         "name":  "setAimCameraProfile"
+                    },
+                    {
+                        "category":  "fx",
+                        "name":  "fx.spawnEffectSs"
+                    },
+                    {
+                        "category":  "fx",
+                        "name":  "fx.spawnActorFx"
+                    },
+                    {
+                        "category":  "fx",
+                        "name":  "fx.spawnPreset"
+                    },
+                    {
+                        "category":  "fx",
+                        "name":  "fx.stopFx"
+                    },
+                    {
+                        "category":  "state",
+                        "name":  "states.applyState"
+                    },
+                    {
+                        "category":  "state",
+                        "name":  "states.clearState"
+                    },
+                    {
+                        "category":  "state",
+                        "name":  "states.hasState"
+                    },
+                    {
+                        "category":  "player",
+                        "name":  "player.getStateFlags"
+                    },
+                    {
+                        "category":  "player",
+                        "name":  "player.setStateFlag"
+                    },
+                    {
+                        "category":  "player",
+                        "name":  "player.clearStateFlag"
+                    },
+                    {
+                        "category":  "player",
+                        "name":  "player.setControlLock"
+                    },
+                    {
+                        "category":  "player",
+                        "name":  "player.setGravityScale"
+                    },
+                    {
+                        "category":  "player",
+                        "name":  "player.setBoostType"
+                    },
+                    {
+                        "category":  "player",
+                        "name":  "player.setDamageResponse"
+                    },
+                    {
+                        "category":  "spells",
+                        "name":  "spells.castSpell"
                     },
                     {
                         "category":  "wasm",

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "statuses": [
+    {
+      "id": "com.sylian.sss:burn",
+      "displayName": "SSS Burn",
+      "baseStatus": "core:fire",
+      "durationFrames": 120,
+      "tickFrames": 15,
+      "damagePerTick": 1,
+      "intensity": 220,
+      "stacking": {
+        "mode": "stack",
+        "maxStacks": 3
+      },
+      "visuals": {
+        "startFx": [
+          "com.sylian.sss:lightning_burst"
+        ],
+        "loopFx": [
+          "com.sylian.sss:fire_tail_attach"
+        ]
+      }
+    },
+    {
+      "id": "com.sylian.sss:poison",
+      "displayName": "SSS Poison",
+      "baseStatus": "core:poison",
+      "durationFrames": 150,
+      "tickFrames": 20,
+      "damagePerTick": 1,
+      "intensity": 180,
+      "visuals": {
+        "loopFx": [
+          "com.sylian.sss:poison_motes"
+        ]
+      }
+    },
+    {
+      "id": "com.sylian.sss:levitation",
+      "displayName": "SSS Levitation",
+      "baseStatus": "core:high_jump",
+      "durationFrames": 90,
+      "tickFrames": 15,
+      "damagePerTick": 0,
+      "intensity": 160,
+      "visuals": {
+        "loopFx": [
+          "com.sylian.sss:levitation_aura"
+        ]
+      }
+    },
+    {
+      "id": "com.sylian.sss:slowness",
+      "displayName": "SSS Slowness",
+      "baseStatus": "core:slow",
+      "durationFrames": 120,
+      "tickFrames": 20,
+      "damagePerTick": 0,
+      "intensity": 140
+    },
+    {
+      "id": "com.sylian.sss:shock",
+      "displayName": "SSS Shock",
+      "baseStatus": "core:stun",
+      "durationFrames": 45,
+      "tickFrames": 15,
+      "damagePerTick": 0,
+      "intensity": 255,
+      "callbacks": {
+        "onApply": [
+          {
+            "action": "fx.spawnPreset",
+            "presetId": "com.sylian.sss:lightning_burst"
+          }
+        ]
+      }
+    }
+  ]
+}

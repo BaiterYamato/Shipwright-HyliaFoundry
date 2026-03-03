@@ -116,7 +116,7 @@ function Resolve-TargetBranch {
         return $RequestedTarget
     }
 
-    if (Test-GitRef -Root $Root -Ref "refs/heads/develop" -or Test-GitRef -Root $Root -Ref "refs/remotes/origin/develop") {
+    if ((Test-GitRef -Root $Root -Ref "refs/heads/develop") -or (Test-GitRef -Root $Root -Ref "refs/remotes/origin/develop")) {
         return "develop"
     }
 
@@ -251,7 +251,6 @@ if (Test-Path $appendMemoryScript) {
 Write-Host "merge complete: $mergeHash"
 $mergedCommits | ForEach-Object { Write-Host $_ }
 exit 0
-
 
 
 
