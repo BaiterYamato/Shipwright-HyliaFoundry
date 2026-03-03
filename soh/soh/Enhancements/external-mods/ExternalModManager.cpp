@@ -10657,6 +10657,30 @@ void ExternalModManager::ApplyDefaultKeyboardMappingsForPackage(const ExternalMo
                 continue;
             }
 
+            const auto clearLegacyKeyboardMapping = [&](CONTROLLERBUTTONS_T legacyBitmask) {
+                auto legacyButton = controller->GetButtonByBitmask(legacyBitmask);
+                if (legacyButton == nullptr) {
+                    return;
+                }
+                const std::string legacyMappingId = "P" + std::to_string(controller->GetPortIndex()) + "-B" +
+                                                    std::to_string(static_cast<int32_t>(legacyBitmask)) + "-KB" +
+                                                    std::to_string(scancodeValue);
+                if (legacyButton->GetButtonMappingById(legacyMappingId) == nullptr) {
+                    return;
+                }
+                legacyButton->ClearButtonMappingId(legacyMappingId);
+                legacyButton->SaveButtonMappingIdsToConfig();
+                changedAnyMapping = true;
+                SPDLOG_INFO("[ExternalMods] Removed legacy keyboard mapping for {}.{}: key={} from mask={}",
+                            package.manifest.id, binding.id, scancodeValue, static_cast<int32_t>(legacyBitmask));
+            };
+
+            if (buttonBitmask == BTN_CUSTOM_MOD_ACTION8) {
+                clearLegacyKeyboardMapping(BTN_CUSTOM_MODIFIER1);
+            } else if (buttonBitmask == BTN_CUSTOM_MOD_ACTION9) {
+                clearLegacyKeyboardMapping(BTN_CUSTOM_MODIFIER2);
+            }
+
             const std::string mappingId = "P" + std::to_string(controller->GetPortIndex()) + "-B" +
                                           std::to_string(static_cast<int32_t>(buttonBitmask)) + "-KB" +
                                           std::to_string(scancodeValue);

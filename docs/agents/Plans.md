@@ -896,3 +896,12 @@ This file is the fixed, append-only plan ledger for this repository.
   - docs/examples/external_mods/demo_furnace_system/scripts/init.json
   - docs/examples/external_mods/sss_content_pack/items/use_profiles.json
   - docs/examples/external_mods/sss_content_pack/spells/spells.json
+
+## [PLN-20260303-0012][UPDATE] 2026-03-03T21:21:07Z
+- status: done
+- note: Follow-up hotfix for field behavior: MOD_ACTION8/9 remapped away from modifier bits to dedicated custom action bits (BTN_CUSTOM_OCARINA_PITCH_UP/DOWN), default keyboard mapping now removes legacy key->modifier mappings for action8/action9 keys, and demo furnace bindings were versioned to *_v2 ids to bypass stale per-binding CVar remaps. Build+validate passed.
+- refs:
+  - soh/soh/OTRGlobals.h
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+  - docs/examples/external_mods/demo_furnace_system/config/input.json
+  - docs/examples/external_mods/demo_furnace_system/scripts/init.json
