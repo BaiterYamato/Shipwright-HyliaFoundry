@@ -19,6 +19,9 @@
                          }
                      ],
     "capabilities":  [
+                         "input.bindings.v2",
+                         "behaviors.graph.v1",
+                         "ui.runtime.v1",
                          "actors.generic.v1",
                          "actors.archetypes.v1",
                          "containers.v1",
@@ -56,6 +59,8 @@
     "interactionDefinitions":  "interactions/interactions.json",
     "actorDefinitions":  "actors/actors.json",
     "actorArchetypeDefinitions":  "actors/archetypes.json",
+    "behaviorDefinitions":  "behaviors/behaviors.json",
+    "uiScreenDefinitions":  "ui/screens.json",
     "uiCategory":  "mod"
 }
 

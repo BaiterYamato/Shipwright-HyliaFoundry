@@ -66,6 +66,8 @@ void SohInputEditorWindow::InitElement() {
     addButtonName(BTN_CUSTOM_MOD_ACTION5, "Mod Action 5");
     addButtonName(BTN_CUSTOM_MOD_ACTION6, "Mod Action 6");
     addButtonName(BTN_CUSTOM_MOD_ACTION7, "Mod Action 7");
+    addButtonName(BTN_CUSTOM_MOD_ACTION8, "Mod Action 8");
+    addButtonName(BTN_CUSTOM_MOD_ACTION9, "Mod Action 9");
     addButtonName(0, "None");
 }
 
@@ -1608,8 +1610,8 @@ void SohInputEditorWindow::DrawLinkTab() {
         }
 
         if (ImGui::CollapsingHeader("Modifier Buttons")) {
-            DrawButtonLine("M1", portIndex, BTN_CUSTOM_MODIFIER1);
-            DrawButtonLine("M2", portIndex, BTN_CUSTOM_MODIFIER2);
+            DrawButtonLine("Mod Action 8 (M1)", portIndex, BTN_CUSTOM_MODIFIER1);
+            DrawButtonLine("Mod Action 9 (M2)", portIndex, BTN_CUSTOM_MODIFIER2);
             DrawButtonLine("Mod Action 1", portIndex, BTN_CUSTOM_MOD_ACTION1);
             DrawButtonLine("Mod Action 2", portIndex, BTN_CUSTOM_MOD_ACTION2);
             DrawButtonLine("Mod Action 3", portIndex, BTN_CUSTOM_MOD_ACTION3);

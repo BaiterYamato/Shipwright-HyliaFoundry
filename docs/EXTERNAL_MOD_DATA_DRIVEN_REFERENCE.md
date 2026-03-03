@@ -217,6 +217,33 @@ v7 action family additions:
 - `render.setSkylight`
 - `render.overrideMaterial`
 
+`render/pbr_profiles.json` supports optional SSAO controls:
+
+```json
+"ambientOcclusion": {
+  "enabled": true,
+  "quality": "low|medium|high",
+  "radius": 0.55,
+  "intensity": 0.9,
+  "bias": 0.02,
+  "power": 1.2,
+  "maxDistance": 1200.0,
+  "blurPasses": 2
+}
+```
+
+Runtime precedence:
+
+1. `gEnhancements.Graphics.AO.Enabled=0` disables AO globally.
+2. If enabled globally, profile values are used (plus `AO.IntensityScale` multiplier).
+3. If no profile is active, quality/CVar fallback is applied.
+
+Backend support:
+
+- OpenGL: SSAO pass supported.
+- DirectX11: SSAO pass supported.
+- Metal: fallback to non-AO rendering with `onRenderFallbackApplied`.
+
 v7 extended hooks:
 
 - `onWorldSceneLoaded`

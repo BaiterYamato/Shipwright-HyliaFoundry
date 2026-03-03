@@ -1,6 +1,39 @@
-﻿{
-    "apiVersion":  4,
-    "hooks":  {
-
-              }
+{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "showNotification",
+      "text": "Furnace Debug: MOD_ACTION8 (key 8) toggle spawn. MOD_ACTION9 (key 9) toggles furnace inventory screen."
+    }
+  ],
+  "onInput": [
+    {
+      "id": "toggle_furnace_debug",
+      "binding": "furnace_toggle_action8",
+      "trigger": "pressed",
+      "cooldownFrames": 6,
+      "actions": [
+        {
+          "action": "actors.toggleArchetype",
+          "archetypeId": "com.sylian.demo_furnace_system:furnace_debug",
+          "spawnOrigin": "player_forward",
+          "forwardDistance": 120.0,
+          "upOffset": 0.0,
+          "storeKey": "com.sylian.demo_furnace_system:furnace_handle"
+        }
+      ]
+    },
+    {
+      "id": "toggle_furnace_inventory",
+      "binding": "inventory_toggle_action9",
+      "trigger": "pressed",
+      "cooldownFrames": 6,
+      "actions": [
+        {
+          "action": "ui.toggleScreen",
+          "screenId": "com.sylian.demo_furnace_system:furnace_inventory"
+        }
+      ]
+    }
+  ]
 }

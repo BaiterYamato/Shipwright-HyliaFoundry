@@ -11,6 +11,12 @@
           "presetId": "com.sylian.sss_content_pack:firewall_flash"
         },
         {
+          "action": "fx.spawnActorFx",
+          "overlay": "cube",
+          "lifeFrames": 150,
+          "storeKey": "com.sylian.sss_content_pack:firewall_cube_placeholder"
+        },
+        {
           "action": "spawnAoE",
           "aoe": "com.sylian.sss_content_pack:firewall_volume"
         }

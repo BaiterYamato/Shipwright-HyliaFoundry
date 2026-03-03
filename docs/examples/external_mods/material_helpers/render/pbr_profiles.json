@@ -6,7 +6,17 @@
       "enabled": true,
       "enablePom": true,
       "pomSteps": 12,
-      "pomMaxDistance": 1400.0
+      "pomMaxDistance": 1400.0,
+      "ambientOcclusion": {
+        "enabled": true,
+        "quality": "medium",
+        "radius": 0.55,
+        "intensity": 0.9,
+        "bias": 0.02,
+        "power": 1.2,
+        "maxDistance": 1200.0,
+        "blurPasses": 2
+      }
     }
   ]
 }

@@ -980,6 +980,17 @@ struct ExternalModMaterialDefinition {
 };
 
 struct ExternalModPbrDefinition {
+    struct AmbientOcclusionSettings {
+        bool enabled = false;
+        std::string quality = "medium";
+        float radius = 0.55f;
+        float intensity = 0.9f;
+        float bias = 0.02f;
+        float power = 1.2f;
+        float maxDistance = 1200.0f;
+        int32_t blurPasses = 2;
+    };
+
     std::string id;
     bool enabled = true;
     bool enablePom = false;
@@ -988,6 +999,7 @@ struct ExternalModPbrDefinition {
     int32_t maxDynamicLightsNear = 32;
     int32_t maxDynamicLightsTotal = 128;
     std::string backendPolicy = "auto";
+    AmbientOcclusionSettings ambientOcclusion;
 };
 
 struct ExternalModLightProfileDefinition {
@@ -1021,6 +1033,9 @@ struct ExternalModPostFxPresetDefinition {
     bool hasFogFar = false;
     float vignette = 0.0f;
     float saturation = 1.0f;
+    bool forceFogOverlay = false;
+    float fogOverlayStrength = 0.0f;
+    bool forceDepthAwareFog = false;
 };
 
 struct ExternalModSceneProfileDefinition {

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -14,12 +15,21 @@
 #include <spdlog/spdlog.h>
 
 #include "ExternalModManager.h"
+#include "libultraship/bridge/consolevariablebridge.h"
+#include "ship/Context.h"
 
 extern "C" {
 #include <z64.h>
 #include "macros.h"
 #include "functions.h"
 extern PlayState* gPlayState;
+void gfx_set_force_depth_aware_fog(uint8_t enabled);
+void gfx_set_ambient_occlusion_enabled(uint8_t enabled);
+void gfx_set_ambient_occlusion_debug_view(uint8_t enabled);
+void gfx_set_ambient_occlusion_config(float radius, float intensity, float bias, float power, float maxDistance, int32_t blurPasses,
+                                      uint8_t quality);
+int32_t gfx_get_ambient_occlusion_fallback_reason();
+void gfx_clear_ambient_occlusion_fallback_reason();
 }
 
 namespace SOH {
@@ -341,6 +351,35 @@ ResolvedGraphicsState ResolveGraphicsState(const std::vector<ExternalModPackage>
     return state;
 }
 
+uint8_t ParseAmbientOcclusionQuality(const std::string& quality) {
+    std::string normalized = quality;
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    if (normalized == "low") {
+        return 1;
+    }
+    if (normalized == "medium") {
+        return 2;
+    }
+    if (normalized == "high") {
+        return 3;
+    }
+    return 2;
+}
+
+std::string GetAmbientOcclusionFallbackReasonName(int32_t code) {
+    switch (code) {
+        case 1:
+            return "AO_BACKEND_UNSUPPORTED_METAL";
+        case 2:
+            return "AO_SHADER_COMPILE_FAILED";
+        case 3:
+            return "AO_RUNTIME_UNSUPPORTED";
+        default:
+            return "";
+    }
+}
+
 } // namespace
 
 struct ExternalModWorldGraphicsRuntime::Impl {
@@ -364,6 +403,16 @@ struct ExternalModWorldGraphicsRuntime::Impl {
     std::array<uint8_t, 3> envLight2Color{};
     int16_t envFogNear = 0;
     int16_t envFogFar = 0;
+    bool envFillScreen = false;
+    std::array<uint8_t, 4> envScreenFillColor{};
+    bool forcedFogOverlayActive = false;
+    std::array<uint8_t, 4> appliedFogOverlayColor{};
+    bool depthAwareFogForced = false;
+    bool aoEnabled = false;
+    uint8_t aoQuality = 0;
+    int32_t aoFallbackReason = 0;
+    std::string aoSourceProfileId;
+    std::string aoSourceModId;
     std::vector<FrameLightRecord> frameLights;
     std::string lastResolvedSignature;
     std::string inspectorSummary;
@@ -398,6 +447,18 @@ void ExternalModWorldGraphicsRuntime::OnPlayDrawBegin(ExternalModManager& manage
     mImpl->lightFogFar = play->lightCtx.fogFar;
     mImpl->envFogNear = play->envCtx.lightSettings.fogNear;
     mImpl->envFogFar = play->envCtx.lightSettings.fogFar;
+    mImpl->envFillScreen = play->envCtx.fillScreen;
+    for (size_t i = 0; i < 4; ++i) {
+        mImpl->envScreenFillColor[i] = play->envCtx.screenFillColor[i];
+    }
+    mImpl->forcedFogOverlayActive = false;
+    mImpl->appliedFogOverlayColor.fill(0);
+    mImpl->depthAwareFogForced = false;
+    mImpl->aoEnabled = false;
+    mImpl->aoQuality = 0;
+    mImpl->aoFallbackReason = 0;
+    mImpl->aoSourceProfileId.clear();
+    mImpl->aoSourceModId.clear();
 
     const int16_t sceneId = play->sceneNum;
     const int16_t roomId = play->roomCtx.curRoom.num;
@@ -419,6 +480,11 @@ void ExternalModWorldGraphicsRuntime::OnPlayDrawBegin(ExternalModManager& manage
     }
 
     if (resolvedState.postFx != nullptr) {
+        if (resolvedState.postFx->forceDepthAwareFog) {
+            gfx_set_force_depth_aware_fog(1);
+            mImpl->depthAwareFogForced = true;
+        }
+
         std::array<uint8_t, 3> targetFogColor = {
             ToByteColor(resolvedState.postFx->fogColor[0]), ToByteColor(resolvedState.postFx->fogColor[1]),
             ToByteColor(resolvedState.postFx->fogColor[2]),
@@ -445,6 +511,18 @@ void ExternalModWorldGraphicsRuntime::OnPlayDrawBegin(ExternalModManager& manage
         play->lightCtx.fogFar = static_cast<int16_t>(ClampValue(blendedFar, 0.0f, 1000.0f));
         play->envCtx.lightSettings.fogNear = play->lightCtx.fogNear;
         play->envCtx.lightSettings.fogFar = play->lightCtx.fogFar;
+
+        const float overlayStrength = ClampValue(resolvedState.postFx->fogOverlayStrength * blend, 0.0f, 1.0f);
+        if (resolvedState.postFx->forceFogOverlay && overlayStrength > 0.0f && !play->envCtx.fillScreen) {
+            play->envCtx.fillScreen = true;
+            play->envCtx.screenFillColor[0] = targetFogColor[0];
+            play->envCtx.screenFillColor[1] = targetFogColor[1];
+            play->envCtx.screenFillColor[2] = targetFogColor[2];
+            play->envCtx.screenFillColor[3] = static_cast<uint8_t>(ClampValue(overlayStrength * 255.0f, 0.0f, 255.0f));
+            mImpl->forcedFogOverlayActive = true;
+            mImpl->appliedFogOverlayColor = { play->envCtx.screenFillColor[0], play->envCtx.screenFillColor[1],
+                                              play->envCtx.screenFillColor[2], play->envCtx.screenFillColor[3] };
+        }
     }
 
     if (resolvedState.sceneProfile != nullptr) {
@@ -480,6 +558,8 @@ void ExternalModWorldGraphicsRuntime::OnPlayDrawBegin(ExternalModManager& manage
 
     int32_t maxDynamicLightsTotal = 128;
     int32_t maxDynamicLightsNear = 32;
+    const ExternalModPbrDefinition* selectedAoProfile = nullptr;
+    const ExternalModPackage* selectedAoPackage = nullptr;
     for (const auto& package : packages) {
         if (!package.valid || !package.runtime.enabled) {
             continue;
@@ -487,9 +567,71 @@ void ExternalModWorldGraphicsRuntime::OnPlayDrawBegin(ExternalModManager& manage
         for (const auto& pbrProfile : package.runtime.pbrDefinitions) {
             maxDynamicLightsTotal = std::max(1, pbrProfile.maxDynamicLightsTotal);
             maxDynamicLightsNear = std::max(1, pbrProfile.maxDynamicLightsNear);
+            if (pbrProfile.enabled && pbrProfile.ambientOcclusion.enabled) {
+                if (selectedAoPackage == nullptr || IsHigherPriorityPackage(&package, selectedAoPackage)) {
+                    selectedAoPackage = &package;
+                    selectedAoProfile = &pbrProfile;
+                }
+            }
         }
     }
     maxDynamicLightsNear = std::min(maxDynamicLightsNear, maxDynamicLightsTotal);
+
+    const int32_t aoEnabledCvar = CVarGetInteger("gEnhancements.Graphics.AO.Enabled", 0);
+    const int32_t aoQualityCvar =
+        std::clamp(static_cast<int32_t>(CVarGetInteger("gEnhancements.Graphics.AO.Quality", 0)), static_cast<int32_t>(0),
+                   static_cast<int32_t>(3));
+    const float aoIntensityScale =
+        std::clamp(static_cast<float>(CVarGetFloat("gEnhancements.Graphics.AO.IntensityScale", 1.0f)), 0.0f, 8.0f);
+    const bool aoDebugView = CVarGetInteger("gEnhancements.Graphics.AO.DebugView", 0) != 0;
+
+    uint8_t resolvedAoQuality = static_cast<uint8_t>(aoQualityCvar);
+    float resolvedAoRadius = 0.55f;
+    float resolvedAoIntensity = 0.9f;
+    float resolvedAoBias = 0.02f;
+    float resolvedAoPower = 1.2f;
+    float resolvedAoMaxDistance = 1200.0f;
+    int32_t resolvedAoBlurPasses = 2;
+
+    if (selectedAoProfile != nullptr) {
+        if (resolvedAoQuality == 0) {
+            resolvedAoQuality = ParseAmbientOcclusionQuality(selectedAoProfile->ambientOcclusion.quality);
+        }
+        resolvedAoRadius = selectedAoProfile->ambientOcclusion.radius;
+        resolvedAoIntensity = selectedAoProfile->ambientOcclusion.intensity;
+        resolvedAoBias = selectedAoProfile->ambientOcclusion.bias;
+        resolvedAoPower = selectedAoProfile->ambientOcclusion.power;
+        resolvedAoMaxDistance = selectedAoProfile->ambientOcclusion.maxDistance;
+        resolvedAoBlurPasses = selectedAoProfile->ambientOcclusion.blurPasses;
+    }
+
+    resolvedAoIntensity = std::clamp(resolvedAoIntensity * aoIntensityScale, 0.0f, 3.0f);
+    const bool resolvedAoEnabled = aoEnabledCvar != 0 && resolvedAoQuality > 0;
+    gfx_set_ambient_occlusion_debug_view(aoDebugView ? 1 : 0);
+    gfx_set_ambient_occlusion_config(resolvedAoRadius, resolvedAoIntensity, resolvedAoBias, resolvedAoPower,
+                                     resolvedAoMaxDistance, resolvedAoBlurPasses, resolvedAoQuality);
+    gfx_set_ambient_occlusion_enabled(resolvedAoEnabled ? 1 : 0);
+
+    mImpl->aoEnabled = resolvedAoEnabled;
+    mImpl->aoQuality = resolvedAoQuality;
+    if (selectedAoProfile != nullptr) {
+        mImpl->aoSourceProfileId = selectedAoProfile->id;
+    }
+    if (selectedAoPackage != nullptr) {
+        mImpl->aoSourceModId = selectedAoPackage->manifest.id;
+    }
+
+    const int32_t aoFallbackReason = gfx_get_ambient_occlusion_fallback_reason();
+    if (resolvedAoEnabled && aoFallbackReason != 0 && aoFallbackReason != mImpl->aoFallbackReason) {
+        ExternalModHookEventContext fallbackContext;
+        fallbackContext.scene = sceneId;
+        fallbackContext.value = GetAmbientOcclusionFallbackReasonName(aoFallbackReason);
+        manager.EmitExtendedHook(ExternalModHookType::OnRenderFallbackApplied, fallbackContext, "OnRenderFallbackApplied");
+        mImpl->aoFallbackReason = aoFallbackReason;
+    } else if (aoFallbackReason == 0) {
+        mImpl->aoFallbackReason = 0;
+    }
+    gfx_clear_ambient_occlusion_fallback_reason();
 
     struct CandidateLight {
         const ExternalModPackage* package = nullptr;
@@ -674,11 +816,18 @@ void ExternalModWorldGraphicsRuntime::OnPlayDrawBegin(ExternalModManager& manage
               << (resolvedState.roomProfile != nullptr ? resolvedState.roomProfile->id : "none") << " postFx="
               << (resolvedState.postFx != nullptr ? resolvedState.postFx->id : "none") << " skylight="
               << (resolvedState.skylight != nullptr ? resolvedState.skylight->id : "none") << " lights="
-              << mImpl->frameLights.size() << "/" << maxDynamicLightsTotal << " nearBudget=" << maxDynamicLightsNear;
+              << mImpl->frameLights.size() << "/" << maxDynamicLightsTotal << " nearBudget=" << maxDynamicLightsNear
+              << " fogOverlay=" << (mImpl->forcedFogOverlayActive ? "on" : "off")
+              << " depthFog=" << (mImpl->depthAwareFogForced ? "on" : "off")
+              << " ao=" << (mImpl->aoEnabled ? "on" : "off") << "(q=" << static_cast<int32_t>(mImpl->aoQuality)
+              << ",profile=" << (!mImpl->aoSourceProfileId.empty() ? mImpl->aoSourceProfileId : "none")
+              << ",mod=" << (!mImpl->aoSourceModId.empty() ? mImpl->aoSourceModId : "none") << ")";
     mImpl->inspectorSummary = inspector.str();
 }
 
 void ExternalModWorldGraphicsRuntime::OnPlayDrawEnd(PlayState* play) {
+    gfx_set_force_depth_aware_fog(0);
+
     if (play != nullptr) {
         for (auto& frameLight : mImpl->frameLights) {
             if (frameLight.node != nullptr) {
@@ -707,6 +856,24 @@ void ExternalModWorldGraphicsRuntime::OnPlayDrawEnd(PlayState* play) {
     play->lightCtx.fogFar = mImpl->lightFogFar;
     play->envCtx.lightSettings.fogNear = mImpl->envFogNear;
     play->envCtx.lightSettings.fogFar = mImpl->envFogFar;
+    if (mImpl->forcedFogOverlayActive) {
+        const bool overlayStillActive = play->envCtx.fillScreen &&
+                                        std::equal(play->envCtx.screenFillColor, play->envCtx.screenFillColor + 4,
+                                                   mImpl->appliedFogOverlayColor.begin());
+        if (overlayStillActive) {
+            play->envCtx.fillScreen = mImpl->envFillScreen;
+            for (size_t i = 0; i < 4; ++i) {
+                play->envCtx.screenFillColor[i] = mImpl->envScreenFillColor[i];
+            }
+        }
+    }
+    mImpl->forcedFogOverlayActive = false;
+    mImpl->depthAwareFogForced = false;
+    mImpl->aoEnabled = false;
+    mImpl->aoQuality = 0;
+    mImpl->aoFallbackReason = 0;
+    mImpl->aoSourceProfileId.clear();
+    mImpl->aoSourceModId.clear();
     mImpl->envCaptured = false;
 }
 

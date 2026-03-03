@@ -260,6 +260,8 @@ const std::unordered_map<std::string, int32_t> kButtonAliases = {
     { "BTN_CUSTOM_MOD_ACTION5", BTN_CUSTOM_MOD_ACTION5 },
     { "BTN_CUSTOM_MOD_ACTION6", BTN_CUSTOM_MOD_ACTION6 },
     { "BTN_CUSTOM_MOD_ACTION7", BTN_CUSTOM_MOD_ACTION7 },
+    { "BTN_CUSTOM_MOD_ACTION8", BTN_CUSTOM_MODIFIER1 },
+    { "BTN_CUSTOM_MOD_ACTION9", BTN_CUSTOM_MODIFIER2 },
     { "MOD_ACTION1", BTN_CUSTOM_MOD_ACTION1 },
     { "MOD_ACTION2", BTN_CUSTOM_MOD_ACTION2 },
     { "MOD_ACTION3", BTN_CUSTOM_MOD_ACTION3 },
@@ -267,6 +269,8 @@ const std::unordered_map<std::string, int32_t> kButtonAliases = {
     { "MOD_ACTION5", BTN_CUSTOM_MOD_ACTION5 },
     { "MOD_ACTION6", BTN_CUSTOM_MOD_ACTION6 },
     { "MOD_ACTION7", BTN_CUSTOM_MOD_ACTION7 },
+    { "MOD_ACTION8", BTN_CUSTOM_MODIFIER1 },
+    { "MOD_ACTION9", BTN_CUSTOM_MODIFIER2 },
     { "A", BTN_A },
     { "B", BTN_B },
     { "Z", BTN_Z },
@@ -737,7 +741,7 @@ bool IsItemIdEquippedOnActionButtons(int16_t itemId) {
 bool IsSingleModActionMask(int32_t inputMask, int32_t& outResolvedMask) {
     constexpr int32_t kModActionMask = BTN_CUSTOM_MOD_ACTION1 | BTN_CUSTOM_MOD_ACTION2 | BTN_CUSTOM_MOD_ACTION3 |
                                        BTN_CUSTOM_MOD_ACTION4 | BTN_CUSTOM_MOD_ACTION5 | BTN_CUSTOM_MOD_ACTION6 |
-                                       BTN_CUSTOM_MOD_ACTION7;
+                                       BTN_CUSTOM_MOD_ACTION7 | BTN_CUSTOM_MODIFIER1 | BTN_CUSTOM_MODIFIER2;
 
     const int32_t masked = inputMask & kModActionMask;
     if (masked == 0 || (inputMask & ~kModActionMask) != 0) {
@@ -10062,6 +10066,13 @@ int32_t ResolveFxOverlayActorId(const std::string& overlayName) {
     if (normalized == "ovl_en_clear_tag" || normalized == "en_clear_tag" || normalized == "clear_tag") {
         return ACTOR_EN_CLEAR_TAG;
     }
+    if (normalized == "ovl_obj_kibako2" || normalized == "obj_kibako2" || normalized == "kibako2" ||
+        normalized == "cube" || normalized == "cube_placeholder" || normalized == "crate") {
+        return ACTOR_OBJ_KIBAKO2;
+    }
+    if (normalized == "ovl_obj_kibako" || normalized == "obj_kibako" || normalized == "kibako") {
+        return ACTOR_OBJ_KIBAKO;
+    }
     return -1;
 }
 
@@ -18253,6 +18264,74 @@ bool ExternalModManager::TryParsePbrDefinitions(const std::string& content, int3
             }
             definition.backendPolicy = ToLower(profile["backendPolicy"].get<std::string>());
         }
+        if (profile.contains("ambientOcclusion")) {
+            if (!profile["ambientOcclusion"].is_object()) {
+                outError = "profiles[" + std::to_string(i) + "].ambientOcclusion must be object";
+                return false;
+            }
+            const auto& ao = profile["ambientOcclusion"];
+            if (ao.contains("enabled")) {
+                if (!ao["enabled"].is_boolean()) {
+                    outError = "profiles[" + std::to_string(i) + "].ambientOcclusion.enabled must be boolean";
+                    return false;
+                }
+                definition.ambientOcclusion.enabled = ao["enabled"].get<bool>();
+            }
+            if (ao.contains("quality")) {
+                if (!ao["quality"].is_string()) {
+                    outError = "profiles[" + std::to_string(i) + "].ambientOcclusion.quality must be string";
+                    return false;
+                }
+                definition.ambientOcclusion.quality = ToLower(ao["quality"].get<std::string>());
+                if (definition.ambientOcclusion.quality != "low" && definition.ambientOcclusion.quality != "medium" &&
+                    definition.ambientOcclusion.quality != "high") {
+                    outError = "profiles[" + std::to_string(i) + "].ambientOcclusion.quality must be low|medium|high";
+                    return false;
+                }
+            }
+            if (ao.contains("radius")) {
+                if (!ao["radius"].is_number()) {
+                    outError = "profiles[" + std::to_string(i) + "].ambientOcclusion.radius must be numeric";
+                    return false;
+                }
+                definition.ambientOcclusion.radius = std::clamp(ao["radius"].get<float>(), 0.05f, 3.0f);
+            }
+            if (ao.contains("intensity")) {
+                if (!ao["intensity"].is_number()) {
+                    outError = "profiles[" + std::to_string(i) + "].ambientOcclusion.intensity must be numeric";
+                    return false;
+                }
+                definition.ambientOcclusion.intensity = std::clamp(ao["intensity"].get<float>(), 0.0f, 3.0f);
+            }
+            if (ao.contains("bias")) {
+                if (!ao["bias"].is_number()) {
+                    outError = "profiles[" + std::to_string(i) + "].ambientOcclusion.bias must be numeric";
+                    return false;
+                }
+                definition.ambientOcclusion.bias = std::clamp(ao["bias"].get<float>(), 0.0f, 0.2f);
+            }
+            if (ao.contains("power")) {
+                if (!ao["power"].is_number()) {
+                    outError = "profiles[" + std::to_string(i) + "].ambientOcclusion.power must be numeric";
+                    return false;
+                }
+                definition.ambientOcclusion.power = std::clamp(ao["power"].get<float>(), 0.1f, 4.0f);
+            }
+            if (ao.contains("maxDistance")) {
+                if (!ao["maxDistance"].is_number()) {
+                    outError = "profiles[" + std::to_string(i) + "].ambientOcclusion.maxDistance must be numeric";
+                    return false;
+                }
+                definition.ambientOcclusion.maxDistance = std::clamp(ao["maxDistance"].get<float>(), 50.0f, 5000.0f);
+            }
+            if (ao.contains("blurPasses")) {
+                if (!ao["blurPasses"].is_number_integer()) {
+                    outError = "profiles[" + std::to_string(i) + "].ambientOcclusion.blurPasses must be integer";
+                    return false;
+                }
+                definition.ambientOcclusion.blurPasses = std::clamp(ao["blurPasses"].get<int32_t>(), 0, 4);
+            }
+        }
 
         outDefinitions.push_back(std::move(definition));
     }
@@ -18537,6 +18616,27 @@ bool ExternalModManager::TryParsePostFxDefinitions(const std::string& content, i
                 return false;
             }
             definition.saturation = std::clamp(preset["saturation"].get<float>(), 0.0f, 2.5f);
+        }
+        if (preset.contains("forceFogOverlay")) {
+            if (!preset["forceFogOverlay"].is_boolean()) {
+                outError = "presets[" + std::to_string(i) + "].forceFogOverlay must be boolean";
+                return false;
+            }
+            definition.forceFogOverlay = preset["forceFogOverlay"].get<bool>();
+        }
+        if (preset.contains("fogOverlayStrength")) {
+            if (!preset["fogOverlayStrength"].is_number()) {
+                outError = "presets[" + std::to_string(i) + "].fogOverlayStrength must be numeric";
+                return false;
+            }
+            definition.fogOverlayStrength = std::clamp(preset["fogOverlayStrength"].get<float>(), 0.0f, 1.0f);
+        }
+        if (preset.contains("forceDepthAwareFog")) {
+            if (!preset["forceDepthAwareFog"].is_boolean()) {
+                outError = "presets[" + std::to_string(i) + "].forceDepthAwareFog must be boolean";
+                return false;
+            }
+            definition.forceDepthAwareFog = preset["forceDepthAwareFog"].get<bool>();
         }
 
         outDefinitions.push_back(std::move(definition));
@@ -22395,11 +22495,30 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
                 }
 
                 if (existingHandle != 0) {
-                    if (FindActorInstance(package.runtime, existingHandle) != nullptr) {
+                    if (auto* existingInstance = FindActorInstance(package.runtime, existingHandle);
+                        existingInstance != nullptr) {
+                        std::vector<ExternalModAction> onDestroyActions;
+                        const auto* existingDefinition = FindActorDefinition(package.runtime, existingInstance->definitionId);
+                        if (existingDefinition != nullptr && !existingDefinition->behaviorId.empty()) {
+                            int32_t stepCount = package.runtime.behaviorStepsThisFrame;
+                            std::string behaviorError;
+                            if (!CollectBehaviorEventActions(package, existingDefinition->behaviorId, "ondestroy",
+                                                             existingInstance, package.runtime.behaviorMaxStepsPerModPerFrame,
+                                                             stepCount, onDestroyActions, behaviorError)) {
+                                DisableRuntime(package, "actors.toggleArchetype behavior failed: " + behaviorError);
+                                return;
+                            }
+                            package.runtime.behaviorStepsThisFrame = stepCount;
+                        }
+
                         std::string actorError;
                         if (!DespawnActorInstance(package, existingHandle, actorError)) {
                             DisableRuntime(package, "actors.toggleArchetype despawn failed: " + actorError);
                             return;
+                        }
+
+                        if (!onDestroyActions.empty()) {
+                            ExecuteActions(package, onDestroyActions, "actorOnDestroy");
                         }
 
                         package.runtime.globalBlackboard.erase(handleStoreKey);
@@ -22489,6 +22608,25 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
                                                      overrideSceneId)) {
                     DisableRuntime(package, "actors.toggleArchetype spawn failed: " + actorError);
                     return;
+                }
+
+                if (!actorDefinition->behaviorId.empty()) {
+                    auto* spawnedInstance = FindActorInstance(package.runtime, spawnedHandle);
+                    if (spawnedInstance != nullptr) {
+                        int32_t stepCount = package.runtime.behaviorStepsThisFrame;
+                        std::vector<ExternalModAction> onSpawnActions;
+                        std::string behaviorError;
+                        if (!CollectBehaviorEventActions(package, actorDefinition->behaviorId, "onspawn", spawnedInstance,
+                                                         package.runtime.behaviorMaxStepsPerModPerFrame, stepCount,
+                                                         onSpawnActions, behaviorError)) {
+                            DisableRuntime(package, "actors.toggleArchetype behavior failed: " + behaviorError);
+                            return;
+                        }
+                        package.runtime.behaviorStepsThisFrame = stepCount;
+                        if (!onSpawnActions.empty()) {
+                            ExecuteActions(package, onSpawnActions, "actorOnSpawn");
+                        }
+                    }
                 }
 
                 package.runtime.globalBlackboard[handleStoreKey] = std::to_string(spawnedHandle);

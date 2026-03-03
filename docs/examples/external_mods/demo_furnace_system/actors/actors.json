@@ -12,7 +12,8 @@
         "maxInstances": 1,
         "tickRate": 1,
         "lodDistance": 5000.0
-      }
+      },
+      "behaviorId": "com.sylian.demo_furnace_system:furnace_debug_behavior"
     }
   ]
 }

@@ -4,15 +4,37 @@
     {
       "id": "com.sylian.world_profiles:overworld_clear",
       "tonemap": "filmic",
-      "exposure": 1.08,
-      "bloom": 0.2,
+      "exposure": 1.0,
+      "bloom": 0.04,
       "fogColor": [
         0.67,
         0.8,
         1.0,
         1.0
       ],
-      "fogDensity": 0.02
+      "fogNear": 965,
+      "fogFar": 1000,
+      "vignette": 0.0,
+      "saturation": 1.0
+    },
+    {
+      "id": "com.sylian.world_profiles:overworld_green_cinematic",
+      "tonemap": "filmic",
+      "exposure": 0.94,
+      "bloom": 0.18,
+      "fogColor": [
+        0.16,
+        0.88,
+        0.28,
+        1.0
+      ],
+      "fogNear": 420,
+      "fogFar": 980,
+      "vignette": 0.32,
+      "saturation": 0.92,
+      "forceFogOverlay": true,
+      "fogOverlayStrength": 0.12,
+      "forceDepthAwareFog": true
     },
     {
       "id": "com.sylian.world_profiles:cave_cold",

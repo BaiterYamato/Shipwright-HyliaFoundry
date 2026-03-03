@@ -25,6 +25,12 @@
           "spawnIceSmoke": false
         },
         {
+          "action": "fx.spawnActorFx",
+          "overlay": "cube",
+          "lifeFrames": 120,
+          "storeKey": "com.sylian.sss_content_pack:firewall_cube_use"
+        },
+        {
           "action": "spells.castSpell",
           "spellId": "com.sylian.sss_content_pack:firewall_cast_spell"
         }

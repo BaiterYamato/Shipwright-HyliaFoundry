@@ -768,3 +768,118 @@ This file is the fixed, append-only plan ledger for this repository.
 - note: Phase A hotfix delivered: External Mods tabs now use manual manifest uiCategory (core_api|mod), all example manifests tagged, legacy demo_firewall_staff/demo_purple_din_lev_glove removed, sss_content_pack Firewall switched to onUse cast path, levitationProfile lift_suspend parser/runtime added and wired in sss/sss_content_pack statuses, useProfile->spell->aoe debug trace added, docs/runtime refs refreshed, demo sync+validation+Release build passed.
 - refs:
   - soh/soh/Enhancements/external-mods/ExternalModManager.cpp,soh/soh/Enhancements/external-mods/ExternalModUi.cpp,docs/examples/external_mods/sss_content_pack/items/items.json,docs/examples/external_mods/sss_content_pack/statuses/statuses.json,docs/examples/external_mods/sss/statuses/statuses.json,tools/external_mods/sync_examples_to_runtime.ps1,docs/actions.json,docs/events.json,docs/catalogs.json
+
+## [PLN-20260303-0009][UPDATE] 2026-03-03T16:51:56Z
+- status: in_progress
+- note: Starting Phase C fog fidelity patch: add data-driven postfx fog overlay controls to tint non-fog draw passes (sky/sprite-style textures), wire runtime apply/restore in OnPlayDrawBegin/End without breaking existing fill-screen effects, and calibrate world_profiles presets for stable green cinematic behavior.
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModTypes.h,soh/soh/Enhancements/external-mods/ExternalModManager.cpp,soh/soh/Enhancements/external-mods/ExternalModWorldGraphicsRuntime.cpp,docs/examples/external_mods/world_profiles/render/postfx_presets.json
+
+## [PLN-20260303-0009][UPDATE] 2026-03-03T17:07:27Z
+- status: in_progress
+- note: Implemented postfx fog overlay extension (forceFogOverlay/fogOverlayStrength), wired world graphics runtime fill-screen fallback for non-fog passes, and updated world_profiles green cinematic preset. Synced demos, built Release, validated world_profiles mod, and checked doc/runtime drift.
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModTypes.h
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+  - soh/soh/Enhancements/external-mods/ExternalModWorldGraphicsRuntime.cpp
+  - docs/examples/external_mods/world_profiles/render/postfx_presets.json
+
+## [PLN-20260303-0009][UPDATE] 2026-03-03T17:12:33Z
+- status: in_progress
+- note: Adjusted world_profiles overworld defaults back to vanilla-like low fog (overworld_clear tuned and reassigned in scene/room profiles), preserving green cinematic preset for optional use. Synced examples to runtime mods.
+- refs:
+  - docs/examples/external_mods/world_profiles/render/postfx_presets.json
+  - docs/examples/external_mods/world_profiles/world/scene_profiles.json
+  - docs/examples/external_mods/world_profiles/world/room_profiles.json
+  - x64/Release/mods/world_profiles/render/postfx_presets.json
+
+## [PLN-20260303-0009][UPDATE] 2026-03-03T17:26:18Z
+- status: in_progress
+- note: Implemented depth-aware fog mode for postfx presets: added forceDepthAwareFog parsing/runtime, wired world draw begin/end to toggle renderer fog forcing, and patched Fast3D interpreter to compute/apply fog even for non-fog display lists while world pass is active. Tuned green cinematic preset to use depth-aware fog with reduced overlay strength.
+- refs:
+  - libultraship/include/fast/interpreter.h
+  - libultraship/src/fast/interpreter.cpp
+  - soh/soh/Enhancements/external-mods/ExternalModTypes.h
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+  - soh/soh/Enhancements/external-mods/ExternalModWorldGraphicsRuntime.cpp
+  - docs/examples/external_mods/world_profiles/render/postfx_presets.json
+
+## [PLN-20260303-0010] Ambient Occlusion real SSAO (GL+DX11 with Metal fallback)
+- createdUtc: 2026-03-03T18:09:36Z
+- status: in_progress
+- scope: engine
+- summary: Implement runtime SSAO with quality tiers, pbr_profiles AO fields, CVars+UI overrides, and backend fallback observability without breaking fog/postfx world graphics.
+- milestones:
+  1. Add AO schema/types/parser+resolved state and C bridge,Implement SSAO pass in OpenGL and DX11 with quality modes,Add Metal fallback + fallback events/logs + UI CVars,Update docs/runtime references and validate release build
+- tags: external-mods,render,ao,ssao,v7
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModTypes.h,soh/soh/Enhancements/external-mods/ExternalModManager.cpp,soh/soh/Enhancements/external-mods/ExternalModWorldGraphicsRuntime.cpp,libultraship/include/fast/interpreter.h,libultraship/src/fast/interpreter.cpp,libultraship/include/fast/backends/gfx_rendering_api.h,libultraship/src/fast/backends/gfx_opengl.cpp,libultraship/src/fast/backends/gfx_direct3d11.cpp,libultraship/src/fast/backends/gfx_metal.cpp,soh/soh/SohGui/SohMenuSettings.cpp,docs/EXTERNAL_MOD_DATA_DRIVEN_REFERENCE.md
+
+## [PLN-20260303-0010][UPDATE] 2026-03-03T19:02:09Z
+- status: done
+- note: Implemented SSAO runtime patch: AO schema/parser in pbr profiles, GL+DX11 AO passes with blur/composite, Metal fallback telemetry, AO CVars+graphics menu, world graphics AO resolve bridge, docs/export/sync validation, and Release build success.
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModTypes.h
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+  - soh/soh/Enhancements/external-mods/ExternalModWorldGraphicsRuntime.cpp
+  - libultraship/include/fast/backends/gfx_rendering_api.h
+  - libultraship/src/fast/backends/gfx_opengl.cpp
+  - libultraship/src/fast/backends/gfx_direct3d11.cpp
+  - libultraship/src/fast/backends/gfx_metal.cpp
+  - libultraship/src/fast/interpreter.cpp
+  - soh/soh/SohGui/SohMenuSettings.cpp
+  - docs/EXTERNAL_MOD_DATA_DRIVEN_REFERENCE.md
+  - docs/SYLIAN_FOUNDRY_MODLOADER.md
+  - tools/external_mods/export_runtime_reference.ps1
+
+## [PLN-20260303-0011] SSAO crash hotfix triage and guard
+- createdUtc: 2026-03-03T19:12:17Z
+- status: in_progress
+- scope: engine
+- summary: Investigate crash when enabling AO/SSAO from graphics menu, identify failing backend path, and apply runtime guard/fallback so enabling AO never crashes.
+- milestones:
+  1. Collect crash evidence from log/dump and map first failing frame
+  2. Patch AO runtime/backends with null/resource guards and fallback path
+  3. Build Release and run mod/doc validation checks
+- tags: render, ao, crash, hotfix
+- refs:
+  - x64/Release/logs/Ship of Harkinian.log
+  - libultraship/src/fast/backends/gfx_opengl.cpp
+  - libultraship/src/fast/backends/gfx_direct3d11.cpp
+  - soh/soh/Enhancements/external-mods/ExternalModWorldGraphicsRuntime.cpp
+
+## [PLN-20260303-0011][UPDATE] 2026-03-03T19:17:35Z
+- status: done
+- note: Triage found DX11 crash in SSAO setup path (EnsureAmbientOcclusionShaders/CreateBuffer). Applied non-throw AO resource creation guards with fallback code and fixed AO constant-buffer alignment (16-byte ByteWidth). Release build now succeeds.
+- refs:
+  - x64/Release/logs/Ship of Harkinian.log
+  - libultraship/src/fast/backends/gfx_direct3d11.cpp
+
+## [PLN-20260303-0012] Hotkeys MOD_ACTION8/9 + placeholders cube for firewall/furnace
+- createdUtc: 2026-03-03T19:29:25Z
+- status: in_progress
+- scope: mod
+- summary: Add config-driven bindings for furnace and new inventory on MOD_ACTION8/9, and make firewall staff/furnace spawn visible placeholder cube actors for testing.
+- milestones:
+  1. Patch demo input/config bindings for MOD_ACTION8 and MOD_ACTION9
+  2. Patch content demos so firewall and furnace spawn clear placeholder cube actors
+  3. Sync examples to runtime and validate build/mod load
+- tags: external-mods, demos, input, hotkeys, firewall, furnace
+- refs:
+  - docs/examples/external_mods/sss_content_pack
+  - docs/examples/external_mods/demo_furnace_system
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+
+## [PLN-20260303-0012][UPDATE] 2026-03-03T20:35:27Z
+- status: done
+- note: Implemented MOD_ACTION8/9 aliases + UI labels, wired demo_furnace_system bindings and onInput actions, added actors.toggleArchetype onSpawn/onDestroy behavior dispatch, added cube overlay alias for placeholder spawns, patched sss_content_pack firewall to spawn visible cube placeholder, synced demos, validated mods, and built Release successfully.
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+  - soh/soh/Enhancements/controls/SohInputEditorWindow.cpp
+  - soh/soh/SohGui/UIWidgets.cpp
+  - soh/soh/OTRGlobals.h
+  - docs/examples/external_mods/demo_furnace_system/config/input.json
+  - docs/examples/external_mods/demo_furnace_system/scripts/init.json
+  - docs/examples/external_mods/demo_furnace_system/behaviors/behaviors.json
+  - docs/examples/external_mods/sss_content_pack/items/use_profiles.json
+  - docs/examples/external_mods/sss_content_pack/spells/spells.json

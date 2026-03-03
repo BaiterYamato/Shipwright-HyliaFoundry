@@ -140,6 +140,28 @@ Authoring guides:
 - `docs/examples/external_mods/v7_reference_suite_docs/FRAMEWORK_AUTHOR_GUIDE.md`
 - `docs/examples/external_mods/v7_reference_suite_docs/DEMO_PLAYBOOK.md`
 
+### v7.1 Ambient Occlusion (SSAO)
+
+`render/pbr_profiles.json` supports optional SSAO controls through `ambientOcclusion`:
+
+- `enabled`
+- `quality` (`low|medium|high`)
+- `radius`, `intensity`, `bias`, `power`
+- `maxDistance`, `blurPasses`
+
+Runtime/backend behavior:
+
+- OpenGL: SSAO supported.
+- DirectX11: SSAO supported.
+- Metal: AO fallback (render continues, AO disabled) with `onRenderFallbackApplied`.
+
+Global override CVars:
+
+- `gEnhancements.Graphics.AO.Enabled`
+- `gEnhancements.Graphics.AO.Quality` (`0..3`)
+- `gEnhancements.Graphics.AO.IntensityScale`
+- `gEnhancements.Graphics.AO.DebugView`
+
 ## Safety and failure model
 
 - Invalid mod data disables only the failing mod.

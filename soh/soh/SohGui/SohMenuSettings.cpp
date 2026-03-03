@@ -410,6 +410,33 @@ void SohMenu::AddMenuSettings() {
 
     path.column = SECTION_COLUMN_2;
     AddWidget(path, "Advanced Graphics Options", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "Ambient Occlusion (SSAO)", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Graphics.AO.Enabled")
+        .RaceDisable(false)
+        .Options(CheckboxOptions()
+                     .Tooltip("Enables screen-space ambient occlusion (SSAO). Uses extra GPU processing.")
+                     .DefaultValue(false));
+    AddWidget(path, "Ambient Occlusion Quality", WIDGET_CVAR_SLIDER_INT)
+        .CVar("gEnhancements.Graphics.AO.Quality")
+        .RaceDisable(false)
+        .Options(IntSliderOptions()
+                     .Tooltip("0=Off, 1=Low, 2=Medium, 3=High.")
+                     .Min(0)
+                     .Max(3)
+                     .DefaultValue(0));
+    AddWidget(path, "Ambient Occlusion Intensity", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.AO.IntensityScale")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Global multiplier for AO intensity. 1.0 = profile default.")
+                     .Min(0.0f)
+                     .Max(3.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Ambient Occlusion Debug View", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Graphics.AO.DebugView")
+        .RaceDisable(false)
+        .Options(CheckboxOptions().Tooltip("Displays AO buffer instead of compositing it.").DefaultValue(false));
 
     // Controls
     path.sidebarName = "Controls";

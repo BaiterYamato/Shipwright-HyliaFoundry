@@ -1,18 +1,19 @@
 {
   "schemaVersion": 1,
-  "bindings": [],
-  "hotkeys": [
+  "bindings": [
     {
-      "id": "spawn_furnace_debug",
-      "defaultKeyboardKeys": ["7"],
+      "id": "furnace_toggle_action8",
+      "defaultMask": "MOD_ACTION8",
+      "trigger": "pressed",
       "allowUserRemap": true,
-      "action": {
-        "action": "actors.toggleArchetype",
-        "archetypeId": "com.sylian.demo_furnace_system:furnace_debug",
-        "spawnOrigin": "player_forward",
-        "forwardDistance": 120.0,
-        "upOffset": 0.0
-      }
+      "defaultKeyboardKeys": ["8"]
+    },
+    {
+      "id": "inventory_toggle_action9",
+      "defaultMask": "MOD_ACTION9",
+      "trigger": "pressed",
+      "allowUserRemap": true,
+      "defaultKeyboardKeys": ["9"]
     }
   ]
 }

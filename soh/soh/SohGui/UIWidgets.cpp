@@ -1175,6 +1175,8 @@ std::map<std::string, int32_t> buttonMap = {
     { "Mod Action 5", BTN_CUSTOM_MOD_ACTION5 },
     { "Mod Action 6", BTN_CUSTOM_MOD_ACTION6 },
     { "Mod Action 7", BTN_CUSTOM_MOD_ACTION7 },
+    { "Mod Action 8", BTN_CUSTOM_MOD_ACTION8 },
+    { "Mod Action 9", BTN_CUSTOM_MOD_ACTION9 },
 };
 
 bool BtnSelector(const char* label, int32_t* value, const BtnSelectorOptions& options) {
