@@ -45,5 +45,7 @@
                         "wasm":  "scripts/noop.wat"
                     },
     "behaviorTreeDefinitions":  "ai/behavior_trees.json",
-    "routeDefinitions":  "nav/routes.json"
+    "routeDefinitions":  "nav/routes.json",
+    "uiCategory":  "mod"
 }
+

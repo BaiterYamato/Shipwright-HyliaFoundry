@@ -189,15 +189,6 @@ std::string ToLowerUi(std::string value) {
     return value;
 }
 
-bool IsFrameworkCapability(const std::string& capability) {
-    const std::string lowered = ToLowerUi(capability);
-    return lowered.rfind("ui.", 0) == 0 || lowered.rfind("containers.", 0) == 0 ||
-           lowered.rfind("recipes.", 0) == 0 || lowered.rfind("actors.", 0) == 0 ||
-           lowered.rfind("ai.", 0) == 0 || lowered.rfind("nav.", 0) == 0 || lowered.rfind("fx.", 0) == 0 ||
-           lowered.rfind("states.", 0) == 0 || lowered.rfind("spells.", 0) == 0 || lowered.rfind("render.", 0) == 0 ||
-           lowered.rfind("world.", 0) == 0 || lowered.rfind("assets.", 0) == 0 || lowered.rfind("debug.", 0) == 0;
-}
-
 enum class ExternalModUiPackageTab {
     Mods,
     CoreApi,
@@ -209,40 +200,20 @@ struct ExternalModUiPackageClassification {
     std::string reason;
 };
 
-ExternalModUiPackageClassification ClassifyExternalModPackage(const ExternalModPackage& package,
-                                                              const std::unordered_set<std::string>& providerIds) {
+ExternalModUiPackageClassification ClassifyExternalModPackage(const ExternalModPackage& package) {
     ExternalModUiPackageClassification classification{};
-    if (providerIds.contains(package.manifest.id)) {
+    if (ToLowerUi(package.manifest.uiCategory) == "core_api") {
         classification.tab = ExternalModUiPackageTab::CoreApi;
         classification.badge = "framework";
-        classification.reason = "classified as Core + API because other mods depend on this package";
-        return classification;
-    }
-
-    const bool hasFrameworkCapability = std::any_of(package.manifest.capabilities.begin(),
-                                                    package.manifest.capabilities.end(), IsFrameworkCapability);
-    if (hasFrameworkCapability) {
-        classification.tab = ExternalModUiPackageTab::CoreApi;
-        classification.badge = "api";
-        classification.reason = "classified as Core + API because it exposes framework/runtime capabilities";
-        return classification;
-    }
-
-    const std::string loweredId = ToLowerUi(package.manifest.id);
-    const std::string loweredName = ToLowerUi(package.manifest.name);
-    const bool hasFrameworkHint = loweredId.find("_kit") != std::string::npos ||
-                                  loweredId.find("framework") != std::string::npos ||
-                                  loweredId == "com.sylian.sss" || loweredName.find("framework") != std::string::npos;
-    if (hasFrameworkHint) {
-        classification.tab = ExternalModUiPackageTab::CoreApi;
-        classification.badge = "framework";
-        classification.reason = "classified as Core + API by naming hint (_kit/framework/sss)";
+        classification.reason = "classified by manifest uiCategory=core_api";
         return classification;
     }
 
     classification.tab = ExternalModUiPackageTab::Mods;
     classification.badge = "content";
-    classification.reason = "classified as gameplay/content mod";
+    classification.reason = package.manifest.uiCategory.empty()
+                                ? "classified as mod (uiCategory missing fallback)"
+                                : "classified by manifest uiCategory=mod";
     return classification;
 }
 
@@ -624,13 +595,6 @@ void DrawExternalModControlsSection() {
         });
     }
 
-    std::unordered_set<std::string> providerIds;
-    for (const auto& package : packages) {
-        for (const auto& dependency : package.manifest.dependencies) {
-            providerIds.insert(dependency.modId);
-        }
-    }
-
     if (ImGui::BeginTabBar("ExternalContentTabs")) {
         if (ImGui::BeginTabItem("Resourcepacks")) {
             DrawResourcePacksTab();
@@ -640,7 +604,7 @@ void DrawExternalModControlsSection() {
         if (ImGui::BeginTabItem("Mods")) {
             bool hasRows = false;
             for (auto& package : packages) {
-                const auto classification = ClassifyExternalModPackage(package, providerIds);
+                const auto classification = ClassifyExternalModPackage(package);
                 if (classification.tab != ExternalModUiPackageTab::Mods) {
                     continue;
                 }
@@ -656,7 +620,7 @@ void DrawExternalModControlsSection() {
         if (ImGui::BeginTabItem("Core + API")) {
             bool hasRows = false;
             for (auto& package : packages) {
-                const auto classification = ClassifyExternalModPackage(package, providerIds);
+                const auto classification = ClassifyExternalModPackage(package);
                 if (classification.tab != ExternalModUiPackageTab::CoreApi) {
                     continue;
                 }

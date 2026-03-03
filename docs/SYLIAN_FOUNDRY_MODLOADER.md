@@ -21,6 +21,7 @@ The **Sylian Foundry Modloader** loads external mod packages (folder/zip), valid
 - Required for new mods: `mod.json.apiVersion = 4`
 - Runtime type: `wasm3-v1`
 - Namespaced IDs required (`modId:*`, with `core:*` reserved for built-ins)
+- External Mods UI category tag: `mod.json.uiCategory = core_api | mod`
 - Capability-gated files: if capability is declared, required file/path must be valid
 - Dependency graph is enforced (`dependencies[]` with semver ranges)
 
@@ -115,8 +116,7 @@ Content layer:
 - `demo_mini_inventory_h`
 - `demo_bag_inventory_ext`
 - `demo_furnace_system`
-- `demo_firewall_staff`
-- `demo_purple_din_lev_glove`
+- `sss_content_pack`
 - `demo_npc_patrol`
 - `demo_enemy_templates`
 - `demo_vanilla_adapters`

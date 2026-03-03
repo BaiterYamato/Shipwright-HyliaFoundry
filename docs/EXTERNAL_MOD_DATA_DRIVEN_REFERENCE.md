@@ -18,6 +18,7 @@ Typical fields:
 - `loadPriority`
 - `dependencies` (`id`/`modId` + optional `versionRange`)
 - `capabilities`
+- `uiCategory` (`core_api` or `mod`) for External Mods tab classification
 - capability file fields (e.g., `damageDefinitions`, `itemUseProfiles`)
 - optional runtime budgets (`runtime`)
 
@@ -105,11 +106,23 @@ Built-in reusable preset status id:
 
 This mode freezes player/enemy/boss without periodic damage while preserving freeze lock behavior.
 
-## 8) Movement profiles
+## 8) Status levitation profile (lift + suspend, no freeze)
+
+`statuses/statuses.json` can extend a `core:high_jump` status with:
+
+- `levitationProfile.mode`: `none | lift_suspend`
+- `liftSpeed`, `holdHeight`
+- `riseFrames`, `suspendFrames`
+- `lockHorizontal`
+- `gravityScaleWhileActive`
+
+When `mode=lift_suspend`, targets are lifted and suspended by status runtime without using freeze/stun timers.
+
+## 9) Movement profiles
 
 `movement/movement_profiles.json` supports modifier and surf-oriented behavior with profile-defined parameters (speed/drag/slope/board behavior).
 
-## 9) Hooks and behavior actions
+## 10) Hooks and behavior actions
 
 - Hook list: `docs/events.json` (`hooks`)
 - Behavior events: `docs/events.json` (`behaviorEvents`)
@@ -118,7 +131,7 @@ This mode freezes player/enemy/boss without periodic damage while preserving fre
   - `onStatusApplied`, `onStatusTick`, `onStatusExpired`
   - `onStateApplied`, `onStateRemoved`
 
-## 10) FX presets, states and spells catalogs
+## 11) FX presets, states and spells catalogs
 
 - `fx/fx_presets.json`: reusable action bundles, invoked by `fx.spawnPreset`.
 - `states/states.json`: actor/player-oriented state definitions with `apply[]` and `remove[]`.
@@ -130,7 +143,7 @@ These catalogs are capability-gated by:
 - `states.catalog.v1`
 - `spells.catalog.v1`
 
-## 11) v6 UI/container/actors/AI/nav/debug contracts
+## 12) v6 UI/container/actors/AI/nav/debug contracts
 
 New capabilities:
 
@@ -157,7 +170,7 @@ New hook events:
 - `onArchetypeSpawn`, `onArchetypeDespawn`, `onInteraction`
 - `onBehaviorNodeChanged`, `onPathRequested`, `onPathFailed`
 
-## 12) Validation workflow
+## 13) Validation workflow
 
 1. Validate schema/capabilities via runtime load.
 2. Check logs for contextual parser/runtime errors.
@@ -167,11 +180,11 @@ New hook events:
 tools/external_mods/export_runtime_reference.ps1
 ```
 
-## 13) Example packs
+## 14) Example packs
 
 See `docs/examples/external_mods/` for runnable reference mods.
 
-## 14) v7 world graphics contracts
+## 15) v7 world graphics contracts
 
 New capabilities:
 

@@ -46,5 +46,7 @@
     "containerDefinitions":  "containers/containers.json",
     "inventoryExtensionDefinitions":  "inventory_ext/pages.json",
     "recipeDefinitions":  "recipes/processing_recipes.json",
-    "interactionDefinitions":  "interactions/interactions.json"
+    "interactionDefinitions":  "interactions/interactions.json",
+    "uiCategory":  "core_api"
 }
+

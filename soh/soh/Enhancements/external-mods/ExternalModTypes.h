@@ -137,6 +137,7 @@ struct ExternalModManifest {
     std::string id;
     std::string name;
     std::string version;
+    std::string uiCategory = "mod";
     int32_t apiVersion = 0;
     std::string gameVersionMin;
     std::string engineVersionRange;
@@ -627,6 +628,11 @@ enum class ExternalModFreezeMode {
     IceTrapNoDamage,
 };
 
+enum class ExternalModLevitationMode {
+    None,
+    LiftSuspend,
+};
+
 enum class ExternalModFreezeShellSize {
     Auto,
     Small,
@@ -644,6 +650,16 @@ struct ExternalModFreezeProfile {
     bool breakEffectOnExpire = true;
 };
 
+struct ExternalModLevitationProfile {
+    ExternalModLevitationMode mode = ExternalModLevitationMode::None;
+    float liftSpeed = 2.5f;
+    float holdHeight = 80.0f;
+    int32_t riseFrames = 12;
+    int32_t suspendFrames = 45;
+    bool lockHorizontal = true;
+    float gravityScaleWhileActive = 0.0f;
+};
+
 struct ExternalModStatusDefinition {
     std::string id;
     std::string displayName;
@@ -658,6 +674,8 @@ struct ExternalModStatusDefinition {
     int32_t shakeFrames = 0;
     bool hasFreezeProfile = false;
     ExternalModFreezeProfile freezeProfile;
+    bool hasLevitationProfile = false;
+    ExternalModLevitationProfile levitationProfile;
     std::vector<std::string> visualsStartFx;
     std::vector<std::string> visualsLoopFx;
     std::vector<std::string> visualsEndFx;
@@ -1351,6 +1369,8 @@ struct ExternalModRuntime {
         std::string stackingMode = "refresh";
         int32_t maxStacks = 1;
         ExternalModFreezeProfile freezeProfile;
+        ExternalModLevitationProfile levitationProfile;
+        float baseGravity = -1.0f;
         uintptr_t freezeShellActorAddress = 0;
         std::vector<std::string> loopFxHandleKeys;
     };

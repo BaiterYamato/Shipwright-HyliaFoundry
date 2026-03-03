@@ -44,6 +44,15 @@
       "tickFrames": 15,
       "damagePerTick": 0,
       "intensity": 160,
+      "levitationProfile": {
+        "mode": "lift_suspend",
+        "liftSpeed": 6.0,
+        "holdHeight": 90.0,
+        "riseFrames": 12,
+        "suspendFrames": 45,
+        "lockHorizontal": true,
+        "gravityScaleWhileActive": 0.0
+      },
       "visuals": {
         "loopFx": [
           "com.sylian.sss:levitation_aura"

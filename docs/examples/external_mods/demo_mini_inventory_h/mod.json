@@ -43,5 +43,7 @@
                         "quests":  "quests",
                         "wasm":  "scripts/noop.wat"
                     },
-    "uiScreenDefinitions":  "ui/screens.json"
+    "uiScreenDefinitions":  "ui/screens.json",
+    "uiCategory":  "mod"
 }
+

@@ -5,7 +5,7 @@
       "displayName": "Firewall Staff",
       "slot": "SLOT_HAMMER",
       "useMode": "augment",
-      "useTrigger": "hammerGroundImpact",
+      "useTrigger": "onUse",
       "agePolicy": "allowChild",
       "useProfile": "com.sylian.sss_content_pack:firewall_staff_profile",
       "grant": {

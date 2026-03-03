@@ -751,3 +751,20 @@ This file is the fixed, append-only plan ledger for this repository.
 - note: Implemented v8 foundation slice: direct hotkeys runtime + actors.toggleArchetype with player_forward/world spawn override, External Mods 3-tab UI (Resourcepacks/Mods/Core+API) with classification badges, and demo_furnace_system key 7 toggle archetype spawn/despawn. Also added v8 plan track files, synced demos, regenerated runtime references, and passed Release build + mod validation.
 - refs:
   - soh/soh/Enhancements/external-mods/ExternalModManager.cpp,soh/soh/Enhancements/external-mods/ExternalModUi.cpp,docs/examples/external_mods/demo_furnace_system/config/input.json,docs/agents/plan_tracks/v8/index.md,docs/actions.json
+
+## [PLN-20260303-0009] v6/v7 closure + firewall/levitation fixes
+- createdUtc: 2026-03-03T15:30:58Z
+- status: in_progress
+- scope: mixed
+- summary: Implement manual External Mods UI categorization, fix SSS content pack firewall and levitation behavior, remove legacy empty demos, and close v6/v7 remaining runtime checkpoints with validation.
+- milestones:
+  1. Phase A: UI category + SSS gameplay hotfixes + demo cleanup,Phase B: v6 runtime module/parity closure checklist updates + targeted code gaps,Phase C: v7 renderer/runtime closure tasks + validation/export
+- tags: external-mods,api-v4,v6,v7,sss,ui
+- refs:
+  - docs/agents/plan_tracks/v6,docs/agents/plan_tracks/v7,soh/soh/Enhancements/external-mods/ExternalModManager.cpp,soh/soh/Enhancements/external-mods/ExternalModUi.cpp,docs/examples/external_mods/sss_content_pack
+
+## [PLN-20260303-0009][UPDATE] 2026-03-03T15:58:44Z
+- status: in_progress
+- note: Phase A hotfix delivered: External Mods tabs now use manual manifest uiCategory (core_api|mod), all example manifests tagged, legacy demo_firewall_staff/demo_purple_din_lev_glove removed, sss_content_pack Firewall switched to onUse cast path, levitationProfile lift_suspend parser/runtime added and wired in sss/sss_content_pack statuses, useProfile->spell->aoe debug trace added, docs/runtime refs refreshed, demo sync+validation+Release build passed.
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp,soh/soh/Enhancements/external-mods/ExternalModUi.cpp,docs/examples/external_mods/sss_content_pack/items/items.json,docs/examples/external_mods/sss_content_pack/statuses/statuses.json,docs/examples/external_mods/sss/statuses/statuses.json,tools/external_mods/sync_examples_to_runtime.ps1,docs/actions.json,docs/events.json,docs/catalogs.json

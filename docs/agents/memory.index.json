@@ -1,13 +1,13 @@
 ﻿{
     "version":  2,
     "schemaVersion":  2,
-    "lastUpdatedUtc":  "2026-03-03T15:02:05Z",
+    "lastUpdatedUtc":  "2026-03-03T15:58:44Z",
     "stats":  {
-                  "entryCount":  107,
-                  "openCount":  35,
+                  "entryCount":  109,
+                  "openCount":  37,
                   "doneCount":  71,
                   "deprecatedCount":  1,
-                  "topicCount":  55,
+                  "topicCount":  56,
                   "tagCount":  57
               },
     "consistency":  {
@@ -274,6 +274,12 @@
                                              "line":  67,
                                              "source":  "memory.log"
                                          },
+                 "mem-20260303-000043":  {
+                                             "topic":  "plan:PLN-20260303-0009",
+                                             "status":  "open",
+                                             "line":  108,
+                                             "source":  "memory.log"
+                                         },
                  "mem-20260303-000022":  {
                                              "topic":  "plan:PLN-20260225-0006",
                                              "status":  "done",
@@ -368,6 +374,12 @@
                                              "topic":  "external-mods-aim-ots-direct-hotkey-lmb",
                                              "status":  "done",
                                              "line":  16,
+                                             "source":  "memory.log"
+                                         },
+                 "mem-20260303-000044":  {
+                                             "topic":  "plan:PLN-20260303-0009",
+                                             "status":  "open",
+                                             "line":  109,
                                              "source":  "memory.log"
                                          },
                  "mem-20260303-000025":  {
@@ -731,7 +743,9 @@
                                  "mem-20260303-000038",
                                  "mem-20260303-000039",
                                  "mem-20260303-000041",
-                                 "mem-20260303-000042"
+                                 "mem-20260303-000042",
+                                 "mem-20260303-000043",
+                                 "mem-20260303-000044"
                              ],
                   "external-mods,aim-ots,camera,reticle,input":  [
                                                                      "mem-20260225-000026"
@@ -864,7 +878,9 @@
                                  "mem-20260303-000038",
                                  "mem-20260303-000039",
                                  "mem-20260303-000041",
-                                 "mem-20260303-000042"
+                                 "mem-20260303-000042",
+                                 "mem-20260303-000043",
+                                 "mem-20260303-000044"
                              ],
                   "external-mods,api-v4,v6,reference-suite":  [
                                                                   "mem-20260303-000030"
@@ -1003,7 +1019,9 @@
                                 "mem-20260303-000038",
                                 "mem-20260303-000039",
                                 "mem-20260303-000041",
-                                "mem-20260303-000042"
+                                "mem-20260303-000042",
+                                "mem-20260303-000043",
+                                "mem-20260303-000044"
                             ],
                   "external-mods,api-v4,sss,tooling,docs":  [
                                                                 "mem-20260303-000002"
@@ -1199,6 +1217,10 @@
                                                    "mem-20260225-000065",
                                                    "mem-20260303-000009"
                                                ],
+                    "plan:PLN-20260303-0009":  [
+                                                   "mem-20260303-000043",
+                                                   "mem-20260303-000044"
+                                               ],
                     "plan:PLN-20260303-0007":  [
                                                    "mem-20260303-000038",
                                                    "mem-20260303-000039"
@@ -1386,7 +1408,9 @@
                                   "mem-20260303-000038",
                                   "mem-20260303-000039",
                                   "mem-20260303-000041",
-                                  "mem-20260303-000042"
+                                  "mem-20260303-000042",
+                                  "mem-20260303-000043",
+                                  "mem-20260303-000044"
                               ]
                  },
     "ranges":  [

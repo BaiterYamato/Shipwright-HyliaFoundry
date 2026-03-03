@@ -42,5 +42,7 @@
                         "wasm":  "scripts/noop.wat"
                     },
     "uiHudDefinitions":  "ui/hud_layouts.json",
-    "uiScreenDefinitions":  "ui/screens.json"
+    "uiScreenDefinitions":  "ui/screens.json",
+    "uiCategory":  "core_api"
 }
+

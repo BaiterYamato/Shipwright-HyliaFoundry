@@ -34,5 +34,7 @@
                     "maxHookCallsPerFrame":  256,
                     "maxActorInstances":  64,
                     "maxActiveStatuses":  256
-                }
+                },
+    "uiCategory":  "mod"
 }
+

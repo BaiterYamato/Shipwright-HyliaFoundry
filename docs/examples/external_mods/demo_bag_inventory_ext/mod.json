@@ -43,5 +43,7 @@
                         "quests":  "quests",
                         "wasm":  "scripts/noop.wat"
                     },
-    "inventoryExtensionDefinitions":  "inventory_ext/pages.json"
+    "inventoryExtensionDefinitions":  "inventory_ext/pages.json",
+    "uiCategory":  "mod"
 }
+

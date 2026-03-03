@@ -1190,6 +1190,19 @@ bool ParseFreezeShellSizeToken(const std::string& value, ExternalModFreezeShellS
     return false;
 }
 
+bool ParseLevitationModeToken(const std::string& value, ExternalModLevitationMode& outMode) {
+    const auto normalized = ToLower(value);
+    if (normalized == "none") {
+        outMode = ExternalModLevitationMode::None;
+        return true;
+    }
+    if (normalized == "lift_suspend" || normalized == "liftsuspend") {
+        outMode = ExternalModLevitationMode::LiftSuspend;
+        return true;
+    }
+    return false;
+}
+
 bool IsCoreFreezeNoDamageStatusId(const std::string& statusId) {
     return ToLower(statusId) == kCoreFreezeNoDamageStatusId;
 }
@@ -7952,6 +7965,21 @@ ExternalModFreezeProfile ResolveFreezeProfileForStatus(const ExternalModRuntime&
     return profile;
 }
 
+ExternalModLevitationProfile ResolveLevitationProfileForStatus(const ExternalModRuntime& runtime, const std::string& statusId,
+                                                               ExternalModStatusType statusType) {
+    ExternalModLevitationProfile profile;
+    if (statusType != ExternalModStatusType::HighJump) {
+        return profile;
+    }
+
+    const auto* statusDefinition = ExternalModContentRegistry::FindStatusDefinitionById(runtime, statusId);
+    if (statusDefinition != nullptr && statusDefinition->hasLevitationProfile) {
+        return statusDefinition->levitationProfile;
+    }
+
+    return profile;
+}
+
 uint8_t ResolveFreezeShellSizeParam(const Actor* actor, ExternalModFreezeShellSize size) {
     if (size == ExternalModFreezeShellSize::Small) {
         return kObjIcePolySizeSmall;
@@ -8124,6 +8152,7 @@ void BeginStatusOnActor(ExternalModRuntime& runtime, PlayState* play, Actor* act
         statusState.baseRotX = actor->shape.rot.x;
         statusState.baseRotY = actor->shape.rot.y;
         statusState.baseRotZ = actor->shape.rot.z;
+        statusState.baseGravity = actor->gravity;
         statusState.stacks = 1;
         runtime.statusEffects.push_back(statusState);
         state = &runtime.statusEffects.back();
@@ -8165,8 +8194,10 @@ void BeginStatusOnActor(ExternalModRuntime& runtime, PlayState* play, Actor* act
     state->baseRotX = actor->shape.rot.x;
     state->baseRotY = actor->shape.rot.y;
     state->baseRotZ = actor->shape.rot.z;
+    state->baseGravity = actor->gravity;
     state->fallbackLogged = false;
     state->freezeProfile = ResolveFreezeProfileForStatus(runtime, statusId, statusType);
+    state->levitationProfile = ResolveLevitationProfileForStatus(runtime, statusId, statusType);
     if (statusType == ExternalModStatusType::Freeze && state->freezeProfile.mode == ExternalModFreezeMode::IceTrapNoDamage) {
         state->damagePerTick = 0;
     }
@@ -8266,6 +8297,19 @@ void RestoreStatusState(ExternalModRuntime::StatusEffectState& statusState, Acto
         actor->colorFilterTimer = 0;
         actor->colorFilterParams = 0;
         return;
+    }
+
+    if (statusState.statusType == ExternalModStatusType::HighJump &&
+        statusState.levitationProfile.mode == ExternalModLevitationMode::LiftSuspend) {
+        if (statusState.levitationProfile.lockHorizontal) {
+            actor->world.pos.x = statusState.baseX;
+            actor->world.pos.z = statusState.baseZ;
+        }
+        actor->world.pos.y = statusState.baseY;
+        actor->velocity.y = 0.0f;
+        if (statusState.baseGravity > -9999.0f) {
+            actor->gravity = statusState.baseGravity;
+        }
     }
 
     actor->colorFilterTimer = 0;
@@ -8512,6 +8556,35 @@ void TickStatusEffects(ExternalModPackage& package, PlayState* play,
                 actor->freezeTimer = static_cast<uint16_t>(std::clamp(std::min(statusState.framesRemaining, 6), 1, 6));
                 ApplyStatusColorFilter(actor, statusState.statusType, statusState.intensity);
                 break;
+            case ExternalModStatusType::HighJump:
+                if (statusState.levitationProfile.mode == ExternalModLevitationMode::LiftSuspend) {
+                    const int32_t riseFrames = std::max(1, statusState.levitationProfile.riseFrames);
+                    const int32_t elapsedFrames =
+                        std::max(0, statusState.totalDurationFrames - statusState.framesRemaining);
+                    const float riseProgress =
+                        std::clamp(static_cast<float>(elapsedFrames) / static_cast<float>(riseFrames), 0.0f, 1.0f);
+                    const float liftedByFrames = statusState.levitationProfile.holdHeight * riseProgress;
+                    const float liftedBySpeed = std::clamp(statusState.levitationProfile.liftSpeed *
+                                                               static_cast<float>(elapsedFrames),
+                                                           0.0f, statusState.levitationProfile.holdHeight);
+                    const float liftedHeight = std::clamp(
+                        std::max(liftedByFrames, liftedBySpeed), 0.0f, statusState.levitationProfile.holdHeight);
+                    if (statusState.levitationProfile.lockHorizontal) {
+                        actor->world.pos.x = statusState.baseX;
+                        actor->world.pos.z = statusState.baseZ;
+                    }
+                    actor->world.pos.y = statusState.baseY + liftedHeight;
+                    actor->velocity.x = 0.0f;
+                    actor->velocity.y = 0.0f;
+                    actor->velocity.z = 0.0f;
+                    if (statusState.baseGravity > -9999.0f) {
+                        actor->gravity = statusState.baseGravity * statusState.levitationProfile.gravityScaleWhileActive;
+                    }
+                    ApplyStatusColorFilter(actor, statusState.statusType, statusState.intensity);
+                } else {
+                    ApplyStatusColorFilter(actor, statusState.statusType, statusState.intensity / 2);
+                }
+                break;
             case ExternalModStatusType::Fire:
             case ExternalModStatusType::Poison:
                 ApplyStatusColorFilter(actor, statusState.statusType, statusState.intensity);
@@ -8651,7 +8724,9 @@ void ApplyGlobalPlayerStatusModifiers(std::vector<ExternalModPackage>& packages,
                     movementMultiplier *= std::clamp(statusState.speedMultiplier, 0.05f, 8.0f);
                     break;
                 case ExternalModStatusType::HighJump:
-                    highJumpActive = true;
+                    if (statusState.levitationProfile.mode != ExternalModLevitationMode::LiftSuspend) {
+                        highJumpActive = true;
+                    }
                     break;
                 case ExternalModStatusType::Strength:
                     strengthMultiplier *= std::clamp(statusState.strengthMultiplier, 0.1f, 12.0f);
@@ -9410,6 +9485,11 @@ bool ExecuteUseProfileById(ExternalModPackage& package, const std::string& profi
 
     std::vector<Actor*> targets;
     ResolveTargetsForTargetingProfile(*targetingProfile, play, player, targets);
+    const bool traceUseProfile = CVarGetInteger("gExternalMods.UseProfileTrace", 0) != 0;
+    if (traceUseProfile) {
+        SPDLOG_INFO("[ExternalMods] useProfile '{}' targets={} item='{}' mod='{}'", profile->id, targets.size(),
+                    sourceItem == nullptr ? "<none>" : sourceItem->id.c_str(), package.manifest.id);
+    }
     package.runtime.useProfileSpawnedShockwave = false;
     if (!ExecuteUseProfileEffects(package, profile->effects, targets, play, player, sourceItem, outError)) {
         return false;
@@ -9420,6 +9500,7 @@ bool ExecuteUseProfileById(ExternalModPackage& package, const std::string& profi
 bool ExecuteUseProfileEffects(ExternalModPackage& package, const std::vector<ExternalModUseProfileEffect>& effects,
                               const std::vector<Actor*>& targets, PlayState* play, Player* player,
                               const ExternalModItemDefinition* sourceItem, std::string& outError) {
+    const bool traceUseProfile = CVarGetInteger("gExternalMods.UseProfileTrace", 0) != 0;
     for (const auto& effect : effects) {
         const auto effectAction = ToLower(effect.action);
         if (effectAction == "dealdamage") {
@@ -9553,6 +9634,10 @@ bool ExecuteUseProfileEffects(ExternalModPackage& package, const std::vector<Ext
             if (aoeProfile == nullptr) {
                 outError = "Unknown aoe profile: " + effect.aoeProfileId;
                 return false;
+            }
+            if (traceUseProfile) {
+                SPDLOG_INFO("[ExternalMods] useProfile->aoe '{}' item='{}' mod='{}'", aoeProfile->id,
+                            sourceItem == nullptr ? "<none>" : sourceItem->id.c_str(), package.manifest.id);
             }
 
             Vec3f aoeOrigin = player->actor.world.pos;
@@ -9693,6 +9778,10 @@ bool ExecuteUseProfileEffects(ExternalModPackage& package, const std::vector<Ext
             if (spellDefinition == nullptr) {
                 outError = "Unknown spell id: " + resolvedSpellId;
                 return false;
+            }
+            if (traceUseProfile) {
+                SPDLOG_INFO("[ExternalMods] useProfile->spell '{}' item='{}' mod='{}'", spellDefinition->id,
+                            sourceItem == nullptr ? "<none>" : sourceItem->id.c_str(), package.manifest.id);
             }
             const auto cooldownIt = package.runtime.spellCooldownsById.find(spellDefinition->id);
             if (cooldownIt != package.runtime.spellCooldownsById.end() && cooldownIt->second > 0) {
@@ -12843,6 +12932,26 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
         outManifest.loadPriority = -outManifest.loadOrder;
     }
 
+    if (json.contains("uiCategory")) {
+        if (!json["uiCategory"].is_string()) {
+            outError = "Invalid field: uiCategory must be string";
+            return false;
+        }
+        const std::string normalizedCategory = ToLower(json["uiCategory"].get<std::string>());
+        if (normalizedCategory == "core_api" || normalizedCategory == "mod") {
+            outManifest.uiCategory = normalizedCategory;
+        } else {
+            SPDLOG_WARN("[ExternalMods] Manifest {} has unsupported uiCategory '{}'; falling back to 'mod'",
+                        outManifest.id.empty() ? "<unknown>" : outManifest.id,
+                        json["uiCategory"].get<std::string>());
+            outManifest.uiCategory = "mod";
+        }
+    } else {
+        SPDLOG_WARN("[ExternalMods] Manifest {} missing uiCategory; defaulting to 'mod'",
+                    outManifest.id.empty() ? "<unknown>" : outManifest.id);
+        outManifest.uiCategory = "mod";
+    }
+
     if (json.contains("assets")) {
         if (!json["assets"].is_array()) {
             outError = "Invalid field: assets must be an array";
@@ -15378,12 +15487,14 @@ bool ExternalModManager::TryParseStatusDefinitions(const std::string& content, i
                 definition.baseStatusType = parsedType;
             }
         }
+        bool hasExplicitDurationFrames = false;
         if (status.contains("durationFrames")) {
             if (!status["durationFrames"].is_number_integer()) {
                 outError = "statuses[" + std::to_string(i) + "].durationFrames must be integer";
                 return false;
             }
             definition.durationFrames = std::clamp(status["durationFrames"].get<int32_t>(), 1, 36000);
+            hasExplicitDurationFrames = true;
         }
         if (status.contains("tickFrames")) {
             if (!status["tickFrames"].is_number_integer()) {
@@ -15477,6 +15588,81 @@ bool ExternalModManager::TryParseStatusDefinitions(const std::string& content, i
                     return false;
                 }
                 definition.freezeProfile.breakEffectOnExpire = freezeProfile["breakEffectOnExpire"].get<bool>();
+            }
+        }
+        if (status.contains("levitationProfile")) {
+            if (!status["levitationProfile"].is_object()) {
+                outError = "statuses[" + std::to_string(i) + "].levitationProfile must be object";
+                return false;
+            }
+            definition.hasLevitationProfile = true;
+            const auto& levitationProfile = status["levitationProfile"];
+            if (levitationProfile.contains("mode")) {
+                if (!levitationProfile["mode"].is_string()) {
+                    outError = "statuses[" + std::to_string(i) + "].levitationProfile.mode must be string";
+                    return false;
+                }
+                if (!ParseLevitationModeToken(levitationProfile["mode"].get<std::string>(),
+                                              definition.levitationProfile.mode)) {
+                    outError = "statuses[" + std::to_string(i) +
+                               "].levitationProfile.mode must be none|lift_suspend";
+                    return false;
+                }
+            }
+            if (levitationProfile.contains("liftSpeed")) {
+                if (!levitationProfile["liftSpeed"].is_number()) {
+                    outError = "statuses[" + std::to_string(i) + "].levitationProfile.liftSpeed must be number";
+                    return false;
+                }
+                definition.levitationProfile.liftSpeed =
+                    std::clamp(levitationProfile["liftSpeed"].get<float>(), 0.01f, 50.0f);
+            }
+            if (levitationProfile.contains("holdHeight")) {
+                if (!levitationProfile["holdHeight"].is_number()) {
+                    outError = "statuses[" + std::to_string(i) + "].levitationProfile.holdHeight must be number";
+                    return false;
+                }
+                definition.levitationProfile.holdHeight =
+                    std::clamp(levitationProfile["holdHeight"].get<float>(), 0.0f, 1000.0f);
+            }
+            if (levitationProfile.contains("riseFrames")) {
+                if (!levitationProfile["riseFrames"].is_number_integer()) {
+                    outError = "statuses[" + std::to_string(i) + "].levitationProfile.riseFrames must be integer";
+                    return false;
+                }
+                definition.levitationProfile.riseFrames =
+                    std::clamp(levitationProfile["riseFrames"].get<int32_t>(), 1, 36000);
+            }
+            if (levitationProfile.contains("suspendFrames")) {
+                if (!levitationProfile["suspendFrames"].is_number_integer()) {
+                    outError = "statuses[" + std::to_string(i) + "].levitationProfile.suspendFrames must be integer";
+                    return false;
+                }
+                definition.levitationProfile.suspendFrames =
+                    std::clamp(levitationProfile["suspendFrames"].get<int32_t>(), 0, 36000);
+            }
+            if (levitationProfile.contains("lockHorizontal")) {
+                if (!levitationProfile["lockHorizontal"].is_boolean()) {
+                    outError = "statuses[" + std::to_string(i) + "].levitationProfile.lockHorizontal must be boolean";
+                    return false;
+                }
+                definition.levitationProfile.lockHorizontal = levitationProfile["lockHorizontal"].get<bool>();
+            }
+            if (levitationProfile.contains("gravityScaleWhileActive")) {
+                if (!levitationProfile["gravityScaleWhileActive"].is_number()) {
+                    outError = "statuses[" + std::to_string(i) +
+                               "].levitationProfile.gravityScaleWhileActive must be number";
+                    return false;
+                }
+                definition.levitationProfile.gravityScaleWhileActive =
+                    std::clamp(levitationProfile["gravityScaleWhileActive"].get<float>(), 0.0f, 5.0f);
+            }
+
+            if (definition.levitationProfile.mode == ExternalModLevitationMode::LiftSuspend &&
+                !hasExplicitDurationFrames) {
+                definition.durationFrames = std::clamp(definition.levitationProfile.riseFrames +
+                                                           definition.levitationProfile.suspendFrames,
+                                                       1, 36000);
             }
         }
         if (status.contains("stacking")) {

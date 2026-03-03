@@ -52,5 +52,7 @@
     "debugOverlayDefinitions":  "debug/overlays.json",
     "routeDefinitions":  "nav/routes.json",
     "behaviorTreeDefinitions":  "ai/behavior_trees.json",
-    "actorAdapterDefinitions":  "actors/adapters.json"
+    "actorAdapterDefinitions":  "actors/adapters.json",
+    "uiCategory":  "core_api"
 }
+

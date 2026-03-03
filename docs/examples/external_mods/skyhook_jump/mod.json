@@ -36,5 +36,7 @@
                         "actors":  "actors/actors.json",
                         "quests":  "quests/quests.json",
                         "wasm":  "scripts/skyhook.wat"
-                    }
+                    },
+    "uiCategory":  "mod"
 }
+

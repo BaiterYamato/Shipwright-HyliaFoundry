@@ -19,8 +19,8 @@ Start here:
 v6 reference suite:
 
 - Frameworks: `ui_kit`, `container_kit`, `ai_templates`, `sss`
-- Content demos: `demo_mini_inventory_h`, `demo_bag_inventory_ext`, `demo_furnace_system`, `demo_firewall_staff`,
-  `demo_purple_din_lev_glove`, `demo_npc_patrol`, `demo_enemy_templates`, `demo_vanilla_adapters`
+- Content demos: `demo_mini_inventory_h`, `demo_bag_inventory_ext`, `demo_furnace_system`,
+  `sss_content_pack`, `demo_npc_patrol`, `demo_enemy_templates`, `demo_vanilla_adapters`
 
 v7 world graphics suite:
 

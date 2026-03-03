@@ -55,5 +55,7 @@
     "recipeDefinitions":  "recipes/processing_recipes.json",
     "interactionDefinitions":  "interactions/interactions.json",
     "actorDefinitions":  "actors/actors.json",
-    "actorArchetypeDefinitions":  "actors/archetypes.json"
+    "actorArchetypeDefinitions":  "actors/archetypes.json",
+    "uiCategory":  "mod"
 }
+

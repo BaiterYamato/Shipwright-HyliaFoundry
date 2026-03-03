@@ -45,5 +45,7 @@
                         "wasm":  "scripts/noop.wat"
                     },
     "debugOverlayDefinitions":  "debug/overlays.json",
-    "actorAdapterDefinitions":  "actors/adapters.json"
+    "actorAdapterDefinitions":  "actors/adapters.json",
+    "uiCategory":  "mod"
 }
+

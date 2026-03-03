@@ -20,8 +20,7 @@ Create layered reference suite in `docs/examples/external_mods`:
 - `demo_mini_inventory_h`
 - `demo_bag_inventory_ext`
 - `demo_furnace_system`
-- `demo_firewall_staff`
-- `demo_purple_din_lev_glove`
+- `sss_content_pack`
 - `demo_npc_patrol`
 - `demo_enemy_templates`
 - `demo_vanilla_adapters`

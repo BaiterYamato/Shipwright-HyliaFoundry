@@ -36,5 +36,7 @@
                         "actors":  "actors/actors.json",
                         "quests":  "quests/quests.json",
                         "wasm":  "scripts/noop.wat"
-                    }
+                    },
+    "uiCategory":  "mod"
 }
+

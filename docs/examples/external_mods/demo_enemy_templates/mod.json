@@ -47,5 +47,7 @@
                     },
     "sensorDefinitions":  "ai/sensors.json",
     "actorArchetypeDefinitions":  "actors/archetypes.json",
-    "behaviorTreeDefinitions":  "ai/behavior_trees.json"
+    "behaviorTreeDefinitions":  "ai/behavior_trees.json",
+    "uiCategory":  "mod"
 }
+
