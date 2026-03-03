@@ -686,3 +686,12 @@ This file is the fixed, append-only plan ledger for this repository.
   - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
   - soh/soh/Enhancements/external-mods/ExternalModTypes.h
   - docs/examples/external_mods
+
+## [PLN-20260303-0006][UPDATE] 2026-03-03T10:48:27Z
+- status: done
+- note: Completed v7 scaffolding: capabilities/actions/hooks runtime plumbing, v7 track docs, v7 framework/demo suite, exports/sync/build/validation.
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+  - docs/agents/plan_tracks/v7/milestones/patch_v7_world_graphics_core.md
+  - docs/examples/external_mods/lighting_kit/mod.json
+  - tools/external_mods/export_runtime_reference.ps1

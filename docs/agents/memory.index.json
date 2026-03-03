@@ -1,14 +1,14 @@
 ﻿{
     "version":  2,
     "schemaVersion":  2,
-    "lastUpdatedUtc":  "2026-03-03T10:08:33Z",
+    "lastUpdatedUtc":  "2026-03-03T10:48:45Z",
     "stats":  {
-                  "entryCount":  99,
+                  "entryCount":  101,
                   "openCount":  31,
-                  "doneCount":  67,
+                  "doneCount":  69,
                   "deprecatedCount":  1,
-                  "topicCount":  51,
-                  "tagCount":  54
+                  "topicCount":  52,
+                  "tagCount":  56
               },
     "consistency":  {
                         "duplicateIds":  [
@@ -194,6 +194,12 @@
                                              "topic":  "external-mods-v4-foundation",
                                              "status":  "done",
                                              "line":  50,
+                                             "source":  "memory.log"
+                                         },
+                 "mem-20260303-000036":  {
+                                             "topic":  "external-mods:v7-world-graphics",
+                                             "status":  "done",
+                                             "line":  101,
                                              "source":  "memory.log"
                                          },
                  "mem-20260225-000034":  {
@@ -615,6 +621,12 @@
                                              "status":  "done",
                                              "line":  57,
                                              "source":  "memory.log"
+                                         },
+                 "mem-20260303-000035":  {
+                                             "topic":  "plan:PLN-20260303-0006",
+                                             "status":  "done",
+                                             "line":  100,
+                                             "source":  "memory.log"
                                          }
              },
     "byTag":  {
@@ -677,7 +689,8 @@
                                  "mem-20260303-000031",
                                  "mem-20260303-000032",
                                  "mem-20260303-000033",
-                                 "mem-20260303-000034"
+                                 "mem-20260303-000034",
+                                 "mem-20260303-000035"
                              ],
                   "external-mods,aim-ots,camera,reticle,input":  [
                                                                      "mem-20260225-000026"
@@ -688,7 +701,8 @@
                                         "mem-20260225-000016",
                                         "mem-20260225-000045",
                                         "mem-20260225-000053",
-                                        "mem-20260225-000063"
+                                        "mem-20260225-000063",
+                                        "mem-20260303-000036"
                                     ],
                   "agents,git,tooling,plans":  [
                                                    "mem-20260303-000005"
@@ -721,7 +735,8 @@
                             ],
                   "api-v4":  [
                                  "mem-20260225-000053",
-                                 "mem-20260225-000063"
+                                 "mem-20260225-000063",
+                                 "mem-20260303-000036"
                              ],
                   "git":  [
                               "mem-20260225-000033",
@@ -802,7 +817,8 @@
                                  "mem-20260303-000031",
                                  "mem-20260303-000032",
                                  "mem-20260303-000033",
-                                 "mem-20260303-000034"
+                                 "mem-20260303-000034",
+                                 "mem-20260303-000035"
                              ],
                   "external-mods,api-v4,v6,reference-suite":  [
                                                                   "mem-20260303-000030"
@@ -935,11 +951,15 @@
                                 "mem-20260303-000031",
                                 "mem-20260303-000032",
                                 "mem-20260303-000033",
-                                "mem-20260303-000034"
+                                "mem-20260303-000034",
+                                "mem-20260303-000035"
                             ],
                   "external-mods,api-v4,sss,tooling,docs":  [
                                                                 "mem-20260303-000002"
                                                             ],
+                  "render":  [
+                                 "mem-20260303-000036"
+                             ],
                   "skills":  [
                                  "mem-20260225-000006"
                              ],
@@ -952,6 +972,9 @@
                   "manifest":  [
                                    "mem-20260225-000063"
                                ],
+                  "v7":  [
+                             "mem-20260303-000036"
+                         ],
                   "readme":  [
                                  "mem-20260225-000005"
                              ],
@@ -1029,7 +1052,8 @@
                                                    "mem-20260303-000014"
                                                ],
                     "plan:PLN-20260303-0006":  [
-                                                   "mem-20260303-000034"
+                                                   "mem-20260303-000034",
+                                                   "mem-20260303-000035"
                                                ],
                     "plan:PLN-20260225-0018":  [
                                                    "mem-20260225-000061",
@@ -1082,6 +1106,9 @@
                     "skills-pack-v1":  [
                                            "mem-20260225-000006"
                                        ],
+                    "external-mods:v7-world-graphics":  [
+                                                            "mem-20260303-000036"
+                                                        ],
                     "agents:finalize-plan-merge-root-binding-fix":  [
                                                                         "mem-20260303-000005"
                                                                     ],
@@ -1252,7 +1279,9 @@
                                   "mem-20260303-000030",
                                   "mem-20260303-000031",
                                   "mem-20260303-000032",
-                                  "mem-20260303-000033"
+                                  "mem-20260303-000033",
+                                  "mem-20260303-000035",
+                                  "mem-20260303-000036"
                               ],
                      "open":  [
                                   "mem-20260225-000003",
