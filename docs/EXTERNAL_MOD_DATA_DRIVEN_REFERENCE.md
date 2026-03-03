@@ -38,6 +38,19 @@ Machine-readable mapping: `docs/catalogs.json` (`capabilities[]`).
 - `spells/spells.json`
 - `hooks/hooks.json`
 - `behaviors/behaviors.json`
+- `ui/screens.json`
+- `ui/hud_layouts.json`
+- `inventory_ext/pages.json`
+- `containers/containers.json`
+- `recipes/processing_recipes.json`
+- `interactions/interactions.json`
+- `actors/archetypes.json`
+- `actors/adapters.json`
+- `ai/behavior_trees.json`
+- `ai/sensors.json`
+- `nav/routes.json`
+- `nav/nav_bridge.json`
+- `debug/overlays.json`
 
 ## 4) Item definitions (`items/items.json`)
 
@@ -117,7 +130,34 @@ These catalogs are capability-gated by:
 - `states.catalog.v1`
 - `spells.catalog.v1`
 
-## 11) Validation workflow
+## 11) v6 UI/container/actors/AI/nav/debug contracts
+
+New capabilities:
+
+- `ui.runtime.v1`, `ui.hud.v1`, `ui.inventory_ext.v1`
+- `containers.v1`, `recipes.processing.v1`, `interactions.v1`
+- `actors.archetypes.v1`, `actors.adapters.v1`
+- `ai.behavior_trees.v1`, `ai.sensors.v1`
+- `nav.routes.v1`, `nav.navmesh_bridge.v1`
+- `debug.overlay.v1`
+
+Common action families:
+
+- `ui.*` (`openScreen`, `closeScreen`, `toggleScreen`, `focusNext`, `focusPrev`)
+- `inventoryExt.*` (`createPage`, `moveItem`, `save`, `load`)
+- `container.*` (`open`, `moveItem`, `startProcess`, `cancelProcess`, `getProgress`)
+- `actors.*` (`spawnArchetype`, `despawnArchetype`)
+- `interactions.invoke`
+- `ai.*`, `sense.*`, `nav.*`, `debug.*`
+
+New hook events:
+
+- `onUiScreenOpened`, `onUiScreenClosed`, `onUiAction`
+- `onContainerSlotChanged`, `onProcessStart`, `onProcessTick`, `onProcessComplete`
+- `onArchetypeSpawn`, `onArchetypeDespawn`, `onInteraction`
+- `onBehaviorNodeChanged`, `onPathRequested`, `onPathFailed`
+
+## 12) Validation workflow
 
 1. Validate schema/capabilities via runtime load.
 2. Check logs for contextual parser/runtime errors.
@@ -127,6 +167,6 @@ These catalogs are capability-gated by:
 tools/external_mods/export_runtime_reference.ps1
 ```
 
-## 12) Example packs
+## 13) Example packs
 
 See `docs/examples/external_mods/` for runnable reference mods.

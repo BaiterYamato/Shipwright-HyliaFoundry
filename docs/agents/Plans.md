@@ -622,3 +622,20 @@ This file is the fixed, append-only plan ledger for this repository.
 - note: finalize-plan-merge was run and correctly stopped because source and target are both develop; checkpoint commit already landed directly on target branch.
 - refs:
   - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1,branch:develop,commit:fa1035a82
+
+## [PLN-20260303-0004] Patch v6 core API + v6 reference suite rollout
+- createdUtc: 2026-03-03T07:29:15Z
+- status: in_progress
+- scope: mixed
+- summary: Execute strict patch-v5 gate then implement v6 contract/runtime scaffolding (UI/container/actors/AI/nav/debug) and ship v6 framework/content reference suite under docs/examples/external_mods.
+- milestones:
+  1. Phase0 gate patch v5 and produce report,Phase1 add v6 capabilities/manifest fields/actions/events/docs exports,Phase2-6 add runtime modules and guard rails,Phase7-8 ship v6 framework and demo suites + sync,Phase9-10 tooling/docs/export/build/smoke and finalize
+- tags: external-mods,api-v4,v6,reference-suite,frameworks
+- refs:
+  - docs/agents/plan_tracks/v6/index.md,docs/agents/plan_tracks/v6/roadmap.md,soh/soh/Enhancements/external-mods/ExternalModManager.cpp,docs/examples/external_mods
+
+## [PLN-20260303-0004][UPDATE] 2026-03-03T08:55:47Z
+- status: done
+- note: Completed patch-v5 gate + v6 core contract/runtime scaffolding, exported references, added v6 framework/content reference suite, synced demos, and validated build/validate_mod/doc-drift.
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp,soh/soh/Enhancements/external-mods/ExternalModTypes.h,tools/external_mods/export_runtime_reference.ps1,tools/external_mods/validate_mod.ps1,tools/external_mods/sync_examples_to_runtime.ps1,docs/examples/external_mods/ui_kit/mod.json,docs/examples/external_mods/container_kit/mod.json,docs/examples/external_mods/ai_templates/mod.json,docs/agents/plan_tracks/v5/milestones/patch_v5_gate_report.md,docs/agents/plan_tracks/v6/milestones/patch_v6_core_api.md,docs/agents/plan_tracks/v6/milestones/patch_v6_reference_suite.md

@@ -171,6 +171,45 @@ class ExternalModManager {
     static bool TryParseCameraDefinitions(const std::string& content, int32_t apiVersion,
                                           std::vector<ExternalModAimCameraProfile>& outDefinitions,
                                           std::string& outError);
+    static bool TryParseUiScreenDefinitions(const std::string& content, int32_t apiVersion,
+                                            std::vector<ExternalModUiScreenDefinition>& outDefinitions,
+                                            std::string& outError);
+    static bool TryParseUiHudDefinitions(const std::string& content, int32_t apiVersion,
+                                         std::vector<ExternalModUiHudLayoutDefinition>& outDefinitions,
+                                         std::string& outError);
+    static bool TryParseInventoryExtensionDefinitions(const std::string& content, int32_t apiVersion,
+                                                      std::vector<ExternalModInventoryPageDefinition>& outDefinitions,
+                                                      std::string& outError);
+    static bool TryParseContainerDefinitions(const std::string& content, int32_t apiVersion,
+                                             std::vector<ExternalModContainerDefinition>& outDefinitions,
+                                             std::string& outError);
+    static bool TryParseRecipeDefinitions(const std::string& content, int32_t apiVersion,
+                                          std::vector<ExternalModProcessingRecipeDefinition>& outDefinitions,
+                                          std::string& outError);
+    static bool TryParseInteractionDefinitions(const std::string& content, int32_t apiVersion,
+                                               std::vector<ExternalModInteractionDefinition>& outDefinitions,
+                                               std::string& outError);
+    static bool TryParseActorArchetypeDefinitions(const std::string& content, int32_t apiVersion,
+                                                  std::vector<ExternalModActorArchetypeDefinition>& outDefinitions,
+                                                  std::string& outError);
+    static bool TryParseActorAdapterDefinitions(const std::string& content, int32_t apiVersion,
+                                                std::vector<ExternalModActorAdapterDefinition>& outDefinitions,
+                                                std::string& outError);
+    static bool TryParseBehaviorTreeDefinitions(const std::string& content, int32_t apiVersion,
+                                                std::vector<ExternalModBehaviorTreeDefinition>& outDefinitions,
+                                                std::string& outError);
+    static bool TryParseSensorDefinitions(const std::string& content, int32_t apiVersion,
+                                          std::vector<ExternalModSensorDefinition>& outDefinitions,
+                                          std::string& outError);
+    static bool TryParseRouteDefinitions(const std::string& content, int32_t apiVersion,
+                                         std::vector<ExternalModRouteDefinition>& outDefinitions,
+                                         std::string& outError);
+    static bool TryParseNavBridgeDefinitions(const std::string& content, int32_t apiVersion,
+                                             std::vector<ExternalModNavBridgeDefinition>& outDefinitions,
+                                             std::string& outError);
+    static bool TryParseDebugOverlayDefinitions(const std::string& content, int32_t apiVersion,
+                                                std::vector<ExternalModDebugOverlayDefinition>& outDefinitions,
+                                                std::string& outError);
     static bool TryParseFxPresetDefinitions(const std::string& content, int32_t apiVersion,
                                             std::vector<ExternalModFxPresetDefinition>& outDefinitions,
                                             std::string& outError);

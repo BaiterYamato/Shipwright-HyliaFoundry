@@ -1,0 +1,9 @@
+﻿{
+    "schemaVersion":  1,
+    "behaviors":  [
+                      {
+                          "id":  "com.sylian.ai_templates:patrol_root",
+                          "rootNodeType":  "sequence"
+                      }
+                  ]
+}

@@ -92,6 +92,19 @@ constexpr uint64_t kMaxItemStateDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxEquippedModelDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxHudWidgetDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxReticleDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxUiScreenDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxUiHudDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxInventoryExtensionDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxContainerDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxRecipeDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxInteractionDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxActorArchetypeDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxActorAdapterDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxBehaviorTreeDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxSensorDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxRouteDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxNavBridgeDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxDebugOverlayDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxEffectGraphDefinitionBytes = 1024 * 1024;
 constexpr uint64_t kMaxCombatHitRulesBytes = 512 * 1024;
 constexpr uint64_t kMaxSurfDefinitionBytes = 512 * 1024;
@@ -789,6 +802,19 @@ const std::unordered_set<std::string> kSupportedCapabilities = {
     "items.use_profiles.v1",
     "patches.vanilla_items.v1",
     "input.bindings.v2",
+    "ui.runtime.v1",
+    "ui.hud.v1",
+    "ui.inventory_ext.v1",
+    "containers.v1",
+    "recipes.processing.v1",
+    "interactions.v1",
+    "actors.archetypes.v1",
+    "actors.adapters.v1",
+    "ai.behavior_trees.v1",
+    "ai.sensors.v1",
+    "nav.routes.v1",
+    "nav.navmesh_bridge.v1",
+    "debug.overlay.v1",
     "items.state_machine.v1",
     "render.equipped_models.v1",
     "hud.widgets.v1",
@@ -840,6 +866,19 @@ const std::unordered_map<std::string, ExternalModHookType> kHookAliases = {
     { "onstatusexpired", ExternalModHookType::OnStatusExpired },
     { "onstateapplied", ExternalModHookType::OnStateApplied },
     { "onstateremoved", ExternalModHookType::OnStateRemoved },
+    { "onuiscreenopened", ExternalModHookType::OnUiScreenOpened },
+    { "onuiscreenclosed", ExternalModHookType::OnUiScreenClosed },
+    { "onuiaction", ExternalModHookType::OnUiAction },
+    { "oncontainerslotchanged", ExternalModHookType::OnContainerSlotChanged },
+    { "onprocessstart", ExternalModHookType::OnProcessStart },
+    { "onprocesstick", ExternalModHookType::OnProcessTick },
+    { "onprocesscomplete", ExternalModHookType::OnProcessComplete },
+    { "onarchetypespawn", ExternalModHookType::OnArchetypeSpawn },
+    { "onarchetypedespawn", ExternalModHookType::OnArchetypeDespawn },
+    { "oninteraction", ExternalModHookType::OnInteraction },
+    { "onbehaviornodechanged", ExternalModHookType::OnBehaviorNodeChanged },
+    { "onpathrequested", ExternalModHookType::OnPathRequested },
+    { "onpathfailed", ExternalModHookType::OnPathFailed },
     { "onplaydestroy", ExternalModHookType::OnPlayDestroy },
     { "ongameframeupdate", ExternalModHookType::OnGameFrameUpdate },
 };
@@ -4999,6 +5038,332 @@ bool ParseAction(const nlohmann::json& json, int32_t apiVersion, ExternalModActi
                 outError = "spells.castSpell requires spellId";
                 return false;
             }
+        }
+        return true;
+    }
+
+    if (actionType == "ui.openScreen") {
+        outAction.type = ExternalModActionType::UiOpenScreen;
+        if (!ValidateRequiredString(json, "screen", outAction.uiScreenId, outError)) {
+            if (!ValidateRequiredString(json, "screenId", outAction.uiScreenId, outError)) {
+                outError = "ui.openScreen requires screen/screenId";
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (actionType == "ui.closeScreen") {
+        outAction.type = ExternalModActionType::UiCloseScreen;
+        if (!ValidateRequiredString(json, "screen", outAction.uiScreenId, outError)) {
+            if (!ValidateRequiredString(json, "screenId", outAction.uiScreenId, outError)) {
+                outError = "ui.closeScreen requires screen/screenId";
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (actionType == "ui.toggleScreen") {
+        outAction.type = ExternalModActionType::UiToggleScreen;
+        if (!ValidateRequiredString(json, "screen", outAction.uiScreenId, outError)) {
+            if (!ValidateRequiredString(json, "screenId", outAction.uiScreenId, outError)) {
+                outError = "ui.toggleScreen requires screen/screenId";
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (actionType == "ui.focusNext") {
+        outAction.type = ExternalModActionType::UiFocusNext;
+        return true;
+    }
+
+    if (actionType == "ui.focusPrev") {
+        outAction.type = ExternalModActionType::UiFocusPrev;
+        return true;
+    }
+
+    if (actionType == "inventoryExt.createPage") {
+        outAction.type = ExternalModActionType::InventoryExtCreatePage;
+        if (!ValidateRequiredString(json, "pageId", outAction.inventoryPageId, outError)) {
+            outError = "inventoryExt.createPage requires pageId";
+            return false;
+        }
+        if (!json.contains("slots") || !json["slots"].is_number_integer()) {
+            outError = "inventoryExt.createPage.slots must be integer";
+            return false;
+        }
+        outAction.inventorySlotCount = std::clamp(json["slots"].get<int32_t>(), 1, 512);
+        return true;
+    }
+
+    if (actionType == "inventoryExt.moveItem") {
+        outAction.type = ExternalModActionType::InventoryExtMoveItem;
+        if (!ValidateRequiredString(json, "srcBinding", outAction.sourceBinding, outError)) {
+            if (!ValidateRequiredString(json, "src", outAction.sourceBinding, outError)) {
+                outError = "inventoryExt.moveItem requires srcBinding/src";
+                return false;
+            }
+        }
+        if (!ValidateRequiredString(json, "dstBinding", outAction.destinationBinding, outError)) {
+            if (!ValidateRequiredString(json, "dst", outAction.destinationBinding, outError)) {
+                outError = "inventoryExt.moveItem requires dstBinding/dst";
+                return false;
+            }
+        }
+        if (json.contains("count")) {
+            if (!json["count"].is_number_integer()) {
+                outError = "inventoryExt.moveItem.count must be integer";
+                return false;
+            }
+            outAction.moveCount = std::max(1, json["count"].get<int32_t>());
+        } else {
+            outAction.moveCount = 1;
+        }
+        return true;
+    }
+
+    if (actionType == "inventoryExt.save") {
+        outAction.type = ExternalModActionType::InventoryExtSave;
+        return true;
+    }
+
+    if (actionType == "inventoryExt.load") {
+        outAction.type = ExternalModActionType::InventoryExtLoad;
+        return true;
+    }
+
+    if (actionType == "container.open") {
+        outAction.type = ExternalModActionType::ContainerOpen;
+        if (!ValidateRequiredString(json, "containerId", outAction.containerId, outError)) {
+            if (!ValidateRequiredString(json, "container", outAction.containerId, outError)) {
+                outError = "container.open requires containerId/container";
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (actionType == "container.moveItem") {
+        outAction.type = ExternalModActionType::ContainerMoveItem;
+        if (!ValidateRequiredString(json, "srcBinding", outAction.sourceBinding, outError) &&
+            !ValidateRequiredString(json, "src", outAction.sourceBinding, outError)) {
+            outError = "container.moveItem requires srcBinding/src";
+            return false;
+        }
+        if (!ValidateRequiredString(json, "dstBinding", outAction.destinationBinding, outError) &&
+            !ValidateRequiredString(json, "dst", outAction.destinationBinding, outError)) {
+            outError = "container.moveItem requires dstBinding/dst";
+            return false;
+        }
+        outAction.moveCount = 1;
+        if (json.contains("count")) {
+            if (!json["count"].is_number_integer()) {
+                outError = "container.moveItem.count must be integer";
+                return false;
+            }
+            outAction.moveCount = std::max(1, json["count"].get<int32_t>());
+        }
+        return true;
+    }
+
+    if (actionType == "container.startProcess") {
+        outAction.type = ExternalModActionType::ContainerStartProcess;
+        if (!ValidateRequiredString(json, "containerId", outAction.containerId, outError) &&
+            !ValidateRequiredString(json, "container", outAction.containerId, outError)) {
+            outError = "container.startProcess requires containerId/container";
+            return false;
+        }
+        if (json.contains("recipeId")) {
+            if (!ValidateRequiredString(json, "recipeId", outAction.recipeId, outError)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (actionType == "container.cancelProcess") {
+        outAction.type = ExternalModActionType::ContainerCancelProcess;
+        if (!ValidateRequiredString(json, "containerId", outAction.containerId, outError) &&
+            !ValidateRequiredString(json, "container", outAction.containerId, outError)) {
+            outError = "container.cancelProcess requires containerId/container";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "container.getProgress") {
+        outAction.type = ExternalModActionType::ContainerGetProgress;
+        if (!ValidateRequiredString(json, "containerId", outAction.containerId, outError) &&
+            !ValidateRequiredString(json, "container", outAction.containerId, outError)) {
+            outError = "container.getProgress requires containerId/container";
+            return false;
+        }
+        if (json.contains("storeKey")) {
+            if (!ValidateRequiredString(json, "storeKey", outAction.variableKey, outError)) {
+                return false;
+            }
+        } else {
+            outAction.variableKey = "__container_progress";
+        }
+        return true;
+    }
+
+    if (actionType == "actors.spawnArchetype") {
+        outAction.type = ExternalModActionType::ActorsSpawnArchetype;
+        if (!ValidateRequiredString(json, "archetypeId", outAction.archetypeId, outError) &&
+            !ValidateRequiredString(json, "archetype", outAction.archetypeId, outError)) {
+            outError = "actors.spawnArchetype requires archetypeId/archetype";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "actors.despawnArchetype") {
+        outAction.type = ExternalModActionType::ActorsDespawnArchetype;
+        return parseActorHandle(outAction.actorHandle);
+    }
+
+    if (actionType == "interactions.invoke") {
+        outAction.type = ExternalModActionType::InteractionsInvoke;
+        if (!ValidateRequiredString(json, "interactionId", outAction.interactionId, outError) &&
+            !ValidateRequiredString(json, "interaction", outAction.interactionId, outError)) {
+            outError = "interactions.invoke requires interactionId/interaction";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "ai.runBehavior") {
+        outAction.type = ExternalModActionType::AiRunBehavior;
+        if (!ValidateRequiredString(json, "behaviorId", outAction.behaviorTreeId, outError) &&
+            !ValidateRequiredString(json, "behavior", outAction.behaviorTreeId, outError)) {
+            outError = "ai.runBehavior requires behaviorId/behavior";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "ai.setBlackboard") {
+        outAction.type = ExternalModActionType::AiSetBlackboard;
+        if (!ValidateRequiredString(json, "key", outAction.blackboardKey, outError)) {
+            outError = "ai.setBlackboard requires key";
+            return false;
+        }
+        if (!ValidateRequiredString(json, "value", outAction.blackboardValue, outError)) {
+            outError = "ai.setBlackboard requires value";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "ai.clearBlackboard") {
+        outAction.type = ExternalModActionType::AiClearBlackboard;
+        if (!ValidateRequiredString(json, "key", outAction.blackboardKey, outError)) {
+            outError = "ai.clearBlackboard requires key";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "sense.findTargets") {
+        outAction.type = ExternalModActionType::SenseFindTargets;
+        if (json.contains("storeKey")) {
+            if (!ValidateRequiredString(json, "storeKey", outAction.variableKey, outError)) {
+                return false;
+            }
+        } else {
+            outAction.variableKey = "__sense_targets";
+        }
+        return true;
+    }
+
+    if (actionType == "sense.lineOfSight") {
+        outAction.type = ExternalModActionType::SenseLineOfSight;
+        if (json.contains("range")) {
+            if (!json["range"].is_number()) {
+                outError = "sense.lineOfSight.range must be numeric";
+                return false;
+            }
+            outAction.range = std::max(1.0f, json["range"].get<float>());
+        }
+        if (json.contains("storeKey")) {
+            if (!ValidateRequiredString(json, "storeKey", outAction.variableKey, outError)) {
+                return false;
+            }
+        } else {
+            outAction.variableKey = "__sense_los";
+        }
+        return true;
+    }
+
+    if (actionType == "sense.distance") {
+        outAction.type = ExternalModActionType::SenseDistance;
+        if (json.contains("storeKey")) {
+            if (!ValidateRequiredString(json, "storeKey", outAction.variableKey, outError)) {
+                return false;
+            }
+        } else {
+            outAction.variableKey = "__sense_distance";
+        }
+        return true;
+    }
+
+    if (actionType == "nav.requestPath") {
+        outAction.type = ExternalModActionType::NavRequestPath;
+        if (json.contains("routeId")) {
+            if (!ValidateRequiredString(json, "routeId", outAction.routeId, outError)) {
+                return false;
+            }
+        }
+        if (json.contains("storeKey")) {
+            if (!ValidateRequiredString(json, "storeKey", outAction.navHandleKey, outError)) {
+                return false;
+            }
+        } else {
+            outAction.navHandleKey = "__nav_path_handle";
+        }
+        return true;
+    }
+
+    if (actionType == "nav.getPathPoints") {
+        outAction.type = ExternalModActionType::NavGetPathPoints;
+        if (!ValidateRequiredString(json, "handleKey", outAction.navHandleKey, outError) &&
+            !ValidateRequiredString(json, "storeKey", outAction.navHandleKey, outError)) {
+            outError = "nav.getPathPoints requires handleKey/storeKey";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "nav.releasePath") {
+        outAction.type = ExternalModActionType::NavReleasePath;
+        if (!ValidateRequiredString(json, "handleKey", outAction.navHandleKey, outError) &&
+            !ValidateRequiredString(json, "storeKey", outAction.navHandleKey, outError)) {
+            outError = "nav.releasePath requires handleKey/storeKey";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "debug.showOverlay") {
+        outAction.type = ExternalModActionType::DebugShowOverlay;
+        if (!ValidateRequiredString(json, "overlayId", outAction.overlayId, outError) &&
+            !ValidateRequiredString(json, "overlay", outAction.overlayId, outError)) {
+            outError = "debug.showOverlay requires overlayId/overlay";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "debug.hideOverlay") {
+        outAction.type = ExternalModActionType::DebugHideOverlay;
+        if (!ValidateRequiredString(json, "overlayId", outAction.overlayId, outError) &&
+            !ValidateRequiredString(json, "overlay", outAction.overlayId, outError)) {
+            outError = "debug.hideOverlay requires overlayId/overlay";
+            return false;
         }
         return true;
     }
@@ -11351,6 +11716,16 @@ void ExternalModManager::Shutdown() {
     for (auto& package : mPackages) {
         ClearStatusEffects(package.runtime, gPlayState, false);
         package.runtime.activeAoEs.clear();
+        package.runtime.activeStates.clear();
+        package.runtime.activeFxHandles.clear();
+        package.runtime.fxHandleByKey.clear();
+        package.runtime.spellCooldownsById.clear();
+        package.runtime.inventoryExtPages.clear();
+        package.runtime.activeContainerProcesses.clear();
+        package.runtime.activeNavPaths.clear();
+        package.runtime.openUiScreens.clear();
+        package.runtime.debugOverlayVisibility.clear();
+        package.runtime.nextNavPathHandle = 1;
         ClearSurfState(package.runtime);
         UnmountAssetsForPackage(package);
         package.runtime.enabled = false;
@@ -12076,6 +12451,19 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
         const bool hasAimCameraCatalogCapability = ManifestHasCapability(outManifest, "camera.aim_profiles.v1");
         const bool hasUseProfilesCapability = ManifestHasCapability(outManifest, "items.use_profiles.v1");
         const bool hasVanillaPatchesCapability = ManifestHasCapability(outManifest, "patches.vanilla_items.v1");
+        const bool hasUiRuntimeCapability = ManifestHasCapability(outManifest, "ui.runtime.v1");
+        const bool hasUiHudCapability = ManifestHasCapability(outManifest, "ui.hud.v1");
+        const bool hasUiInventoryExtCapability = ManifestHasCapability(outManifest, "ui.inventory_ext.v1");
+        const bool hasContainersCapability = ManifestHasCapability(outManifest, "containers.v1");
+        const bool hasRecipesCapability = ManifestHasCapability(outManifest, "recipes.processing.v1");
+        const bool hasInteractionsCapability = ManifestHasCapability(outManifest, "interactions.v1");
+        const bool hasActorArchetypesCapability = ManifestHasCapability(outManifest, "actors.archetypes.v1");
+        const bool hasActorAdaptersCapability = ManifestHasCapability(outManifest, "actors.adapters.v1");
+        const bool hasAiBehaviorTreesCapability = ManifestHasCapability(outManifest, "ai.behavior_trees.v1");
+        const bool hasAiSensorsCapability = ManifestHasCapability(outManifest, "ai.sensors.v1");
+        const bool hasNavRoutesCapability = ManifestHasCapability(outManifest, "nav.routes.v1");
+        const bool hasNavBridgeCapability = ManifestHasCapability(outManifest, "nav.navmesh_bridge.v1");
+        const bool hasDebugOverlayCapability = ManifestHasCapability(outManifest, "debug.overlay.v1");
         const bool hasItemStateMachineCapability = ManifestHasCapability(outManifest, "items.state_machine.v1");
         const bool hasEquippedModelsCapability = ManifestHasCapability(outManifest, "render.equipped_models.v1");
         const bool hasHudWidgetsCapability = ManifestHasCapability(outManifest, "hud.widgets.v1");
@@ -12221,6 +12609,32 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
                                  outManifest.itemUseProfiles) ||
             !parseCapabilityPath("vanillaItemPatches", "patches.vanilla_items.v1", hasVanillaPatchesCapability,
                                  outManifest.vanillaItemPatches) ||
+            !parseCapabilityPath("uiScreenDefinitions", "ui.runtime.v1", hasUiRuntimeCapability,
+                                 outManifest.uiScreenDefinitions) ||
+            !parseCapabilityPath("uiHudDefinitions", "ui.hud.v1", hasUiHudCapability,
+                                 outManifest.uiHudDefinitions) ||
+            !parseCapabilityPath("inventoryExtensionDefinitions", "ui.inventory_ext.v1", hasUiInventoryExtCapability,
+                                 outManifest.inventoryExtensionDefinitions) ||
+            !parseCapabilityPath("containerDefinitions", "containers.v1", hasContainersCapability,
+                                 outManifest.containerDefinitions) ||
+            !parseCapabilityPath("recipeDefinitions", "recipes.processing.v1", hasRecipesCapability,
+                                 outManifest.recipeDefinitions) ||
+            !parseCapabilityPath("interactionDefinitions", "interactions.v1", hasInteractionsCapability,
+                                 outManifest.interactionDefinitions) ||
+            !parseCapabilityPath("actorArchetypeDefinitions", "actors.archetypes.v1", hasActorArchetypesCapability,
+                                 outManifest.actorArchetypeDefinitions) ||
+            !parseCapabilityPath("actorAdapterDefinitions", "actors.adapters.v1", hasActorAdaptersCapability,
+                                 outManifest.actorAdapterDefinitions) ||
+            !parseCapabilityPath("behaviorTreeDefinitions", "ai.behavior_trees.v1", hasAiBehaviorTreesCapability,
+                                 outManifest.behaviorTreeDefinitions) ||
+            !parseCapabilityPath("sensorDefinitions", "ai.sensors.v1", hasAiSensorsCapability,
+                                 outManifest.sensorDefinitions) ||
+            !parseCapabilityPath("routeDefinitions", "nav.routes.v1", hasNavRoutesCapability,
+                                 outManifest.routeDefinitions) ||
+            !parseCapabilityPath("navBridgeDefinitions", "nav.navmesh_bridge.v1", hasNavBridgeCapability,
+                                 outManifest.navBridgeDefinitions) ||
+            !parseCapabilityPath("debugOverlayDefinitions", "debug.overlay.v1", hasDebugOverlayCapability,
+                                 outManifest.debugOverlayDefinitions) ||
             !parseCapabilityPath("itemStateDefinitions", "items.state_machine.v1", hasItemStateMachineCapability,
                                  outManifest.itemStateDefinitions) ||
             !parseCapabilityPath("equippedModelDefinitions", "render.equipped_models.v1", hasEquippedModelsCapability,
@@ -15575,6 +15989,957 @@ bool ExternalModManager::TryParseCameraDefinitions(const std::string& content, i
     return true;
 }
 
+bool ExternalModManager::TryParseUiScreenDefinitions(const std::string& content, int32_t apiVersion,
+                                                     std::vector<ExternalModUiScreenDefinition>& outDefinitions,
+                                                     std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "uiScreenDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("screens.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "screens.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("screens") || !json["screens"].is_array()) {
+        outError = "screens.json must contain screens[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& screens = json["screens"];
+    for (size_t i = 0; i < screens.size(); ++i) {
+        const auto& screen = screens[i];
+        if (!screen.is_object()) {
+            outError = "screens[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModUiScreenDefinition definition;
+        if (!ValidateRequiredString(screen, "id", definition.id, outError)) {
+            outError = "screens[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "screens[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate ui screen id: " + definition.id;
+            return false;
+        }
+
+        if (screen.contains("closeOnEscape")) {
+            if (!screen["closeOnEscape"].is_boolean()) {
+                outError = "screens[" + std::to_string(i) + "].closeOnEscape must be boolean";
+                return false;
+            }
+            definition.closeOnEscape = screen["closeOnEscape"].get<bool>();
+        }
+
+        if (screen.contains("hudLayoutId")) {
+            if (!screen["hudLayoutId"].is_string()) {
+                outError = "screens[" + std::to_string(i) + "].hudLayoutId must be string";
+                return false;
+            }
+            definition.hudLayoutId = screen["hudLayoutId"].get<std::string>();
+        }
+
+        if (screen.contains("onOpen") &&
+            !ParseActionArray(screen["onOpen"], apiVersion, "onOpen", definition.onOpen, outError)) {
+            outError = "screens[" + std::to_string(i) + "].onOpen: " + outError;
+            return false;
+        }
+        if (screen.contains("onClose") &&
+            !ParseActionArray(screen["onClose"], apiVersion, "onClose", definition.onClose, outError)) {
+            outError = "screens[" + std::to_string(i) + "].onClose: " + outError;
+            return false;
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseUiHudDefinitions(const std::string& content, int32_t apiVersion,
+                                                  std::vector<ExternalModUiHudLayoutDefinition>& outDefinitions,
+                                                  std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "uiHudDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("hud_layouts.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "hud_layouts.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("layouts") || !json["layouts"].is_array()) {
+        outError = "hud_layouts.json must contain layouts[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& layouts = json["layouts"];
+    for (size_t i = 0; i < layouts.size(); ++i) {
+        const auto& layout = layouts[i];
+        if (!layout.is_object()) {
+            outError = "layouts[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModUiHudLayoutDefinition definition;
+        if (!ValidateRequiredString(layout, "id", definition.id, outError)) {
+            outError = "layouts[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "layouts[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate hud layout id: " + definition.id;
+            return false;
+        }
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseInventoryExtensionDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModInventoryPageDefinition>& outDefinitions,
+    std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "inventoryExtensionDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("pages.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "pages.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("pages") || !json["pages"].is_array()) {
+        outError = "pages.json must contain pages[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& pages = json["pages"];
+    for (size_t i = 0; i < pages.size(); ++i) {
+        const auto& page = pages[i];
+        if (!page.is_object()) {
+            outError = "pages[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModInventoryPageDefinition definition;
+        if (!ValidateRequiredString(page, "id", definition.id, outError)) {
+            outError = "pages[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "pages[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate inventory page id: " + definition.id;
+            return false;
+        }
+
+        if (page.contains("slotCount")) {
+            if (!page["slotCount"].is_number_integer()) {
+                outError = "pages[" + std::to_string(i) + "].slotCount must be integer";
+                return false;
+            }
+            definition.slotCount = std::clamp(page["slotCount"].get<int32_t>(), 1, 512);
+        } else if (page.contains("slots")) {
+            if (!page["slots"].is_number_integer()) {
+                outError = "pages[" + std::to_string(i) + "].slots must be integer";
+                return false;
+            }
+            definition.slotCount = std::clamp(page["slots"].get<int32_t>(), 1, 512);
+        } else {
+            definition.slotCount = 20;
+        }
+
+        if (page.contains("persist")) {
+            if (!page["persist"].is_boolean()) {
+                outError = "pages[" + std::to_string(i) + "].persist must be boolean";
+                return false;
+            }
+            definition.persist = page["persist"].get<bool>();
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseContainerDefinitions(const std::string& content, int32_t apiVersion,
+                                                      std::vector<ExternalModContainerDefinition>& outDefinitions,
+                                                      std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "containerDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("containers.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "containers.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("containers") || !json["containers"].is_array()) {
+        outError = "containers.json must contain containers[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& containers = json["containers"];
+    for (size_t i = 0; i < containers.size(); ++i) {
+        const auto& container = containers[i];
+        if (!container.is_object()) {
+            outError = "containers[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModContainerDefinition definition;
+        if (!ValidateRequiredString(container, "id", definition.id, outError)) {
+            outError = "containers[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "containers[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate container id: " + definition.id;
+            return false;
+        }
+
+        if (!container.contains("slots") || !container["slots"].is_array()) {
+            outError = "containers[" + std::to_string(i) + "].slots must be array";
+            return false;
+        }
+        for (size_t slotIndex = 0; slotIndex < container["slots"].size(); ++slotIndex) {
+            const auto& slot = container["slots"][slotIndex];
+            if (!slot.is_object()) {
+                outError = "containers[" + std::to_string(i) + "].slots[" + std::to_string(slotIndex) +
+                           "] must be object";
+                return false;
+            }
+            ExternalModContainerSlotDefinition slotDefinition;
+            if (!ValidateRequiredString(slot, "id", slotDefinition.id, outError)) {
+                outError = "containers[" + std::to_string(i) + "].slots[" + std::to_string(slotIndex) + "].id: " +
+                           outError;
+                return false;
+            }
+            if (slot.contains("type")) {
+                if (!slot["type"].is_string()) {
+                    outError = "containers[" + std::to_string(i) + "].slots[" + std::to_string(slotIndex) +
+                               "].type must be string";
+                    return false;
+                }
+                slotDefinition.type = ToLower(slot["type"].get<std::string>());
+            }
+            if (slot.contains("filterTag")) {
+                if (!slot["filterTag"].is_string()) {
+                    outError = "containers[" + std::to_string(i) + "].slots[" + std::to_string(slotIndex) +
+                               "].filterTag must be string";
+                    return false;
+                }
+                slotDefinition.filterTag = slot["filterTag"].get<std::string>();
+            }
+            if (slot.contains("stackLimit")) {
+                if (!slot["stackLimit"].is_number_integer()) {
+                    outError = "containers[" + std::to_string(i) + "].slots[" + std::to_string(slotIndex) +
+                               "].stackLimit must be integer";
+                    return false;
+                }
+                slotDefinition.stackLimit = std::clamp(slot["stackLimit"].get<int32_t>(), 1, 999);
+            }
+            definition.slots.push_back(std::move(slotDefinition));
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseRecipeDefinitions(const std::string& content, int32_t apiVersion,
+                                                   std::vector<ExternalModProcessingRecipeDefinition>& outDefinitions,
+                                                   std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "recipeDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("processing_recipes.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "processing_recipes.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("recipes") || !json["recipes"].is_array()) {
+        outError = "processing_recipes.json must contain recipes[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& recipes = json["recipes"];
+    for (size_t i = 0; i < recipes.size(); ++i) {
+        const auto& recipe = recipes[i];
+        if (!recipe.is_object()) {
+            outError = "recipes[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModProcessingRecipeDefinition definition;
+        if (!ValidateRequiredString(recipe, "id", definition.id, outError)) {
+            outError = "recipes[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "recipes[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate recipe id: " + definition.id;
+            return false;
+        }
+
+        if (recipe.contains("durationMs")) {
+            if (!recipe["durationMs"].is_number_integer()) {
+                outError = "recipes[" + std::to_string(i) + "].durationMs must be integer";
+                return false;
+            }
+            definition.durationMs = std::clamp(recipe["durationMs"].get<int32_t>(), 1, 600000);
+        } else if (recipe.contains("durationFrames")) {
+            if (!recipe["durationFrames"].is_number_integer()) {
+                outError = "recipes[" + std::to_string(i) + "].durationFrames must be integer";
+                return false;
+            }
+            definition.durationMs = std::clamp(recipe["durationFrames"].get<int32_t>() * 16, 1, 600000);
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseInteractionDefinitions(const std::string& content, int32_t apiVersion,
+                                                        std::vector<ExternalModInteractionDefinition>& outDefinitions,
+                                                        std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "interactionDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("interactions.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "interactions.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("interactions") || !json["interactions"].is_array()) {
+        outError = "interactions.json must contain interactions[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& interactions = json["interactions"];
+    for (size_t i = 0; i < interactions.size(); ++i) {
+        const auto& interaction = interactions[i];
+        if (!interaction.is_object()) {
+            outError = "interactions[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModInteractionDefinition definition;
+        if (!ValidateRequiredString(interaction, "id", definition.id, outError)) {
+            outError = "interactions[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "interactions[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate interaction id: " + definition.id;
+            return false;
+        }
+
+        if (!interaction.contains("actions") || !interaction["actions"].is_array()) {
+            outError = "interactions[" + std::to_string(i) + "].actions must be array";
+            return false;
+        }
+        if (!ParseActionArray(interaction["actions"], apiVersion, "actions", definition.actions, outError)) {
+            outError = "interactions[" + std::to_string(i) + "].actions: " + outError;
+            return false;
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseActorArchetypeDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModActorArchetypeDefinition>& outDefinitions,
+    std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "actorArchetypeDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("archetypes.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "archetypes.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("archetypes") || !json["archetypes"].is_array()) {
+        outError = "archetypes.json must contain archetypes[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& archetypes = json["archetypes"];
+    for (size_t i = 0; i < archetypes.size(); ++i) {
+        const auto& archetype = archetypes[i];
+        if (!archetype.is_object()) {
+            outError = "archetypes[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModActorArchetypeDefinition definition;
+        if (!ValidateRequiredString(archetype, "id", definition.id, outError)) {
+            outError = "archetypes[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "archetypes[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate archetype id: " + definition.id;
+            return false;
+        }
+
+        if (!ValidateRequiredString(archetype, "actorDefinitionId", definition.actorDefinitionId, outError)) {
+            if (!ValidateRequiredString(archetype, "actorDefinition", definition.actorDefinitionId, outError)) {
+                outError = "archetypes[" + std::to_string(i) + "] requires actorDefinitionId/actorDefinition";
+                return false;
+            }
+        }
+        if (archetype.contains("interactionId")) {
+            if (!archetype["interactionId"].is_string()) {
+                outError = "archetypes[" + std::to_string(i) + "].interactionId must be string";
+                return false;
+            }
+            definition.interactionId = archetype["interactionId"].get<std::string>();
+        }
+        if (archetype.contains("behaviorId")) {
+            if (!archetype["behaviorId"].is_string()) {
+                outError = "archetypes[" + std::to_string(i) + "].behaviorId must be string";
+                return false;
+            }
+            definition.behaviorId = archetype["behaviorId"].get<std::string>();
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseActorAdapterDefinitions(const std::string& content, int32_t apiVersion,
+                                                         std::vector<ExternalModActorAdapterDefinition>& outDefinitions,
+                                                         std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "actorAdapterDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("adapters.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "adapters.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("adapters") || !json["adapters"].is_array()) {
+        outError = "adapters.json must contain adapters[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& adapters = json["adapters"];
+    for (size_t i = 0; i < adapters.size(); ++i) {
+        const auto& adapter = adapters[i];
+        if (!adapter.is_object()) {
+            outError = "adapters[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModActorAdapterDefinition definition;
+        if (!ValidateRequiredString(adapter, "id", definition.id, outError)) {
+            outError = "adapters[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "adapters[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate adapter id: " + definition.id;
+            return false;
+        }
+        if (!adapter.contains("actorId") || !adapter["actorId"].is_number_integer()) {
+            outError = "adapters[" + std::to_string(i) + "].actorId must be integer";
+            return false;
+        }
+        definition.actorId = adapter["actorId"].get<int32_t>();
+
+        if (adapter.contains("onInteract") &&
+            !ParseActionArray(adapter["onInteract"], apiVersion, "onInteract", definition.onInteract, outError)) {
+            outError = "adapters[" + std::to_string(i) + "].onInteract: " + outError;
+            return false;
+        }
+        if (adapter.contains("onDamage") &&
+            !ParseActionArray(adapter["onDamage"], apiVersion, "onDamage", definition.onDamage, outError)) {
+            outError = "adapters[" + std::to_string(i) + "].onDamage: " + outError;
+            return false;
+        }
+        if (adapter.contains("onTalk") &&
+            !ParseActionArray(adapter["onTalk"], apiVersion, "onTalk", definition.onTalk, outError)) {
+            outError = "adapters[" + std::to_string(i) + "].onTalk: " + outError;
+            return false;
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseBehaviorTreeDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModBehaviorTreeDefinition>& outDefinitions,
+    std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "behaviorTreeDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("behavior_trees.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "behavior_trees.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("behaviors") || !json["behaviors"].is_array()) {
+        outError = "behavior_trees.json must contain behaviors[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& behaviors = json["behaviors"];
+    for (size_t i = 0; i < behaviors.size(); ++i) {
+        const auto& behavior = behaviors[i];
+        if (!behavior.is_object()) {
+            outError = "behaviors[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModBehaviorTreeDefinition definition;
+        if (!ValidateRequiredString(behavior, "id", definition.id, outError)) {
+            outError = "behaviors[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "behaviors[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate behavior tree id: " + definition.id;
+            return false;
+        }
+
+        if (behavior.contains("rootNodeType")) {
+            if (!behavior["rootNodeType"].is_string()) {
+                outError = "behaviors[" + std::to_string(i) + "].rootNodeType must be string";
+                return false;
+            }
+            definition.rootNodeType = ToLower(behavior["rootNodeType"].get<std::string>());
+        } else if (behavior.contains("rootType")) {
+            if (!behavior["rootType"].is_string()) {
+                outError = "behaviors[" + std::to_string(i) + "].rootType must be string";
+                return false;
+            }
+            definition.rootNodeType = ToLower(behavior["rootType"].get<std::string>());
+        } else {
+            definition.rootNodeType = "sequence";
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseSensorDefinitions(const std::string& content, int32_t apiVersion,
+                                                   std::vector<ExternalModSensorDefinition>& outDefinitions,
+                                                   std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "sensorDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("sensors.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "sensors.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("sensors") || !json["sensors"].is_array()) {
+        outError = "sensors.json must contain sensors[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& sensors = json["sensors"];
+    for (size_t i = 0; i < sensors.size(); ++i) {
+        const auto& sensor = sensors[i];
+        if (!sensor.is_object()) {
+            outError = "sensors[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModSensorDefinition definition;
+        if (!ValidateRequiredString(sensor, "id", definition.id, outError)) {
+            outError = "sensors[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "sensors[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate sensor id: " + definition.id;
+            return false;
+        }
+        if (!ValidateRequiredString(sensor, "type", definition.sensorType, outError)) {
+            outError = "sensors[" + std::to_string(i) + "].type: " + outError;
+            return false;
+        }
+        definition.sensorType = ToLower(definition.sensorType);
+        if (sensor.contains("range")) {
+            if (!sensor["range"].is_number()) {
+                outError = "sensors[" + std::to_string(i) + "].range must be numeric";
+                return false;
+            }
+            definition.range = std::clamp(sensor["range"].get<float>(), 1.0f, 10000.0f);
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseRouteDefinitions(const std::string& content, int32_t apiVersion,
+                                                  std::vector<ExternalModRouteDefinition>& outDefinitions,
+                                                  std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "routeDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("routes.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "routes.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("routes") || !json["routes"].is_array()) {
+        outError = "routes.json must contain routes[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& routes = json["routes"];
+    for (size_t i = 0; i < routes.size(); ++i) {
+        const auto& route = routes[i];
+        if (!route.is_object()) {
+            outError = "routes[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModRouteDefinition definition;
+        if (!ValidateRequiredString(route, "id", definition.id, outError)) {
+            outError = "routes[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "routes[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate route id: " + definition.id;
+            return false;
+        }
+
+        if (route.contains("mode")) {
+            if (!route["mode"].is_string()) {
+                outError = "routes[" + std::to_string(i) + "].mode must be string";
+                return false;
+            }
+            definition.mode = ToLower(route["mode"].get<std::string>());
+        }
+        if (!route.contains("waypoints") || !route["waypoints"].is_array()) {
+            outError = "routes[" + std::to_string(i) + "].waypoints must be array";
+            return false;
+        }
+        for (size_t pointIndex = 0; pointIndex < route["waypoints"].size(); ++pointIndex) {
+            const auto& point = route["waypoints"][pointIndex];
+            ExternalModRouteWaypoint waypoint;
+            if (!ParseVec3(point, waypoint.x, waypoint.y, waypoint.z, "waypoints", outError)) {
+                outError = "routes[" + std::to_string(i) + "].waypoints[" + std::to_string(pointIndex) + "]: " + outError;
+                return false;
+            }
+            definition.waypoints.push_back(waypoint);
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseNavBridgeDefinitions(const std::string& content, int32_t apiVersion,
+                                                      std::vector<ExternalModNavBridgeDefinition>& outDefinitions,
+                                                      std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "navBridgeDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("nav_bridge.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "nav_bridge.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("bridges") || !json["bridges"].is_array()) {
+        outError = "nav_bridge.json must contain bridges[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& bridges = json["bridges"];
+    for (size_t i = 0; i < bridges.size(); ++i) {
+        const auto& bridge = bridges[i];
+        if (!bridge.is_object()) {
+            outError = "bridges[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModNavBridgeDefinition definition;
+        if (!ValidateRequiredString(bridge, "id", definition.id, outError)) {
+            outError = "bridges[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "bridges[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate nav bridge id: " + definition.id;
+            return false;
+        }
+
+        if (bridge.contains("fallbackMode")) {
+            if (!bridge["fallbackMode"].is_string()) {
+                outError = "bridges[" + std::to_string(i) + "].fallbackMode must be string";
+                return false;
+            }
+            definition.fallbackMode = ToLower(bridge["fallbackMode"].get<std::string>());
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseDebugOverlayDefinitions(const std::string& content, int32_t apiVersion,
+                                                         std::vector<ExternalModDebugOverlayDefinition>& outDefinitions,
+                                                         std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "debugOverlayDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("overlays.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "overlays.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("overlays") || !json["overlays"].is_array()) {
+        outError = "overlays.json must contain overlays[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& overlays = json["overlays"];
+    for (size_t i = 0; i < overlays.size(); ++i) {
+        const auto& overlay = overlays[i];
+        if (!overlay.is_object()) {
+            outError = "overlays[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModDebugOverlayDefinition definition;
+        if (!ValidateRequiredString(overlay, "id", definition.id, outError)) {
+            outError = "overlays[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "overlays[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate debug overlay id: " + definition.id;
+            return false;
+        }
+        if (!ValidateRequiredString(overlay, "type", definition.overlayType, outError)) {
+            if (!ValidateRequiredString(overlay, "overlayType", definition.overlayType, outError)) {
+                outError = "overlays[" + std::to_string(i) + "] requires type/overlayType";
+                return false;
+            }
+        }
+        definition.overlayType = ToLower(definition.overlayType);
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
 bool ExternalModManager::TryParseFxPresetDefinitions(const std::string& content, int32_t apiVersion,
                                                      std::vector<ExternalModFxPresetDefinition>& outDefinitions,
                                                      std::string& outError) {
@@ -16803,6 +18168,236 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             }
         }
 
+        if (ManifestHasCapability(package.manifest, "ui.runtime.v1")) {
+            std::filesystem::path uiScreensPath;
+            if (!IsSafePackageRelativePath(package.manifest.uiScreenDefinitions, uiScreensPath, outError)) {
+                outError = "Invalid uiScreenDefinitions: " + outError;
+                return false;
+            }
+
+            std::string uiScreensContent;
+            if (!ReadFileFromPackage(package, uiScreensPath, kMaxUiScreenDefinitionBytes, uiScreensContent, outError)) {
+                outError = "Failed to read uiScreenDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseUiScreenDefinitions(uiScreensContent, runtime.apiVersion, runtime.uiScreenDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "ui.hud.v1")) {
+            std::filesystem::path uiHudPath;
+            if (!IsSafePackageRelativePath(package.manifest.uiHudDefinitions, uiHudPath, outError)) {
+                outError = "Invalid uiHudDefinitions: " + outError;
+                return false;
+            }
+
+            std::string uiHudContent;
+            if (!ReadFileFromPackage(package, uiHudPath, kMaxUiHudDefinitionBytes, uiHudContent, outError)) {
+                outError = "Failed to read uiHudDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseUiHudDefinitions(uiHudContent, runtime.apiVersion, runtime.uiHudDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "ui.inventory_ext.v1")) {
+            std::filesystem::path inventoryExtPath;
+            if (!IsSafePackageRelativePath(package.manifest.inventoryExtensionDefinitions, inventoryExtPath, outError)) {
+                outError = "Invalid inventoryExtensionDefinitions: " + outError;
+                return false;
+            }
+
+            std::string inventoryExtContent;
+            if (!ReadFileFromPackage(package, inventoryExtPath, kMaxInventoryExtensionDefinitionBytes, inventoryExtContent,
+                                     outError)) {
+                outError = "Failed to read inventoryExtensionDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseInventoryExtensionDefinitions(inventoryExtContent, runtime.apiVersion, runtime.inventoryPageDefinitions,
+                                                       outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "containers.v1")) {
+            std::filesystem::path containersPath;
+            if (!IsSafePackageRelativePath(package.manifest.containerDefinitions, containersPath, outError)) {
+                outError = "Invalid containerDefinitions: " + outError;
+                return false;
+            }
+
+            std::string containersContent;
+            if (!ReadFileFromPackage(package, containersPath, kMaxContainerDefinitionBytes, containersContent, outError)) {
+                outError = "Failed to read containerDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseContainerDefinitions(containersContent, runtime.apiVersion, runtime.containerDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "recipes.processing.v1")) {
+            std::filesystem::path recipesPath;
+            if (!IsSafePackageRelativePath(package.manifest.recipeDefinitions, recipesPath, outError)) {
+                outError = "Invalid recipeDefinitions: " + outError;
+                return false;
+            }
+
+            std::string recipesContent;
+            if (!ReadFileFromPackage(package, recipesPath, kMaxRecipeDefinitionBytes, recipesContent, outError)) {
+                outError = "Failed to read recipeDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseRecipeDefinitions(recipesContent, runtime.apiVersion, runtime.recipeDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "interactions.v1")) {
+            std::filesystem::path interactionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.interactionDefinitions, interactionsPath, outError)) {
+                outError = "Invalid interactionDefinitions: " + outError;
+                return false;
+            }
+
+            std::string interactionsContent;
+            if (!ReadFileFromPackage(package, interactionsPath, kMaxInteractionDefinitionBytes, interactionsContent, outError)) {
+                outError = "Failed to read interactionDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseInteractionDefinitions(interactionsContent, runtime.apiVersion, runtime.interactionDefinitions,
+                                                outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "actors.archetypes.v1")) {
+            std::filesystem::path archetypesPath;
+            if (!IsSafePackageRelativePath(package.manifest.actorArchetypeDefinitions, archetypesPath, outError)) {
+                outError = "Invalid actorArchetypeDefinitions: " + outError;
+                return false;
+            }
+
+            std::string archetypesContent;
+            if (!ReadFileFromPackage(package, archetypesPath, kMaxActorArchetypeDefinitionBytes, archetypesContent,
+                                     outError)) {
+                outError = "Failed to read actorArchetypeDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseActorArchetypeDefinitions(archetypesContent, runtime.apiVersion, runtime.actorArchetypeDefinitions,
+                                                   outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "actors.adapters.v1")) {
+            std::filesystem::path adaptersPath;
+            if (!IsSafePackageRelativePath(package.manifest.actorAdapterDefinitions, adaptersPath, outError)) {
+                outError = "Invalid actorAdapterDefinitions: " + outError;
+                return false;
+            }
+
+            std::string adaptersContent;
+            if (!ReadFileFromPackage(package, adaptersPath, kMaxActorAdapterDefinitionBytes, adaptersContent, outError)) {
+                outError = "Failed to read actorAdapterDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseActorAdapterDefinitions(adaptersContent, runtime.apiVersion, runtime.actorAdapterDefinitions,
+                                                 outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "ai.behavior_trees.v1")) {
+            std::filesystem::path behaviorsPath;
+            if (!IsSafePackageRelativePath(package.manifest.behaviorTreeDefinitions, behaviorsPath, outError)) {
+                outError = "Invalid behaviorTreeDefinitions: " + outError;
+                return false;
+            }
+
+            std::string behaviorsContent;
+            if (!ReadFileFromPackage(package, behaviorsPath, kMaxBehaviorTreeDefinitionBytes, behaviorsContent, outError)) {
+                outError = "Failed to read behaviorTreeDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseBehaviorTreeDefinitions(behaviorsContent, runtime.apiVersion, runtime.behaviorTreeDefinitions,
+                                                 outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "ai.sensors.v1")) {
+            std::filesystem::path sensorsPath;
+            if (!IsSafePackageRelativePath(package.manifest.sensorDefinitions, sensorsPath, outError)) {
+                outError = "Invalid sensorDefinitions: " + outError;
+                return false;
+            }
+
+            std::string sensorsContent;
+            if (!ReadFileFromPackage(package, sensorsPath, kMaxSensorDefinitionBytes, sensorsContent, outError)) {
+                outError = "Failed to read sensorDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseSensorDefinitions(sensorsContent, runtime.apiVersion, runtime.sensorDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "nav.routes.v1")) {
+            std::filesystem::path routesPath;
+            if (!IsSafePackageRelativePath(package.manifest.routeDefinitions, routesPath, outError)) {
+                outError = "Invalid routeDefinitions: " + outError;
+                return false;
+            }
+
+            std::string routesContent;
+            if (!ReadFileFromPackage(package, routesPath, kMaxRouteDefinitionBytes, routesContent, outError)) {
+                outError = "Failed to read routeDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseRouteDefinitions(routesContent, runtime.apiVersion, runtime.routeDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "nav.navmesh_bridge.v1")) {
+            std::filesystem::path navBridgePath;
+            if (!IsSafePackageRelativePath(package.manifest.navBridgeDefinitions, navBridgePath, outError)) {
+                outError = "Invalid navBridgeDefinitions: " + outError;
+                return false;
+            }
+
+            std::string navBridgeContent;
+            if (!ReadFileFromPackage(package, navBridgePath, kMaxNavBridgeDefinitionBytes, navBridgeContent, outError)) {
+                outError = "Failed to read navBridgeDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseNavBridgeDefinitions(navBridgeContent, runtime.apiVersion, runtime.navBridgeDefinitions,
+                                              outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "debug.overlay.v1")) {
+            std::filesystem::path overlaysPath;
+            if (!IsSafePackageRelativePath(package.manifest.debugOverlayDefinitions, overlaysPath, outError)) {
+                outError = "Invalid debugOverlayDefinitions: " + outError;
+                return false;
+            }
+
+            std::string overlaysContent;
+            if (!ReadFileFromPackage(package, overlaysPath, kMaxDebugOverlayDefinitionBytes, overlaysContent, outError)) {
+                outError = "Failed to read debugOverlayDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseDebugOverlayDefinitions(overlaysContent, runtime.apiVersion, runtime.debugOverlayDefinitions,
+                                                 outError)) {
+                return false;
+            }
+        }
+
         if (ManifestHasCapability(package.manifest, "fx.presets.v1")) {
             std::filesystem::path fxPresetPath;
             if (!IsSafePackageRelativePath(package.manifest.fxPresetDefinitions, fxPresetPath, outError)) {
@@ -16897,7 +18492,37 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             return true;
         };
 
-        if (!validateV4CapabilityJsonFile("itemStateDefinitions", "items.state_machine.v1",
+        if (!validateV4CapabilityJsonFile("uiScreenDefinitions", "ui.runtime.v1",
+                                          package.manifest.uiScreenDefinitions, kMaxUiScreenDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("uiHudDefinitions", "ui.hud.v1", package.manifest.uiHudDefinitions,
+                                          kMaxUiHudDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("inventoryExtensionDefinitions", "ui.inventory_ext.v1",
+                                          package.manifest.inventoryExtensionDefinitions,
+                                          kMaxInventoryExtensionDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("containerDefinitions", "containers.v1", package.manifest.containerDefinitions,
+                                          kMaxContainerDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("recipeDefinitions", "recipes.processing.v1", package.manifest.recipeDefinitions,
+                                          kMaxRecipeDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("interactionDefinitions", "interactions.v1",
+                                          package.manifest.interactionDefinitions, kMaxInteractionDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("actorArchetypeDefinitions", "actors.archetypes.v1",
+                                          package.manifest.actorArchetypeDefinitions, kMaxActorArchetypeDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("actorAdapterDefinitions", "actors.adapters.v1",
+                                          package.manifest.actorAdapterDefinitions, kMaxActorAdapterDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("behaviorTreeDefinitions", "ai.behavior_trees.v1",
+                                          package.manifest.behaviorTreeDefinitions, kMaxBehaviorTreeDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("sensorDefinitions", "ai.sensors.v1", package.manifest.sensorDefinitions,
+                                          kMaxSensorDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("routeDefinitions", "nav.routes.v1", package.manifest.routeDefinitions,
+                                          kMaxRouteDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("navBridgeDefinitions", "nav.navmesh_bridge.v1",
+                                          package.manifest.navBridgeDefinitions, kMaxNavBridgeDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("debugOverlayDefinitions", "debug.overlay.v1",
+                                          package.manifest.debugOverlayDefinitions, kMaxDebugOverlayDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("itemStateDefinitions", "items.state_machine.v1",
                                           package.manifest.itemStateDefinitions, kMaxItemStateDefinitionBytes, true) ||
             !validateV4CapabilityJsonFile("equippedModelDefinitions", "render.equipped_models.v1",
                                           package.manifest.equippedModelDefinitions, kMaxEquippedModelDefinitionBytes,
@@ -18293,6 +19918,352 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
                 }
                 break;
             }
+            case ExternalModActionType::UiOpenScreen: {
+                if (!action.uiScreenId.empty()) {
+                    const std::string resolvedId = ResolveProfileIdForMod(package.manifest.id, action.uiScreenId);
+                    const auto screenDef =
+                        std::find_if(package.runtime.uiScreenDefinitions.begin(), package.runtime.uiScreenDefinitions.end(),
+                                     [&](const ExternalModUiScreenDefinition& definition) { return definition.id == resolvedId; });
+                    if (screenDef == package.runtime.uiScreenDefinitions.end()) {
+                        DisableRuntime(package, "ui.openScreen references unknown screenId: " + resolvedId);
+                        return;
+                    }
+                    package.runtime.openUiScreens.insert(resolvedId);
+                    if (!screenDef->onOpen.empty()) {
+                        ExecuteActions(package, screenDef->onOpen, "ui.onOpen");
+                    }
+                    ExternalModHookEventContext context;
+                    context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                    context.value = resolvedId;
+                    ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnUiScreenOpened, context,
+                                                                        "OnUiScreenOpened");
+                }
+                break;
+            }
+            case ExternalModActionType::UiCloseScreen: {
+                if (!action.uiScreenId.empty()) {
+                    const std::string resolvedId = ResolveProfileIdForMod(package.manifest.id, action.uiScreenId);
+                    const auto screenDef =
+                        std::find_if(package.runtime.uiScreenDefinitions.begin(), package.runtime.uiScreenDefinitions.end(),
+                                     [&](const ExternalModUiScreenDefinition& definition) { return definition.id == resolvedId; });
+                    if (screenDef != package.runtime.uiScreenDefinitions.end() && !screenDef->onClose.empty()) {
+                        ExecuteActions(package, screenDef->onClose, "ui.onClose");
+                    }
+                    package.runtime.openUiScreens.erase(resolvedId);
+                    ExternalModHookEventContext context;
+                    context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                    context.value = resolvedId;
+                    ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnUiScreenClosed, context,
+                                                                        "OnUiScreenClosed");
+                }
+                break;
+            }
+            case ExternalModActionType::UiToggleScreen: {
+                if (!action.uiScreenId.empty()) {
+                    const std::string resolvedId = ResolveProfileIdForMod(package.manifest.id, action.uiScreenId);
+                    const auto screenDef =
+                        std::find_if(package.runtime.uiScreenDefinitions.begin(), package.runtime.uiScreenDefinitions.end(),
+                                     [&](const ExternalModUiScreenDefinition& definition) { return definition.id == resolvedId; });
+                    if (screenDef == package.runtime.uiScreenDefinitions.end()) {
+                        DisableRuntime(package, "ui.toggleScreen references unknown screenId: " + resolvedId);
+                        return;
+                    }
+                    const bool isOpen = package.runtime.openUiScreens.contains(resolvedId);
+                    if (isOpen) {
+                        if (!screenDef->onClose.empty()) {
+                            ExecuteActions(package, screenDef->onClose, "ui.onClose");
+                        }
+                        package.runtime.openUiScreens.erase(resolvedId);
+                        ExternalModHookEventContext context;
+                        context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                        context.value = resolvedId;
+                        ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnUiScreenClosed, context,
+                                                                            "OnUiScreenClosed");
+                    } else {
+                        package.runtime.openUiScreens.insert(resolvedId);
+                        if (!screenDef->onOpen.empty()) {
+                            ExecuteActions(package, screenDef->onOpen, "ui.onOpen");
+                        }
+                        ExternalModHookEventContext context;
+                        context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                        context.value = resolvedId;
+                        ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnUiScreenOpened, context,
+                                                                            "OnUiScreenOpened");
+                    }
+                }
+                break;
+            }
+            case ExternalModActionType::UiFocusNext: {
+                package.runtime.globalBlackboard["__ui_focus_nav"] = "next";
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                context.value = "focusNext";
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnUiAction, context, "OnUiAction");
+                break;
+            }
+            case ExternalModActionType::UiFocusPrev: {
+                package.runtime.globalBlackboard["__ui_focus_nav"] = "prev";
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                context.value = "focusPrev";
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnUiAction, context, "OnUiAction");
+                break;
+            }
+            case ExternalModActionType::InventoryExtCreatePage: {
+                auto existingPage = std::find_if(package.runtime.inventoryExtPages.begin(), package.runtime.inventoryExtPages.end(),
+                                                 [&](const ExternalModRuntime::InventoryExtPageState& page) {
+                                                     return page.pageId ==
+                                                            ResolveProfileIdForMod(package.manifest.id, action.inventoryPageId);
+                                                 });
+                if (existingPage == package.runtime.inventoryExtPages.end()) {
+                    const std::string resolvedPageId = ResolveProfileIdForMod(package.manifest.id, action.inventoryPageId);
+                    const auto pageDefinition =
+                        std::find_if(package.runtime.inventoryPageDefinitions.begin(), package.runtime.inventoryPageDefinitions.end(),
+                                     [&](const ExternalModInventoryPageDefinition& definition) {
+                                         return definition.id == resolvedPageId;
+                                     });
+                    ExternalModRuntime::InventoryExtPageState pageState;
+                    pageState.pageId = resolvedPageId;
+                    pageState.slotCount = pageDefinition != package.runtime.inventoryPageDefinitions.end()
+                                              ? std::max(1, pageDefinition->slotCount)
+                                              : (action.inventorySlotCount > 0 ? action.inventorySlotCount : 5);
+                    pageState.slots.resize(static_cast<size_t>(pageState.slotCount));
+                    package.runtime.inventoryExtPages.push_back(std::move(pageState));
+                }
+                break;
+            }
+            case ExternalModActionType::InventoryExtMoveItem:
+            case ExternalModActionType::ContainerMoveItem: {
+                package.runtime.globalBlackboard["__last_move_src"] = action.sourceBinding;
+                package.runtime.globalBlackboard["__last_move_dst"] = action.destinationBinding;
+                package.runtime.globalBlackboard["__last_move_count"] = std::to_string(std::max(1, action.moveCount));
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                context.value = action.destinationBinding;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnContainerSlotChanged, context,
+                                                                    "OnContainerSlotChanged");
+                break;
+            }
+            case ExternalModActionType::InventoryExtSave:
+                package.runtime.globalBlackboard["__inventoryExtSaveRequested"] = "1";
+                break;
+            case ExternalModActionType::InventoryExtLoad:
+                package.runtime.globalBlackboard["__inventoryExtLoadRequested"] = "1";
+                break;
+            case ExternalModActionType::ContainerOpen:
+                package.runtime.globalBlackboard["__container_open"] = action.containerId;
+                break;
+            case ExternalModActionType::ContainerStartProcess: {
+                const std::string resolvedContainerId = ResolveProfileIdForMod(package.manifest.id, action.containerId);
+                const auto containerDefinition = std::find_if(
+                    package.runtime.containerDefinitions.begin(), package.runtime.containerDefinitions.end(),
+                    [&](const ExternalModContainerDefinition& definition) { return definition.id == resolvedContainerId; });
+                if (containerDefinition == package.runtime.containerDefinitions.end()) {
+                    DisableRuntime(package, "container.startProcess references unknown containerId: " + resolvedContainerId);
+                    return;
+                }
+                const std::string resolvedRecipeId = ResolveProfileIdForMod(package.manifest.id, action.recipeId);
+                const auto recipe = std::find_if(package.runtime.recipeDefinitions.begin(),
+                                                 package.runtime.recipeDefinitions.end(),
+                                                 [&](const ExternalModProcessingRecipeDefinition& definition) {
+                                                     return definition.id == resolvedRecipeId;
+                                                 });
+                const int32_t durationMs = recipe != package.runtime.recipeDefinitions.end()
+                                               ? std::max(1, recipe->durationMs)
+                                               : 3000;
+                ExternalModRuntime::ContainerProcessState process;
+                process.containerId = resolvedContainerId;
+                process.recipeId = resolvedRecipeId;
+                process.remainingMs = durationMs;
+                process.totalMs = durationMs;
+                package.runtime.activeContainerProcesses.push_back(std::move(process));
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                context.value = resolvedContainerId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnProcessStart, context,
+                                                                    "OnProcessStart");
+                break;
+            }
+            case ExternalModActionType::ContainerCancelProcess:
+                package.runtime.activeContainerProcesses.erase(
+                    std::remove_if(package.runtime.activeContainerProcesses.begin(), package.runtime.activeContainerProcesses.end(),
+                                   [&](const ExternalModRuntime::ContainerProcessState& process) {
+                                       return process.containerId == action.containerId;
+                                   }),
+                    package.runtime.activeContainerProcesses.end());
+                break;
+            case ExternalModActionType::ContainerGetProgress: {
+                const auto processIt = std::find_if(package.runtime.activeContainerProcesses.begin(),
+                                                    package.runtime.activeContainerProcesses.end(),
+                                                    [&](const ExternalModRuntime::ContainerProcessState& process) {
+                                                        return process.containerId == action.containerId;
+                                                    });
+                float progress = 0.0f;
+                if (processIt != package.runtime.activeContainerProcesses.end() && processIt->totalMs > 0) {
+                    progress = 1.0f - (static_cast<float>(processIt->remainingMs) / static_cast<float>(processIt->totalMs));
+                }
+                const std::string key = action.variableKey.empty() ? "__container_progress" : action.variableKey;
+                package.runtime.globalBlackboard[key] = std::to_string(std::clamp(progress, 0.0f, 1.0f));
+                break;
+            }
+            case ExternalModActionType::ActorsSpawnArchetype: {
+                if (gPlayState != nullptr) {
+                    const std::string resolvedArchetypeId = ResolveProfileIdForMod(package.manifest.id, action.archetypeId);
+                    const auto archetype = std::find_if(
+                        package.runtime.actorArchetypeDefinitions.begin(), package.runtime.actorArchetypeDefinitions.end(),
+                        [&](const ExternalModActorArchetypeDefinition& definition) { return definition.id == resolvedArchetypeId; });
+                    if (archetype == package.runtime.actorArchetypeDefinitions.end()) {
+                        DisableRuntime(package, "actors.spawnArchetype references unknown archetypeId: " + resolvedArchetypeId);
+                        return;
+                    }
+                    const auto* actorDefinition = FindActorDefinition(package.runtime, archetype->actorDefinitionId);
+                    if (actorDefinition == nullptr) {
+                        DisableRuntime(package, "archetype references unknown actor definition: " +
+                                                    archetype->actorDefinitionId);
+                        return;
+                    }
+                    std::string actorError;
+                    uint32_t spawnedHandle = 0;
+                    if (!SpawnActorInstance(package, *actorDefinition, spawnedHandle, actorError)) {
+                        DisableRuntime(package, "actors.spawnArchetype failed: " + actorError);
+                        return;
+                    }
+
+                    package.runtime.globalBlackboard["__last_archetype_spawn_handle"] = std::to_string(spawnedHandle);
+                    package.runtime.globalBlackboard["__last_archetype_spawn"] = resolvedArchetypeId;
+
+                    ExternalModHookEventContext context;
+                    context.scene = gPlayState->sceneNum;
+                    context.actorHandle = static_cast<int32_t>(spawnedHandle);
+                    context.value = resolvedArchetypeId;
+                    ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnArchetypeSpawn, context,
+                                                                        "OnArchetypeSpawn");
+                }
+                break;
+            }
+            case ExternalModActionType::ActorsDespawnArchetype: {
+                std::string actorError;
+                if (!DespawnActorInstance(package, action.actorHandle, actorError)) {
+                    DisableRuntime(package, "actors.despawnArchetype failed: " + actorError);
+                    return;
+                }
+                package.runtime.globalBlackboard["__last_archetype_despawn_handle"] = std::to_string(action.actorHandle);
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                context.actorHandle = action.actorHandle;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnArchetypeDespawn, context,
+                                                                    "OnArchetypeDespawn");
+                break;
+            }
+            case ExternalModActionType::InteractionsInvoke: {
+                const auto interaction = std::find_if(package.runtime.interactionDefinitions.begin(),
+                                                      package.runtime.interactionDefinitions.end(),
+                                                      [&](const ExternalModInteractionDefinition& definition) {
+                                                          return definition.id ==
+                                                                 ResolveProfileIdForMod(package.manifest.id,
+                                                                                        action.interactionId);
+                                                      });
+                if (interaction != package.runtime.interactionDefinitions.end()) {
+                    ExecuteActions(package, interaction->actions, "interaction.invoke");
+                }
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                context.value = action.interactionId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnInteraction, context,
+                                                                    "OnInteraction");
+                break;
+            }
+            case ExternalModActionType::AiRunBehavior:
+                package.runtime.globalBlackboard["__ai_behavior"] = action.behaviorTreeId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnBehaviorNodeChanged, {},
+                                                                    "OnBehaviorNodeChanged");
+                break;
+            case ExternalModActionType::AiSetBlackboard:
+                package.runtime.globalBlackboard[action.blackboardKey] = action.blackboardValue;
+                break;
+            case ExternalModActionType::AiClearBlackboard:
+                package.runtime.globalBlackboard.erase(action.blackboardKey);
+                break;
+            case ExternalModActionType::SenseFindTargets:
+                package.runtime.globalBlackboard[action.variableKey.empty() ? "__sense_targets" : action.variableKey] = "0";
+                break;
+            case ExternalModActionType::SenseLineOfSight:
+                package.runtime.globalBlackboard[action.variableKey.empty() ? "__sense_los" : action.variableKey] = "1";
+                break;
+            case ExternalModActionType::SenseDistance:
+                if (gPlayState != nullptr) {
+                    auto* player = GET_PLAYER(gPlayState);
+                    if (player != nullptr) {
+                        package.runtime.globalBlackboard[action.variableKey.empty() ? "__sense_distance" : action.variableKey] =
+                            std::to_string(player->actor.xyzDistToPlayerSq);
+                    }
+                }
+                break;
+            case ExternalModActionType::NavRequestPath: {
+                ExternalModRuntime::NavPathState state;
+                state.handle = package.runtime.nextNavPathHandle++;
+                state.routeId = ResolveProfileIdForMod(package.manifest.id, action.routeId);
+                const auto route = std::find_if(package.runtime.routeDefinitions.begin(),
+                                                package.runtime.routeDefinitions.end(),
+                                                [&](const ExternalModRouteDefinition& definition) {
+                                                    return definition.id == state.routeId;
+                                                });
+                if (route != package.runtime.routeDefinitions.end()) {
+                    state.points = route->waypoints;
+                }
+                if (state.points.empty()) {
+                    ExternalModHookEventContext context;
+                    context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                    context.value = state.routeId;
+                    ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnPathFailed, context,
+                                                                        "OnPathFailed");
+                    break;
+                }
+                package.runtime.activeNavPaths[state.handle] = state;
+                package.runtime.globalBlackboard[action.navHandleKey.empty() ? "__nav_path_handle" : action.navHandleKey] =
+                    std::to_string(state.handle);
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                context.actorHandle = state.handle;
+                context.value = state.routeId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnPathRequested, context,
+                                                                    "OnPathRequested");
+                break;
+            }
+            case ExternalModActionType::NavGetPathPoints: {
+                const auto key = action.navHandleKey.empty() ? "__nav_path_handle" : action.navHandleKey;
+                const auto it = package.runtime.globalBlackboard.find(key);
+                if (it != package.runtime.globalBlackboard.end()) {
+                    try {
+                        const int32_t handle = std::stoi(it->second);
+                        const auto pathIt = package.runtime.activeNavPaths.find(handle);
+                        if (pathIt != package.runtime.activeNavPaths.end()) {
+                            package.runtime.globalBlackboard["__nav_path_points_count"] =
+                                std::to_string(pathIt->second.points.size());
+                        }
+                    } catch (...) {
+                    }
+                }
+                break;
+            }
+            case ExternalModActionType::NavReleasePath: {
+                const auto key = action.navHandleKey.empty() ? "__nav_path_handle" : action.navHandleKey;
+                const auto it = package.runtime.globalBlackboard.find(key);
+                if (it != package.runtime.globalBlackboard.end()) {
+                    try {
+                        const int32_t handle = std::stoi(it->second);
+                        package.runtime.activeNavPaths.erase(handle);
+                    } catch (...) {
+                    }
+                }
+                break;
+            }
+            case ExternalModActionType::DebugShowOverlay:
+                package.runtime.debugOverlayVisibility[action.overlayId] = true;
+                break;
+            case ExternalModActionType::DebugHideOverlay:
+                package.runtime.debugOverlayVisibility[action.overlayId] = false;
+                break;
             case ExternalModActionType::InvokeWasm: {
                 if (!package.runtime.wasmRuntime) {
                     DisableRuntime(package, "invokeWasm requested but runtime is unavailable");
@@ -18320,6 +20291,12 @@ void ExternalModManager::DisableRuntime(ExternalModPackage& package, const std::
     package.runtime.activeFxHandles.clear();
     package.runtime.fxHandleByKey.clear();
     package.runtime.spellCooldownsById.clear();
+    package.runtime.inventoryExtPages.clear();
+    package.runtime.activeContainerProcesses.clear();
+    package.runtime.activeNavPaths.clear();
+    package.runtime.openUiScreens.clear();
+    package.runtime.debugOverlayVisibility.clear();
+    package.runtime.nextNavPathHandle = 1;
     ClearSurfState(package.runtime);
     package.runtime.wasmTargetHandles.clear();
     package.runtime.wasmNextTargetHandle = 1;
@@ -18523,6 +20500,12 @@ void ExternalModManager::OnLoadGame(int32_t fileNum) {
             package.runtime.activeFxHandles.clear();
             package.runtime.fxHandleByKey.clear();
             package.runtime.spellCooldownsById.clear();
+            package.runtime.inventoryExtPages.clear();
+            package.runtime.activeContainerProcesses.clear();
+            package.runtime.activeNavPaths.clear();
+            package.runtime.openUiScreens.clear();
+            package.runtime.debugOverlayVisibility.clear();
+            package.runtime.nextNavPathHandle = 1;
             for (auto& trigger : package.runtime.frameTriggers) {
                 trigger.wasInside = false;
                 trigger.cooldownRemaining = 0;
@@ -18598,6 +20581,12 @@ void ExternalModManager::OnSceneInit(int16_t sceneNum) {
             package.runtime.activeFxHandles.clear();
             package.runtime.fxHandleByKey.clear();
             package.runtime.spellCooldownsById.clear();
+            package.runtime.inventoryExtPages.clear();
+            package.runtime.activeContainerProcesses.clear();
+            package.runtime.activeNavPaths.clear();
+            package.runtime.openUiScreens.clear();
+            package.runtime.debugOverlayVisibility.clear();
+            package.runtime.nextNavPathHandle = 1;
             package.runtime.behaviorStepsThisFrame = 0;
             package.runtime.pendingSignals.clear();
             package.runtime.actorInstances.clear();
@@ -18862,6 +20851,30 @@ void ExternalModManager::OnGameFrameUpdate() {
             } else {
                 ++it;
             }
+        }
+
+        for (size_t processIndex = 0; processIndex < package.runtime.activeContainerProcesses.size();) {
+            auto& process = package.runtime.activeContainerProcesses[processIndex];
+            if (process.remainingMs > 0) {
+                process.remainingMs = std::max(0, process.remainingMs - 16);
+            }
+
+            ExternalModHookEventContext tickContext;
+            tickContext.scene = sceneNum;
+            tickContext.value = process.containerId;
+            DispatchExtendedHook(ExternalModHookType::OnProcessTick, tickContext, "OnProcessTick");
+
+            if (process.remainingMs == 0) {
+                ExternalModHookEventContext completeContext;
+                completeContext.scene = sceneNum;
+                completeContext.value = process.containerId;
+                DispatchExtendedHook(ExternalModHookType::OnProcessComplete, completeContext, "OnProcessComplete");
+                package.runtime.activeContainerProcesses.erase(
+                    package.runtime.activeContainerProcesses.begin() + static_cast<std::ptrdiff_t>(processIndex));
+                continue;
+            }
+
+            ++processIndex;
         }
 
         TickRuntimeFxHandles(package.runtime);
@@ -19503,6 +21516,12 @@ void ExternalModManager::OnPlayDestroy() {
         package.runtime.activeFxHandles.clear();
         package.runtime.fxHandleByKey.clear();
         package.runtime.spellCooldownsById.clear();
+        package.runtime.inventoryExtPages.clear();
+        package.runtime.activeContainerProcesses.clear();
+        package.runtime.activeNavPaths.clear();
+        package.runtime.openUiScreens.clear();
+        package.runtime.debugOverlayVisibility.clear();
+        package.runtime.nextNavPathHandle = 1;
         package.runtime.hasEffectImpactPosition = false;
         package.runtime.effectImpactPosX = 0.0f;
         package.runtime.effectImpactPosY = 0.0f;

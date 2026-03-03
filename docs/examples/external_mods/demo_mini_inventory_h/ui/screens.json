@@ -1,0 +1,15 @@
+﻿{
+    "screens":  [
+                    {
+                        "closeOnEscape":  true,
+                        "id":  "com.sylian.demo_mini_inventory_h:overlay",
+                        "onClose":  [
+
+                                    ],
+                        "onOpen":  [
+
+                                   ]
+                    }
+                ],
+    "schemaVersion":  1
+}

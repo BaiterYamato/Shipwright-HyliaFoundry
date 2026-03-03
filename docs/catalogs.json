@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-03-03T02:15:20Z",
+    "generatedUtc":  "2026-03-03T08:18:16Z",
     "apiVersion":  4,
     "runtime":  {
                     "budgetDefaults":  {
@@ -95,6 +95,84 @@
                              "schemaVersion":  1,
                              "fileField":  "inputDefinitions",
                              "id":  "input.bindings.v2"
+                         },
+                         {
+                             "fileDefault":  "ui/screens.json",
+                             "schemaVersion":  1,
+                             "fileField":  "uiScreenDefinitions",
+                             "id":  "ui.runtime.v1"
+                         },
+                         {
+                             "fileDefault":  "ui/hud_layouts.json",
+                             "schemaVersion":  1,
+                             "fileField":  "uiHudDefinitions",
+                             "id":  "ui.hud.v1"
+                         },
+                         {
+                             "fileDefault":  "inventory_ext/pages.json",
+                             "schemaVersion":  1,
+                             "fileField":  "inventoryExtensionDefinitions",
+                             "id":  "ui.inventory_ext.v1"
+                         },
+                         {
+                             "fileDefault":  "containers/containers.json",
+                             "schemaVersion":  1,
+                             "fileField":  "containerDefinitions",
+                             "id":  "containers.v1"
+                         },
+                         {
+                             "fileDefault":  "recipes/processing_recipes.json",
+                             "schemaVersion":  1,
+                             "fileField":  "recipeDefinitions",
+                             "id":  "recipes.processing.v1"
+                         },
+                         {
+                             "fileDefault":  "interactions/interactions.json",
+                             "schemaVersion":  1,
+                             "fileField":  "interactionDefinitions",
+                             "id":  "interactions.v1"
+                         },
+                         {
+                             "fileDefault":  "actors/archetypes.json",
+                             "schemaVersion":  1,
+                             "fileField":  "actorArchetypeDefinitions",
+                             "id":  "actors.archetypes.v1"
+                         },
+                         {
+                             "fileDefault":  "actors/adapters.json",
+                             "schemaVersion":  1,
+                             "fileField":  "actorAdapterDefinitions",
+                             "id":  "actors.adapters.v1"
+                         },
+                         {
+                             "fileDefault":  "ai/behavior_trees.json",
+                             "schemaVersion":  1,
+                             "fileField":  "behaviorTreeDefinitions",
+                             "id":  "ai.behavior_trees.v1"
+                         },
+                         {
+                             "fileDefault":  "ai/sensors.json",
+                             "schemaVersion":  1,
+                             "fileField":  "sensorDefinitions",
+                             "id":  "ai.sensors.v1"
+                         },
+                         {
+                             "fileDefault":  "nav/routes.json",
+                             "schemaVersion":  1,
+                             "fileField":  "routeDefinitions",
+                             "id":  "nav.routes.v1"
+                         },
+                         {
+                             "fileDefault":  "nav/nav_bridge.json",
+                             "schemaVersion":  1,
+                             "fileField":  "navBridgeDefinitions",
+                             "id":  "nav.navmesh_bridge.v1"
+                         },
+                         {
+                             "fileDefault":  "debug/overlays.json",
+                             "schemaVersion":  1,
+                             "fileField":  "debugOverlayDefinitions",
+                             "id":  "debug.overlay.v1"
                          },
                          {
                              "fileDefault":  "items/item_states.json",

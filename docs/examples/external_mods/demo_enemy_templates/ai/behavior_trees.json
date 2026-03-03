@@ -1,0 +1,9 @@
+﻿{
+    "schemaVersion":  1,
+    "behaviors":  [
+                      {
+                          "id":  "com.sylian.demo_enemy_templates:enemy_bt",
+                          "rootNodeType":  "selector"
+                      }
+                  ]
+}

@@ -1,0 +1,51 @@
+﻿{
+    "id":  "com.sylian.demo_enemy_templates",
+    "name":  "demo enemy templates",
+    "version":  "0.1.0",
+    "apiVersion":  4,
+    "loadPriority":  308,
+    "entryScript":  "scripts/init.json",
+    "assets":  [
+
+               ],
+    "dependencies":  [
+                         {
+                             "id":  "com.sylian.ai_templates",
+                             "versionRange":  "\u003e=0.1.0 \u003c0.2.0"
+                         }
+                     ],
+    "capabilities":  [
+                         "actors.archetypes.v1",
+                         "ai.behavior_trees.v1",
+                         "ai.sensors.v1"
+                     ],
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "permissions":  [
+
+                    ],
+    "entrypoints":  {
+                        "items":  "items/items.json",
+                        "combat":  "combat",
+                        "movement":  "movement",
+                        "camera":  "camera/camera_profiles.json",
+                        "ui":  "ui",
+                        "actors":  "actors",
+                        "quests":  "quests",
+                        "wasm":  "scripts/noop.wat"
+                    },
+    "sensorDefinitions":  "ai/sensors.json",
+    "actorArchetypeDefinitions":  "actors/archetypes.json",
+    "behaviorTreeDefinitions":  "ai/behavior_trees.json"
+}

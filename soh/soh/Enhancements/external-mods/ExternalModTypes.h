@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace Ship {
@@ -187,6 +188,19 @@ struct ExternalModManifest {
     std::string equippedModelDefinitions;
     std::string hudWidgetDefinitions;
     std::string hudReticleDefinitions;
+    std::string uiScreenDefinitions;
+    std::string uiHudDefinitions;
+    std::string inventoryExtensionDefinitions;
+    std::string containerDefinitions;
+    std::string recipeDefinitions;
+    std::string interactionDefinitions;
+    std::string actorArchetypeDefinitions;
+    std::string actorAdapterDefinitions;
+    std::string behaviorTreeDefinitions;
+    std::string sensorDefinitions;
+    std::string routeDefinitions;
+    std::string navBridgeDefinitions;
+    std::string debugOverlayDefinitions;
     std::string effectGraphDefinitions;
     std::string combatHitRuleDefinitions;
     std::string surfDefinitions;
@@ -261,6 +275,34 @@ enum class ExternalModActionType {
     PlayerSetBoostType,
     PlayerSetDamageResponse,
     SpellsCastSpell,
+    UiOpenScreen,
+    UiCloseScreen,
+    UiToggleScreen,
+    UiFocusNext,
+    UiFocusPrev,
+    InventoryExtCreatePage,
+    InventoryExtMoveItem,
+    InventoryExtSave,
+    InventoryExtLoad,
+    ContainerOpen,
+    ContainerMoveItem,
+    ContainerStartProcess,
+    ContainerCancelProcess,
+    ContainerGetProgress,
+    ActorsSpawnArchetype,
+    ActorsDespawnArchetype,
+    InteractionsInvoke,
+    AiRunBehavior,
+    AiSetBlackboard,
+    AiClearBlackboard,
+    SenseFindTargets,
+    SenseLineOfSight,
+    SenseDistance,
+    NavRequestPath,
+    NavGetPathPoints,
+    NavReleasePath,
+    DebugShowOverlay,
+    DebugHideOverlay,
 };
 
 enum class ExternalModStatusType {
@@ -359,6 +401,23 @@ struct ExternalModAction {
     std::string stateDomain;
     std::string stateFlag;
     std::string stateControlMode;
+    std::string uiScreenId;
+    std::string inventoryPageId;
+    int32_t inventorySlotCount = 0;
+    std::string sourceBinding;
+    std::string destinationBinding;
+    int32_t moveCount = 0;
+    std::string containerId;
+    std::string recipeId;
+    std::string interactionId;
+    std::string archetypeId;
+    std::string behaviorTreeId;
+    std::string blackboardKey;
+    std::string blackboardValue;
+    std::string sensorType;
+    std::string routeId;
+    std::string navHandleKey;
+    std::string overlayId;
     bool boolValue = false;
     bool hasBoolValue = false;
     float floatValue = 0.0f;
@@ -722,6 +781,107 @@ struct ExternalModSpellDefinition {
     std::vector<ExternalModUseProfileEffect> effects;
 };
 
+struct ExternalModUiScreenDefinition {
+    std::string id;
+    std::string sourceModId;
+    bool closeOnEscape = true;
+    std::string hudLayoutId;
+    std::vector<ExternalModAction> onOpen;
+    std::vector<ExternalModAction> onClose;
+};
+
+struct ExternalModUiHudLayoutDefinition {
+    std::string id;
+    std::string sourceModId;
+};
+
+struct ExternalModInventoryPageDefinition {
+    std::string id;
+    std::string sourceModId;
+    int32_t slotCount = 0;
+    bool persist = true;
+};
+
+struct ExternalModContainerSlotDefinition {
+    std::string id;
+    std::string type;
+    std::string filterTag;
+    int32_t stackLimit = 1;
+};
+
+struct ExternalModContainerDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::vector<ExternalModContainerSlotDefinition> slots;
+};
+
+struct ExternalModProcessingRecipeDefinition {
+    std::string id;
+    std::string sourceModId;
+    int32_t durationMs = 1000;
+};
+
+struct ExternalModInteractionDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::vector<ExternalModAction> actions;
+};
+
+struct ExternalModActorArchetypeDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string actorDefinitionId;
+    std::string interactionId;
+    std::string behaviorId;
+};
+
+struct ExternalModActorAdapterDefinition {
+    std::string id;
+    std::string sourceModId;
+    int32_t actorId = -1;
+    std::vector<ExternalModAction> onInteract;
+    std::vector<ExternalModAction> onDamage;
+    std::vector<ExternalModAction> onTalk;
+};
+
+struct ExternalModBehaviorTreeDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string rootNodeType;
+};
+
+struct ExternalModSensorDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string sensorType;
+    float range = 200.0f;
+};
+
+struct ExternalModRouteWaypoint {
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+};
+
+struct ExternalModRouteDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string mode = "loop";
+    std::vector<ExternalModRouteWaypoint> waypoints;
+};
+
+struct ExternalModNavBridgeDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string fallbackMode = "waypoint_direct";
+};
+
+struct ExternalModDebugOverlayDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string overlayType;
+};
+
 struct ExternalModBehaviorCondition {
     std::string type;
     std::string scope;
@@ -842,6 +1002,19 @@ enum class ExternalModHookType {
     OnStatusExpired,
     OnStateApplied,
     OnStateRemoved,
+    OnUiScreenOpened,
+    OnUiScreenClosed,
+    OnUiAction,
+    OnContainerSlotChanged,
+    OnProcessStart,
+    OnProcessTick,
+    OnProcessComplete,
+    OnArchetypeSpawn,
+    OnArchetypeDespawn,
+    OnInteraction,
+    OnBehaviorNodeChanged,
+    OnPathRequested,
+    OnPathFailed,
     OnPlayDestroy,
     OnGameFrameUpdate,
 };
@@ -898,6 +1071,19 @@ struct ExternalModRuntime {
     std::vector<ExternalModAoEProfile> aoeProfiles;
     std::vector<ExternalModMovementProfile> movementProfiles;
     std::vector<ExternalModAimCameraProfile> cameraProfiles;
+    std::vector<ExternalModUiScreenDefinition> uiScreenDefinitions;
+    std::vector<ExternalModUiHudLayoutDefinition> uiHudDefinitions;
+    std::vector<ExternalModInventoryPageDefinition> inventoryPageDefinitions;
+    std::vector<ExternalModContainerDefinition> containerDefinitions;
+    std::vector<ExternalModProcessingRecipeDefinition> recipeDefinitions;
+    std::vector<ExternalModInteractionDefinition> interactionDefinitions;
+    std::vector<ExternalModActorArchetypeDefinition> actorArchetypeDefinitions;
+    std::vector<ExternalModActorAdapterDefinition> actorAdapterDefinitions;
+    std::vector<ExternalModBehaviorTreeDefinition> behaviorTreeDefinitions;
+    std::vector<ExternalModSensorDefinition> sensorDefinitions;
+    std::vector<ExternalModRouteDefinition> routeDefinitions;
+    std::vector<ExternalModNavBridgeDefinition> navBridgeDefinitions;
+    std::vector<ExternalModDebugOverlayDefinition> debugOverlayDefinitions;
     std::vector<ExternalModFxPresetDefinition> fxPresets;
     std::vector<ExternalModStateDefinition> stateDefinitions;
     std::vector<ExternalModSpellDefinition> spellDefinitions;
@@ -967,6 +1153,22 @@ struct ExternalModRuntime {
         float originY = 0.0f;
         float originZ = 0.0f;
     };
+    struct InventoryExtPageState {
+        std::string pageId;
+        int32_t slotCount = 0;
+        std::vector<std::string> slots;
+    };
+    struct ContainerProcessState {
+        std::string containerId;
+        std::string recipeId;
+        int32_t remainingMs = 0;
+        int32_t totalMs = 0;
+    };
+    struct NavPathState {
+        int32_t handle = 0;
+        std::string routeId;
+        std::vector<ExternalModRouteWaypoint> points;
+    };
     struct SurfState {
         bool active = false;
         std::string sourceModId;
@@ -989,8 +1191,14 @@ struct ExternalModRuntime {
     std::vector<ActiveFxHandleState> activeFxHandles;
     std::vector<ActiveStateState> activeStates;
     std::vector<ActiveAoEState> activeAoEs;
+    std::vector<InventoryExtPageState> inventoryExtPages;
+    std::vector<ContainerProcessState> activeContainerProcesses;
+    std::unordered_map<int32_t, NavPathState> activeNavPaths;
+    std::unordered_set<std::string> openUiScreens;
+    std::unordered_map<std::string, bool> debugOverlayVisibility;
     SurfState surfState;
     int32_t nextFxHandle = 1;
+    int32_t nextNavPathHandle = 1;
     std::unordered_map<std::string, int32_t> fxHandleByKey;
     std::unordered_map<std::string, int32_t> spellCooldownsById;
     std::unordered_map<std::string, std::string> globalBlackboard;
@@ -1039,12 +1247,14 @@ struct ExternalModHookEventContext {
     int16_t scene = -1;
     int16_t actorId = -1;
     int16_t actorCategory = -1;
+    int32_t actorHandle = 0;
     int16_t itemId = -1;
     int16_t flagType = -1;
     int16_t flagId = -1;
     int16_t healthDelta = 0;
     std::string statusId;
     std::string stateId;
+    std::string value;
     int32_t stackCount = 0;
 };
 

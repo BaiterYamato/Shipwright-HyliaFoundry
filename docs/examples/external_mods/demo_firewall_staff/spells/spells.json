@@ -1,0 +1,15 @@
+﻿{
+    "schemaVersion":  1,
+    "spells":  [
+                   {
+                       "cooldownFrames":  20,
+                       "id":  "com.sylian.demo_firewall_staff:cast",
+                       "effects":  [
+                                       {
+                                           "spellId":  "com.sylian.sss:spawn_firewall_forward",
+                                           "action":  "spells.castSpell"
+                                       }
+                                   ]
+                   }
+               ]
+}

@@ -1,0 +1,10 @@
+﻿{
+    "schemaVersion":  1,
+    "pages":  [
+                  {
+                      "slotCount":  30,
+                      "id":  "com.sylian.demo_bag_inventory_ext:bag",
+                      "persist":  true
+                  }
+              ]
+}

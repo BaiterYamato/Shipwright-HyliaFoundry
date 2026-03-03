@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-03-03T02:15:20Z",
+    "generatedUtc":  "2026-03-03T08:18:16Z",
     "apiVersion":  4,
     "description":  "Declarative registry for action validation/dispatch contracts.",
     "actions":  [
@@ -194,6 +194,184 @@
                                        "spellId|spell"
                                    ],
                         "name":  "spells.castSpell"
+                    },
+                    {
+                        "params":  [
+                                       "screen|screenId"
+                                   ],
+                        "name":  "ui.openScreen"
+                    },
+                    {
+                        "params":  [
+                                       "screen|screenId"
+                                   ],
+                        "name":  "ui.closeScreen"
+                    },
+                    {
+                        "params":  [
+                                       "screen|screenId"
+                                   ],
+                        "name":  "ui.toggleScreen"
+                    },
+                    {
+                        "params":  [
+
+                                   ],
+                        "name":  "ui.focusNext"
+                    },
+                    {
+                        "params":  [
+
+                                   ],
+                        "name":  "ui.focusPrev"
+                    },
+                    {
+                        "params":  [
+                                       "pageId",
+                                       "slots"
+                                   ],
+                        "name":  "inventoryExt.createPage"
+                    },
+                    {
+                        "params":  [
+                                       "srcBinding|src",
+                                       "dstBinding|dst",
+                                       "count?"
+                                   ],
+                        "name":  "inventoryExt.moveItem"
+                    },
+                    {
+                        "params":  [
+
+                                   ],
+                        "name":  "inventoryExt.save"
+                    },
+                    {
+                        "params":  [
+
+                                   ],
+                        "name":  "inventoryExt.load"
+                    },
+                    {
+                        "params":  [
+                                       "containerId|container"
+                                   ],
+                        "name":  "container.open"
+                    },
+                    {
+                        "params":  [
+                                       "srcBinding|src",
+                                       "dstBinding|dst",
+                                       "count?"
+                                   ],
+                        "name":  "container.moveItem"
+                    },
+                    {
+                        "params":  [
+                                       "containerId|container",
+                                       "recipeId?"
+                                   ],
+                        "name":  "container.startProcess"
+                    },
+                    {
+                        "params":  [
+                                       "containerId|container"
+                                   ],
+                        "name":  "container.cancelProcess"
+                    },
+                    {
+                        "params":  [
+                                       "containerId|container",
+                                       "storeKey?"
+                                   ],
+                        "name":  "container.getProgress"
+                    },
+                    {
+                        "params":  [
+                                       "archetypeId|archetype"
+                                   ],
+                        "name":  "actors.spawnArchetype"
+                    },
+                    {
+                        "params":  [
+                                       "actorHandle|handle|id"
+                                   ],
+                        "name":  "actors.despawnArchetype"
+                    },
+                    {
+                        "params":  [
+                                       "interactionId|interaction"
+                                   ],
+                        "name":  "interactions.invoke"
+                    },
+                    {
+                        "params":  [
+                                       "behaviorId|behavior"
+                                   ],
+                        "name":  "ai.runBehavior"
+                    },
+                    {
+                        "params":  [
+                                       "key",
+                                       "value"
+                                   ],
+                        "name":  "ai.setBlackboard"
+                    },
+                    {
+                        "params":  [
+                                       "key"
+                                   ],
+                        "name":  "ai.clearBlackboard"
+                    },
+                    {
+                        "params":  [
+                                       "storeKey?"
+                                   ],
+                        "name":  "sense.findTargets"
+                    },
+                    {
+                        "params":  [
+                                       "range?",
+                                       "storeKey?"
+                                   ],
+                        "name":  "sense.lineOfSight"
+                    },
+                    {
+                        "params":  [
+                                       "storeKey?"
+                                   ],
+                        "name":  "sense.distance"
+                    },
+                    {
+                        "params":  [
+                                       "routeId?",
+                                       "storeKey?"
+                                   ],
+                        "name":  "nav.requestPath"
+                    },
+                    {
+                        "params":  [
+                                       "handleKey|storeKey"
+                                   ],
+                        "name":  "nav.getPathPoints"
+                    },
+                    {
+                        "params":  [
+                                       "handleKey|storeKey"
+                                   ],
+                        "name":  "nav.releasePath"
+                    },
+                    {
+                        "params":  [
+                                       "overlayId|overlay"
+                                   ],
+                        "name":  "debug.showOverlay"
+                    },
+                    {
+                        "params":  [
+                                       "overlayId|overlay"
+                                   ],
+                        "name":  "debug.hideOverlay"
                     },
                     {
                         "params":  [

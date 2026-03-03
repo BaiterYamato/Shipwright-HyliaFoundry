@@ -1,0 +1,10 @@
+﻿{
+    "schemaVersion":  1,
+    "sensors":  [
+                    {
+                        "range":  600,
+                        "id":  "com.sylian.ai_templates:vision",
+                        "type":  "distance"
+                    }
+                ]
+}

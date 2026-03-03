@@ -1,0 +1,31 @@
+﻿{
+    "schemaVersion":  1,
+    "routes":  [
+                   {
+                       "id":  "com.sylian.demo_npc_patrol:path",
+                       "mode":  "loop",
+                       "waypoints":  [
+                                         [
+                                             0,
+                                             0,
+                                             0
+                                         ],
+                                         [
+                                             80,
+                                             0,
+                                             0
+                                         ],
+                                         [
+                                             80,
+                                             0,
+                                             80
+                                         ],
+                                         [
+                                             0,
+                                             0,
+                                             80
+                                         ]
+                                     ]
+                   }
+               ]
+}

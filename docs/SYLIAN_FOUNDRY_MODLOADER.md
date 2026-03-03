@@ -56,6 +56,22 @@ Use `docs/catalogs.json` as machine-readable source of truth. Common capabilitie
 - `states.catalog.v1` -> `stateDefinitions` (`states/states.json`)
 - `spells.catalog.v1` -> `spellDefinitions` (`spells/spells.json`)
 
+### v6 core extension capabilities
+
+- `ui.runtime.v1` -> `uiScreenDefinitions` (`ui/screens.json`)
+- `ui.hud.v1` -> `uiHudDefinitions` (`ui/hud_layouts.json`)
+- `ui.inventory_ext.v1` -> `inventoryExtensionDefinitions` (`inventory_ext/pages.json`)
+- `containers.v1` -> `containerDefinitions` (`containers/containers.json`)
+- `recipes.processing.v1` -> `recipeDefinitions` (`recipes/processing_recipes.json`)
+- `interactions.v1` -> `interactionDefinitions` (`interactions/interactions.json`)
+- `actors.archetypes.v1` -> `actorArchetypeDefinitions` (`actors/archetypes.json`)
+- `actors.adapters.v1` -> `actorAdapterDefinitions` (`actors/adapters.json`)
+- `ai.behavior_trees.v1` -> `behaviorTreeDefinitions` (`ai/behavior_trees.json`)
+- `ai.sensors.v1` -> `sensorDefinitions` (`ai/sensors.json`)
+- `nav.routes.v1` -> `routeDefinitions` (`nav/routes.json`)
+- `nav.navmesh_bridge.v1` -> `navBridgeDefinitions` (`nav/nav_bridge.json`)
+- `debug.overlay.v1` -> `debugOverlayDefinitions` (`debug/overlays.json`)
+
 ## Runtime lifecycle
 
 1. **Discover** packages in mods folders
@@ -76,6 +92,23 @@ Or define a custom status with `baseStatus: core:freeze` + `freezeProfile.mode: 
 
 - `docs/examples/external_mods/sss`
 - `docs/examples/external_mods/sss_content_pack`
+
+### v6 reference suite (frameworks + demos)
+
+Framework layer:
+- `docs/examples/external_mods/ui_kit`
+- `docs/examples/external_mods/container_kit`
+- `docs/examples/external_mods/ai_templates`
+
+Content layer:
+- `demo_mini_inventory_h`
+- `demo_bag_inventory_ext`
+- `demo_furnace_system`
+- `demo_firewall_staff`
+- `demo_purple_din_lev_glove`
+- `demo_npc_patrol`
+- `demo_enemy_templates`
+- `demo_vanilla_adapters`
 
 These demonstrate a library-style mod (`com.sylian.sss`) plus a dependent content pack (`dependencies[]` enforced by loader).
 

@@ -1,0 +1,56 @@
+﻿{
+    "id":  "com.sylian.ai_templates",
+    "name":  "ai templates",
+    "version":  "0.1.0",
+    "apiVersion":  4,
+    "loadPriority":  336,
+    "entryScript":  "scripts/init.json",
+    "assets":  [
+
+               ],
+    "dependencies":  [
+
+                     ],
+    "capabilities":  [
+                         "actors.archetypes.v1",
+                         "actors.adapters.v1",
+                         "ai.behavior_trees.v1",
+                         "ai.sensors.v1",
+                         "nav.routes.v1",
+                         "nav.navmesh_bridge.v1",
+                         "debug.overlay.v1"
+                     ],
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "permissions":  [
+
+                    ],
+    "entrypoints":  {
+                        "items":  "items/items.json",
+                        "combat":  "combat",
+                        "movement":  "movement",
+                        "camera":  "camera/camera_profiles.json",
+                        "ui":  "ui",
+                        "actors":  "actors",
+                        "quests":  "quests",
+                        "wasm":  "scripts/noop.wat"
+                    },
+    "actorArchetypeDefinitions":  "actors/archetypes.json",
+    "sensorDefinitions":  "ai/sensors.json",
+    "navBridgeDefinitions":  "nav/nav_bridge.json",
+    "debugOverlayDefinitions":  "debug/overlays.json",
+    "routeDefinitions":  "nav/routes.json",
+    "behaviorTreeDefinitions":  "ai/behavior_trees.json",
+    "actorAdapterDefinitions":  "actors/adapters.json"
+}

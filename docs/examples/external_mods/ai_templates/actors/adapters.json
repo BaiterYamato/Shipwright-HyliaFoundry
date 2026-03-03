@@ -1,0 +1,18 @@
+﻿{
+    "schemaVersion":  1,
+    "adapters":  [
+                     {
+                         "onTalk":  [
+
+                                    ],
+                         "onDamage":  [
+
+                                      ],
+                         "actorId":  0,
+                         "id":  "com.sylian.ai_templates:vanilla_actor_adapter",
+                         "onInteract":  [
+
+                                        ]
+                     }
+                 ]
+}

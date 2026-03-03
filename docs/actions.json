@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-03-03T02:15:20Z",
+    "generatedUtc":  "2026-03-03T08:18:16Z",
     "apiVersion":  4,
     "actions":  [
                     {
@@ -233,6 +233,118 @@
                     {
                         "category":  "spells",
                         "name":  "spells.castSpell"
+                    },
+                    {
+                        "category":  "ui",
+                        "name":  "ui.openScreen"
+                    },
+                    {
+                        "category":  "ui",
+                        "name":  "ui.closeScreen"
+                    },
+                    {
+                        "category":  "ui",
+                        "name":  "ui.toggleScreen"
+                    },
+                    {
+                        "category":  "ui",
+                        "name":  "ui.focusNext"
+                    },
+                    {
+                        "category":  "ui",
+                        "name":  "ui.focusPrev"
+                    },
+                    {
+                        "category":  "inventory_ext",
+                        "name":  "inventoryExt.createPage"
+                    },
+                    {
+                        "category":  "inventory_ext",
+                        "name":  "inventoryExt.moveItem"
+                    },
+                    {
+                        "category":  "inventory_ext",
+                        "name":  "inventoryExt.save"
+                    },
+                    {
+                        "category":  "inventory_ext",
+                        "name":  "inventoryExt.load"
+                    },
+                    {
+                        "category":  "container",
+                        "name":  "container.open"
+                    },
+                    {
+                        "category":  "container",
+                        "name":  "container.moveItem"
+                    },
+                    {
+                        "category":  "container",
+                        "name":  "container.startProcess"
+                    },
+                    {
+                        "category":  "container",
+                        "name":  "container.cancelProcess"
+                    },
+                    {
+                        "category":  "container",
+                        "name":  "container.getProgress"
+                    },
+                    {
+                        "category":  "actors",
+                        "name":  "actors.spawnArchetype"
+                    },
+                    {
+                        "category":  "actors",
+                        "name":  "actors.despawnArchetype"
+                    },
+                    {
+                        "category":  "interactions",
+                        "name":  "interactions.invoke"
+                    },
+                    {
+                        "category":  "ai",
+                        "name":  "ai.runBehavior"
+                    },
+                    {
+                        "category":  "ai",
+                        "name":  "ai.setBlackboard"
+                    },
+                    {
+                        "category":  "ai",
+                        "name":  "ai.clearBlackboard"
+                    },
+                    {
+                        "category":  "sensors",
+                        "name":  "sense.findTargets"
+                    },
+                    {
+                        "category":  "sensors",
+                        "name":  "sense.lineOfSight"
+                    },
+                    {
+                        "category":  "sensors",
+                        "name":  "sense.distance"
+                    },
+                    {
+                        "category":  "nav",
+                        "name":  "nav.requestPath"
+                    },
+                    {
+                        "category":  "nav",
+                        "name":  "nav.getPathPoints"
+                    },
+                    {
+                        "category":  "nav",
+                        "name":  "nav.releasePath"
+                    },
+                    {
+                        "category":  "debug",
+                        "name":  "debug.showOverlay"
+                    },
+                    {
+                        "category":  "debug",
+                        "name":  "debug.hideOverlay"
                     },
                     {
                         "category":  "wasm",
