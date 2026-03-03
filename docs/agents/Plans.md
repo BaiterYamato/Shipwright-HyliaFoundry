@@ -883,3 +883,16 @@ This file is the fixed, append-only plan ledger for this repository.
   - docs/examples/external_mods/demo_furnace_system/behaviors/behaviors.json
   - docs/examples/external_mods/sss_content_pack/items/use_profiles.json
   - docs/examples/external_mods/sss_content_pack/spells/spells.json
+
+## [PLN-20260303-0012][UPDATE] 2026-03-03T21:14:02Z
+- status: done
+- note: Hotfix after field test: remapped MOD_ACTION8/9 to dedicated custom action bits (ocarina pitch up/down) to avoid ResetHotKey conflict with Modifier2, added ExecuteUseProfileEffects support for fx.spawnActorFx/fx.stopFx so firewall spell can spawn visible actor placeholders, and versioned furnace binding ids to *_v2 to bypass stale CVar masks from previous mappings. Synced demos, validated target mods, and rebuilt Release successfully.
+- refs:
+  - soh/soh/OTRGlobals.h
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+  - soh/soh/Enhancements/external-mods/ExternalModTypes.h
+  - soh/soh/Enhancements/controls/SohInputEditorWindow.cpp
+  - docs/examples/external_mods/demo_furnace_system/config/input.json
+  - docs/examples/external_mods/demo_furnace_system/scripts/init.json
+  - docs/examples/external_mods/sss_content_pack/items/use_profiles.json
+  - docs/examples/external_mods/sss_content_pack/spells/spells.json

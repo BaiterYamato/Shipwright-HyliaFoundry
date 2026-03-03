@@ -38,9 +38,10 @@ void SohInputEditorWindow::InitElement() {
 
     mButtonsBitmasks = { BTN_A, BTN_B, BTN_START, BTN_L, BTN_R, BTN_Z, BTN_CUP, BTN_CDOWN, BTN_CLEFT, BTN_CRIGHT };
     mDpadBitmasks = { BTN_DUP, BTN_DDOWN, BTN_DLEFT, BTN_DRIGHT };
-    mModifierButtonsBitmasks = { BTN_CUSTOM_MODIFIER1, BTN_CUSTOM_MODIFIER2, BTN_CUSTOM_MOD_ACTION1,
+    mModifierButtonsBitmasks = { BTN_CUSTOM_MODIFIER1,   BTN_CUSTOM_MODIFIER2,   BTN_CUSTOM_MOD_ACTION1,
                                  BTN_CUSTOM_MOD_ACTION2, BTN_CUSTOM_MOD_ACTION3, BTN_CUSTOM_MOD_ACTION4,
-                                 BTN_CUSTOM_MOD_ACTION5, BTN_CUSTOM_MOD_ACTION6, BTN_CUSTOM_MOD_ACTION7 };
+                                 BTN_CUSTOM_MOD_ACTION5, BTN_CUSTOM_MOD_ACTION6, BTN_CUSTOM_MOD_ACTION7,
+                                 BTN_CUSTOM_MOD_ACTION8, BTN_CUSTOM_MOD_ACTION9 };
     mCustomOcarinaButtonsBitmasks = { BTN_CUSTOM_OCARINA_NOTE_D4, BTN_CUSTOM_OCARINA_NOTE_F4,
                                       BTN_CUSTOM_OCARINA_NOTE_A4, BTN_CUSTOM_OCARINA_NOTE_B4,
                                       BTN_CUSTOM_OCARINA_NOTE_D5 };
@@ -1610,8 +1611,8 @@ void SohInputEditorWindow::DrawLinkTab() {
         }
 
         if (ImGui::CollapsingHeader("Modifier Buttons")) {
-            DrawButtonLine("Mod Action 8 (M1)", portIndex, BTN_CUSTOM_MODIFIER1);
-            DrawButtonLine("Mod Action 9 (M2)", portIndex, BTN_CUSTOM_MODIFIER2);
+            DrawButtonLine("Modifier 1", portIndex, BTN_CUSTOM_MODIFIER1);
+            DrawButtonLine("Modifier 2", portIndex, BTN_CUSTOM_MODIFIER2);
             DrawButtonLine("Mod Action 1", portIndex, BTN_CUSTOM_MOD_ACTION1);
             DrawButtonLine("Mod Action 2", portIndex, BTN_CUSTOM_MOD_ACTION2);
             DrawButtonLine("Mod Action 3", portIndex, BTN_CUSTOM_MOD_ACTION3);
@@ -1619,6 +1620,8 @@ void SohInputEditorWindow::DrawLinkTab() {
             DrawButtonLine("Mod Action 5", portIndex, BTN_CUSTOM_MOD_ACTION5);
             DrawButtonLine("Mod Action 6", portIndex, BTN_CUSTOM_MOD_ACTION6);
             DrawButtonLine("Mod Action 7", portIndex, BTN_CUSTOM_MOD_ACTION7);
+            DrawButtonLine("Mod Action 8", portIndex, BTN_CUSTOM_MOD_ACTION8);
+            DrawButtonLine("Mod Action 9", portIndex, BTN_CUSTOM_MOD_ACTION9);
 
             ImGui::BeginDisabled(CVarGetInteger(CVAR_SETTING("DisableChanges"), 0));
             CVarCheckbox("Enable speed modifiers", CVAR_SETTING("WalkModifier.Enabled"),

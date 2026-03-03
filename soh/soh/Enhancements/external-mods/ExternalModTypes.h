@@ -711,6 +711,11 @@ struct ExternalModUseProfileEffect {
     std::string aoeProfileId;
     std::string movementProfileId;
     std::string fxPresetId;
+    std::string fxStoreKey;
+    std::string fxHandleKey;
+    std::string fxOverlayName;
+    int32_t fxActorId = -1;
+    int32_t fxLifeFrames = 20;
     std::string stateId;
     std::string spellId;
     std::string shockwaveOrigin = "player";

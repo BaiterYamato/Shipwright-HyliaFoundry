@@ -9,7 +9,7 @@
   "onInput": [
     {
       "id": "toggle_furnace_debug",
-      "binding": "furnace_toggle_action8",
+      "binding": "furnace_toggle_action8_v2",
       "trigger": "pressed",
       "cooldownFrames": 6,
       "actions": [
@@ -25,7 +25,7 @@
     },
     {
       "id": "toggle_furnace_inventory",
-      "binding": "inventory_toggle_action9",
+      "binding": "inventory_toggle_action9_v2",
       "trigger": "pressed",
       "cooldownFrames": 6,
       "actions": [

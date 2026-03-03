@@ -260,8 +260,8 @@ const std::unordered_map<std::string, int32_t> kButtonAliases = {
     { "BTN_CUSTOM_MOD_ACTION5", BTN_CUSTOM_MOD_ACTION5 },
     { "BTN_CUSTOM_MOD_ACTION6", BTN_CUSTOM_MOD_ACTION6 },
     { "BTN_CUSTOM_MOD_ACTION7", BTN_CUSTOM_MOD_ACTION7 },
-    { "BTN_CUSTOM_MOD_ACTION8", BTN_CUSTOM_MODIFIER1 },
-    { "BTN_CUSTOM_MOD_ACTION9", BTN_CUSTOM_MODIFIER2 },
+    { "BTN_CUSTOM_MOD_ACTION8", BTN_CUSTOM_MOD_ACTION8 },
+    { "BTN_CUSTOM_MOD_ACTION9", BTN_CUSTOM_MOD_ACTION9 },
     { "MOD_ACTION1", BTN_CUSTOM_MOD_ACTION1 },
     { "MOD_ACTION2", BTN_CUSTOM_MOD_ACTION2 },
     { "MOD_ACTION3", BTN_CUSTOM_MOD_ACTION3 },
@@ -269,8 +269,8 @@ const std::unordered_map<std::string, int32_t> kButtonAliases = {
     { "MOD_ACTION5", BTN_CUSTOM_MOD_ACTION5 },
     { "MOD_ACTION6", BTN_CUSTOM_MOD_ACTION6 },
     { "MOD_ACTION7", BTN_CUSTOM_MOD_ACTION7 },
-    { "MOD_ACTION8", BTN_CUSTOM_MODIFIER1 },
-    { "MOD_ACTION9", BTN_CUSTOM_MODIFIER2 },
+    { "MOD_ACTION8", BTN_CUSTOM_MOD_ACTION8 },
+    { "MOD_ACTION9", BTN_CUSTOM_MOD_ACTION9 },
     { "A", BTN_A },
     { "B", BTN_B },
     { "Z", BTN_Z },
@@ -741,7 +741,7 @@ bool IsItemIdEquippedOnActionButtons(int16_t itemId) {
 bool IsSingleModActionMask(int32_t inputMask, int32_t& outResolvedMask) {
     constexpr int32_t kModActionMask = BTN_CUSTOM_MOD_ACTION1 | BTN_CUSTOM_MOD_ACTION2 | BTN_CUSTOM_MOD_ACTION3 |
                                        BTN_CUSTOM_MOD_ACTION4 | BTN_CUSTOM_MOD_ACTION5 | BTN_CUSTOM_MOD_ACTION6 |
-                                       BTN_CUSTOM_MOD_ACTION7 | BTN_CUSTOM_MODIFIER1 | BTN_CUSTOM_MODIFIER2;
+                                       BTN_CUSTOM_MOD_ACTION7 | BTN_CUSTOM_MOD_ACTION8 | BTN_CUSTOM_MOD_ACTION9;
 
     const int32_t masked = inputMask & kModActionMask;
     if (masked == 0 || (inputMask & ~kModActionMask) != 0) {
@@ -9727,6 +9727,28 @@ bool ExecuteUseProfileEffects(ExternalModPackage& package, const std::vector<Ext
             continue;
         }
 
+        if (effectAction == "fx.spawnactorfx" || effectAction == "spawnactorfx") {
+            ExternalModAction fxAction;
+            fxAction.type = ExternalModActionType::FxSpawnActorFx;
+            fxAction.fxActorId = effect.fxActorId;
+            fxAction.fxOverlayName = effect.fxOverlayName;
+            fxAction.fxLifeFrames = std::clamp(effect.fxLifeFrames, 1, 36000);
+            fxAction.fxStoreKey = effect.fxStoreKey;
+            ExternalModManager::ExecuteActionsPublic(package, { fxAction }, "useProfile.fx.spawnActorFx");
+            continue;
+        }
+
+        if (effectAction == "fx.stopfx" || effectAction == "stopfx") {
+            const std::string handleKey = !effect.fxHandleKey.empty() ? effect.fxHandleKey : effect.fxStoreKey;
+            if (!handleKey.empty()) {
+                ExternalModAction fxAction;
+                fxAction.type = ExternalModActionType::FxStopFx;
+                fxAction.fxHandleKey = handleKey;
+                ExternalModManager::ExecuteActionsPublic(package, { fxAction }, "useProfile.fx.stopFx");
+            }
+            continue;
+        }
+
         if (effectAction == "fx.spawnpreset" || effectAction == "spawnpreset") {
             const std::string resolvedPresetId = ResolveProfileIdForMod(package.manifest.id, effect.fxPresetId);
             const auto* preset = ExternalModContentRegistry::FindFxPresetById(package.runtime, resolvedPresetId);
@@ -15374,10 +15396,15 @@ bool TryParseUseProfileEffectObject(const nlohmann::json& effect, const std::str
         !parseOptionalString("movementProfileId", outEffect.movementProfileId) ||
         !parseOptionalString("fxPresetId", outEffect.fxPresetId) ||
         !parseOptionalString("presetId", outEffect.fxPresetId) ||
+        !parseOptionalString("storeKey", outEffect.fxStoreKey) ||
+        !parseOptionalString("handleKey", outEffect.fxHandleKey) ||
+        !parseOptionalString("overlay", outEffect.fxOverlayName) ||
         !parseOptionalString("stateId", outEffect.stateId) ||
         !parseOptionalString("state", outEffect.stateId) ||
         !parseOptionalString("spellId", outEffect.spellId) ||
         !parseOptionalString("spell", outEffect.spellId) ||
+        !parseOptionalInt("actorId", outEffect.fxActorId) ||
+        !parseOptionalInt("lifeFrames", outEffect.fxLifeFrames) ||
         !parseOptionalInt("durationFrames", outEffect.durationFrames) ||
         !parseOptionalInt("tickFrames", outEffect.tickFrames) ||
         !parseOptionalInt("damagePerTick", outEffect.damagePerTick) ||
@@ -15403,6 +15430,12 @@ bool TryParseUseProfileEffectObject(const nlohmann::json& effect, const std::str
 
         outEffect.shockwaveOrigin = originToken;
         outEffect.shockwaveLife = std::clamp(outEffect.shockwaveLife, 1, 120);
+    } else if (actionToken == "fx.spawnactorfx" || actionToken == "spawnactorfx") {
+        if (outEffect.fxActorId < 0 && outEffect.fxOverlayName.empty()) {
+            outError = contextPath + " requires actorId or overlay for fx.spawnActorFx";
+            return false;
+        }
+        outEffect.fxLifeFrames = std::clamp(outEffect.fxLifeFrames, 1, 36000);
     } else if (actionToken == "fx.spawnpreset" || actionToken == "spawnpreset") {
         if (outEffect.fxPresetId.empty()) {
             outError = contextPath + " requires fxPresetId/presetId for fx.spawnPreset";
