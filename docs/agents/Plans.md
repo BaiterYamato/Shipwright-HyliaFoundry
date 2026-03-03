@@ -579,3 +579,17 @@ This file is the fixed, append-only plan ledger for this repository.
 - tags: agents,git,tooling
 - refs:
   - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1,docs/agents/Plans.md
+
+## [PLN-20260303-0001][UPDATE] 2026-03-03T02:38:04Z
+- status: done
+- note: Local merge completed: 'codex/base-before-external-mod-wat-reload' -> 'develop' at 794003077.
+- refs:
+  - branch:codex/base-before-external-mod-wat-reload
+  - branch:develop
+  - commit:794003077
+
+## [PLN-20260303-0002][UPDATE] 2026-03-03T02:39:50Z
+- status: done
+- note: Fixed finalize-plan-merge Root binding bug, stashed dirty libultraship submodule workspace, and successfully finalized PLN-20260303-0001 into develop.
+- refs:
+  - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1,docs/agents/Plans.md,docs/agents/memory.index.json
