@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-02-25T20:21:27Z",
+    "generatedUtc":  "2026-03-03T02:15:20Z",
     "apiVersion":  4,
     "description":  "Declarative registry for action validation/dispatch contracts.",
     "actions":  [
@@ -90,6 +90,110 @@
                                        "profileId"
                                    ],
                         "name":  "setAimCameraProfile"
+                    },
+                    {
+                        "params":  [
+                                       "name|effect|effectId",
+                                       "scale?",
+                                       "lifeFrames?",
+                                       "attachFollow?",
+                                       "storeKey?"
+                                   ],
+                        "name":  "fx.spawnEffectSs"
+                    },
+                    {
+                        "params":  [
+                                       "actorId",
+                                       "overlay?",
+                                       "scale?",
+                                       "lifeFrames?",
+                                       "attachFollow?",
+                                       "storeKey?"
+                                   ],
+                        "name":  "fx.spawnActorFx"
+                    },
+                    {
+                        "params":  [
+                                       "presetId|preset",
+                                       "storeKey?"
+                                   ],
+                        "name":  "fx.spawnPreset"
+                    },
+                    {
+                        "params":  [
+                                       "handleKey|storeKey|key"
+                                   ],
+                        "name":  "fx.stopFx"
+                    },
+                    {
+                        "params":  [
+                                       "stateId|state",
+                                       "durationFrames?",
+                                       "domain?"
+                                   ],
+                        "name":  "states.applyState"
+                    },
+                    {
+                        "params":  [
+                                       "stateId|state",
+                                       "domain?"
+                                   ],
+                        "name":  "states.clearState"
+                    },
+                    {
+                        "params":  [
+                                       "stateId|state",
+                                       "storeKey?"
+                                   ],
+                        "name":  "states.hasState"
+                    },
+                    {
+                        "params":  [
+                                       "storeKey?"
+                                   ],
+                        "name":  "player.getStateFlags"
+                    },
+                    {
+                        "params":  [
+                                       "flag"
+                                   ],
+                        "name":  "player.setStateFlag"
+                    },
+                    {
+                        "params":  [
+                                       "flag"
+                                   ],
+                        "name":  "player.clearStateFlag"
+                    },
+                    {
+                        "params":  [
+                                       "enabled"
+                                   ],
+                        "name":  "player.setControlLock"
+                    },
+                    {
+                        "params":  [
+                                       "scale"
+                                   ],
+                        "name":  "player.setGravityScale"
+                    },
+                    {
+                        "params":  [
+                                       "mode"
+                                   ],
+                        "name":  "player.setBoostType"
+                    },
+                    {
+                        "params":  [
+                                       "mode"
+                                   ],
+                        "name":  "player.setDamageResponse"
+                    },
+                    {
+                        "params":  [
+                                       "spellId|spell"
+                                   ],
+                        "name":  "spells.castSpell"
                     },
                     {
                         "params":  [

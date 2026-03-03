@@ -27,6 +27,12 @@ class ExternalModContentRegistry {
                                                                      const std::string& profileId);
     static const ExternalModAimCameraProfile* FindAimCameraProfileById(const ExternalModRuntime& runtime,
                                                                        const std::string& profileId);
+    static const ExternalModFxPresetDefinition* FindFxPresetById(const ExternalModRuntime& runtime,
+                                                                 const std::string& presetId);
+    static const ExternalModStateDefinition* FindStateDefinitionById(const ExternalModRuntime& runtime,
+                                                                     const std::string& stateId);
+    static const ExternalModSpellDefinition* FindSpellDefinitionById(const ExternalModRuntime& runtime,
+                                                                     const std::string& spellId);
 
     // Sort by loadPriority DESC and modId ASC (deterministic tie-breaker).
     static void SortPackagesByPriority(std::vector<ExternalModPackage*>& packages);

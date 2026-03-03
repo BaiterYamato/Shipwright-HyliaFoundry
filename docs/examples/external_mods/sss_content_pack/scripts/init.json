@@ -1,0 +1,17 @@
+{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "grantModItem",
+      "itemId": "firewall_staff_item"
+    },
+    {
+      "action": "grantModItem",
+      "itemId": "levitation_glove_item"
+    },
+    {
+      "action": "showNotification",
+      "text": "SSS Content Pack loaded: Firewall Staff + Levitation Glove (requires com.sylian.sss)."
+    }
+  ]
+}

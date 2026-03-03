@@ -16,6 +16,7 @@ Typical fields:
 
 - `id`, `name`, `version`, `apiVersion`
 - `loadPriority`
+- `dependencies` (`id`/`modId` + optional `versionRange`)
 - `capabilities`
 - capability file fields (e.g., `damageDefinitions`, `itemUseProfiles`)
 - optional runtime budgets (`runtime`)
@@ -32,6 +33,9 @@ Machine-readable mapping: `docs/catalogs.json` (`capabilities[]`).
 - `combat/projectiles.json`
 - `combat/aoe_profiles.json`
 - `movement/movement_profiles.json`
+- `fx/fx_presets.json`
+- `states/states.json`
+- `spells/spells.json`
 - `hooks/hooks.json`
 - `behaviors/behaviors.json`
 
@@ -58,6 +62,7 @@ Effects are ordered and data-driven. Common actions include:
 - movement profile application
 - impulse/world-query dependent effects
 - `spawnShockwave` for impact-style FX
+- `spells.castSpell`
 
 ## 6) Combat catalogs
 
@@ -96,8 +101,23 @@ This mode freezes player/enemy/boss without periodic damage while preserving fre
 - Hook list: `docs/events.json` (`hooks`)
 - Behavior events: `docs/events.json` (`behaviorEvents`)
 - Action names: `docs/actions.json`
+- New lifecycle hooks include:
+  - `onStatusApplied`, `onStatusTick`, `onStatusExpired`
+  - `onStateApplied`, `onStateRemoved`
 
-## 10) Validation workflow
+## 10) FX presets, states and spells catalogs
+
+- `fx/fx_presets.json`: reusable action bundles, invoked by `fx.spawnPreset`.
+- `states/states.json`: actor/player-oriented state definitions with `apply[]` and `remove[]`.
+- `spells/spells.json`: reusable effect pipelines with cooldown and optional targeting profile.
+
+These catalogs are capability-gated by:
+
+- `fx.presets.v1`
+- `states.catalog.v1`
+- `spells.catalog.v1`
+
+## 11) Validation workflow
 
 1. Validate schema/capabilities via runtime load.
 2. Check logs for contextual parser/runtime errors.
@@ -107,7 +127,6 @@ This mode freezes player/enemy/boss without periodic damage while preserving fre
 tools/external_mods/export_runtime_reference.ps1
 ```
 
-## 11) Example packs
+## 12) Example packs
 
 See `docs/examples/external_mods/` for runnable reference mods.
-

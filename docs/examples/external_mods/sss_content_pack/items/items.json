@@ -1,0 +1,33 @@
+{
+  "items": [
+    {
+      "id": "firewall_staff_item",
+      "displayName": "Firewall Staff",
+      "slot": "SLOT_HAMMER",
+      "useMode": "augment",
+      "useTrigger": "hammerGroundImpact",
+      "agePolicy": "allowChild",
+      "useProfile": "com.sylian.sss_content_pack:firewall_staff_profile",
+      "grant": {
+        "itemId": "ITEM_HAMMER"
+      },
+      "params": {
+        "cooldown": 24
+      }
+    },
+    {
+      "id": "levitation_glove_item",
+      "displayName": "Levitation Glove",
+      "slot": "SLOT_STICK",
+      "useMode": "augment",
+      "agePolicy": "allowChild",
+      "useProfile": "com.sylian.sss_content_pack:levitation_glove_profile",
+      "grant": {
+        "itemId": "ITEM_STICK"
+      },
+      "params": {
+        "cooldown": 45
+      }
+    }
+  ]
+}

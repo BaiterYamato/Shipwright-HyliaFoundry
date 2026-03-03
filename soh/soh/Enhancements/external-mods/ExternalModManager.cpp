@@ -100,6 +100,9 @@ constexpr uint64_t kMaxWorldPatchDefinitionBytes = 1024 * 1024;
 constexpr uint64_t kMaxQuestDefinitionBytes = 1024 * 1024;
 constexpr uint64_t kMaxDialogDefinitionBytes = 1024 * 1024;
 constexpr uint64_t kMaxSdkGeneratorDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxFxPresetDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxStateDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxSpellDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxItemIconBytes = 4ull * 1024ull * 1024ull;
 constexpr uint64_t kMaxItemModelBytes = 8ull * 1024ull * 1024ull;
 constexpr uint64_t kMaxItemModelTextureBytes = 16ull * 1024ull * 1024ull;
@@ -680,6 +683,92 @@ bool IsSupportedRuntimeModuleExtension(const std::filesystem::path& modulePath) 
     return extension == ".wasm" || extension == ".wat";
 }
 
+struct SemVersion {
+    int32_t major = 0;
+    int32_t minor = 0;
+    int32_t patch = 0;
+};
+
+bool TryParseSemVersionToken(const std::string& token, SemVersion& outVersion) {
+    std::smatch match;
+    static const std::regex kSemverRegex(R"(^\s*(\d+)\.(\d+)\.(\d+)\s*$)");
+    if (!std::regex_match(token, match, kSemverRegex) || match.size() != 4) {
+        return false;
+    }
+    outVersion.major = std::stoi(match[1].str());
+    outVersion.minor = std::stoi(match[2].str());
+    outVersion.patch = std::stoi(match[3].str());
+    return true;
+}
+
+int32_t CompareSemVersion(const SemVersion& lhs, const SemVersion& rhs) {
+    if (lhs.major != rhs.major) {
+        return lhs.major < rhs.major ? -1 : 1;
+    }
+    if (lhs.minor != rhs.minor) {
+        return lhs.minor < rhs.minor ? -1 : 1;
+    }
+    if (lhs.patch != rhs.patch) {
+        return lhs.patch < rhs.patch ? -1 : 1;
+    }
+    return 0;
+}
+
+bool IsVersionRangeSatisfied(const std::string& version, const std::string& range) {
+    if (range.empty()) {
+        return true;
+    }
+
+    SemVersion versionValue;
+    if (!TryParseSemVersionToken(version, versionValue)) {
+        return false;
+    }
+
+    std::istringstream rangeStream(range);
+    std::string clause;
+    while (rangeStream >> clause) {
+        std::string op;
+        std::string token;
+        if (clause.rfind(">=", 0) == 0 || clause.rfind("<=", 0) == 0) {
+            op = clause.substr(0, 2);
+            token = clause.substr(2);
+        } else if (!clause.empty() && (clause[0] == '>' || clause[0] == '<' || clause[0] == '=')) {
+            op = clause.substr(0, 1);
+            token = clause.substr(1);
+        } else {
+            op = "=";
+            token = clause;
+        }
+        if (token.empty()) {
+            return false;
+        }
+
+        SemVersion clauseVersion;
+        if (!TryParseSemVersionToken(token, clauseVersion)) {
+            return false;
+        }
+
+        const int32_t cmp = CompareSemVersion(versionValue, clauseVersion);
+        if (op == ">=" && cmp < 0) {
+            return false;
+        }
+        if (op == ">" && cmp <= 0) {
+            return false;
+        }
+        if (op == "<=" && cmp > 0) {
+            return false;
+        }
+        if (op == "<" && cmp >= 0) {
+            return false;
+        }
+        if ((op == "=" || op.empty()) && cmp != 0) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 const std::unordered_set<std::string> kSupportedCapabilities = {
     "hooks.extended.v1",
     "items.data.v2",
@@ -713,6 +802,9 @@ const std::unordered_set<std::string> kSupportedCapabilities = {
     "quests.graph.v1",
     "dialog.nodes.v1",
     "sdk.generators.v1",
+    "fx.presets.v1",
+    "states.catalog.v1",
+    "spells.catalog.v1",
 };
 
 const std::unordered_set<std::string> kSupportedRuntimePermissions = {
@@ -743,6 +835,11 @@ const std::unordered_map<std::string, ExternalModHookType> kHookAliases = {
     { "onactordestroy", ExternalModHookType::OnActorDestroy },
     { "onenemydefeat", ExternalModHookType::OnEnemyDefeat },
     { "onbossdefeat", ExternalModHookType::OnBossDefeat },
+    { "onstatusapplied", ExternalModHookType::OnStatusApplied },
+    { "onstatustick", ExternalModHookType::OnStatusTick },
+    { "onstatusexpired", ExternalModHookType::OnStatusExpired },
+    { "onstateapplied", ExternalModHookType::OnStateApplied },
+    { "onstateremoved", ExternalModHookType::OnStateRemoved },
     { "onplaydestroy", ExternalModHookType::OnPlayDestroy },
     { "ongameframeupdate", ExternalModHookType::OnGameFrameUpdate },
 };
@@ -1283,6 +1380,13 @@ bool EndsWithString(const std::string& value, const std::string& suffix) {
         return false;
     }
     return std::equal(suffix.rbegin(), suffix.rend(), value.rbegin());
+}
+
+bool StartsWithString(const std::string& value, const std::string& prefix) {
+    if (prefix.size() > value.size()) {
+        return false;
+    }
+    return std::equal(prefix.begin(), prefix.end(), value.begin());
 }
 
 std::string NormalizeZipEntryPath(std::string path) {
@@ -4651,6 +4755,254 @@ bool ParseAction(const nlohmann::json& json, int32_t apiVersion, ExternalModActi
         return true;
     }
 
+    if (actionType == "fx.spawnEffectSs" || actionType == "spawnEffectSs") {
+        outAction.type = ExternalModActionType::FxSpawnEffectSs;
+        if (json.contains("name")) {
+            if (!ValidateRequiredString(json, "name", outAction.fxEffectName, outError)) {
+                return false;
+            }
+        } else if (json.contains("effect")) {
+            if (!ValidateRequiredString(json, "effect", outAction.fxEffectName, outError)) {
+                return false;
+            }
+        } else if (json.contains("effectId")) {
+            if (!json["effectId"].is_number_integer()) {
+                outError = "fx.spawnEffectSs.effectId must be integer";
+                return false;
+            }
+            outAction.fxEffectId = json["effectId"].get<int32_t>();
+        } else {
+            outError = "fx.spawnEffectSs requires name/effect/effectId";
+            return false;
+        }
+        if (json.contains("scale")) {
+            if (!json["scale"].is_number()) {
+                outError = "fx.spawnEffectSs.scale must be numeric";
+                return false;
+            }
+            outAction.fxScale = std::max(0.01f, json["scale"].get<float>());
+        }
+        if (json.contains("lifeFrames")) {
+            if (!json["lifeFrames"].is_number_integer()) {
+                outError = "fx.spawnEffectSs.lifeFrames must be integer";
+                return false;
+            }
+            outAction.fxLifeFrames = std::clamp(json["lifeFrames"].get<int32_t>(), 1, 36000);
+        }
+        if (json.contains("attachFollow")) {
+            if (!json["attachFollow"].is_boolean()) {
+                outError = "fx.spawnEffectSs.attachFollow must be boolean";
+                return false;
+            }
+            outAction.fxAttachFollow = json["attachFollow"].get<bool>();
+        }
+        if (json.contains("storeKey")) {
+            if (!ValidateRequiredString(json, "storeKey", outAction.fxStoreKey, outError)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (actionType == "fx.spawnActorFx" || actionType == "spawnActorFx") {
+        outAction.type = ExternalModActionType::FxSpawnActorFx;
+        if (!json.contains("actorId") || !json["actorId"].is_number_integer()) {
+            outError = "fx.spawnActorFx.actorId must be integer";
+            return false;
+        }
+        outAction.fxActorId = json["actorId"].get<int32_t>();
+        if (json.contains("overlay")) {
+            if (!ValidateRequiredString(json, "overlay", outAction.fxOverlayName, outError)) {
+                return false;
+            }
+        }
+        if (json.contains("scale")) {
+            if (!json["scale"].is_number()) {
+                outError = "fx.spawnActorFx.scale must be numeric";
+                return false;
+            }
+            outAction.fxScale = std::max(0.01f, json["scale"].get<float>());
+        }
+        if (json.contains("lifeFrames")) {
+            if (!json["lifeFrames"].is_number_integer()) {
+                outError = "fx.spawnActorFx.lifeFrames must be integer";
+                return false;
+            }
+            outAction.fxLifeFrames = std::clamp(json["lifeFrames"].get<int32_t>(), 1, 36000);
+        }
+        if (json.contains("attachFollow")) {
+            if (!json["attachFollow"].is_boolean()) {
+                outError = "fx.spawnActorFx.attachFollow must be boolean";
+                return false;
+            }
+            outAction.fxAttachFollow = json["attachFollow"].get<bool>();
+        }
+        if (json.contains("storeKey")) {
+            if (!ValidateRequiredString(json, "storeKey", outAction.fxStoreKey, outError)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (actionType == "fx.spawnPreset" || actionType == "spawnPreset") {
+        outAction.type = ExternalModActionType::FxSpawnPreset;
+        if (!ValidateRequiredString(json, "presetId", outAction.fxPresetId, outError)) {
+            if (json.contains("preset") && ValidateRequiredString(json, "preset", outAction.fxPresetId, outError)) {
+                // parsed via alias
+            } else {
+                outError = "fx.spawnPreset requires presetId";
+                return false;
+            }
+        }
+        if (json.contains("storeKey")) {
+            if (!ValidateRequiredString(json, "storeKey", outAction.fxStoreKey, outError)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (actionType == "fx.stopFx" || actionType == "stopFx") {
+        outAction.type = ExternalModActionType::FxStopFx;
+        if (json.contains("handleKey")) {
+            return ValidateRequiredString(json, "handleKey", outAction.fxHandleKey, outError);
+        }
+        if (json.contains("storeKey")) {
+            return ValidateRequiredString(json, "storeKey", outAction.fxHandleKey, outError);
+        }
+        if (json.contains("key")) {
+            return ValidateRequiredString(json, "key", outAction.fxHandleKey, outError);
+        }
+        outError = "fx.stopFx requires handleKey";
+        return false;
+    }
+
+    if (actionType == "states.applyState" || actionType == "applyState") {
+        outAction.type = ExternalModActionType::StatesApplyState;
+        if (!ValidateRequiredString(json, "stateId", outAction.stateId, outError)) {
+            if (json.contains("state") && ValidateRequiredString(json, "state", outAction.stateId, outError)) {
+                // alias
+            } else {
+                outError = "states.applyState requires stateId";
+                return false;
+            }
+        }
+        if (json.contains("durationFrames")) {
+            if (!json["durationFrames"].is_number_integer()) {
+                outError = "states.applyState.durationFrames must be integer";
+                return false;
+            }
+            outAction.durationFrames = std::max(0, json["durationFrames"].get<int32_t>());
+        }
+        if (json.contains("domain")) {
+            if (!ValidateRequiredString(json, "domain", outAction.stateDomain, outError)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (actionType == "states.clearState" || actionType == "clearState") {
+        outAction.type = ExternalModActionType::StatesClearState;
+        if (!ValidateRequiredString(json, "stateId", outAction.stateId, outError)) {
+            if (json.contains("state") && ValidateRequiredString(json, "state", outAction.stateId, outError)) {
+                // alias
+            } else {
+                outError = "states.clearState requires stateId";
+                return false;
+            }
+        }
+        if (json.contains("domain")) {
+            if (!ValidateRequiredString(json, "domain", outAction.stateDomain, outError)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (actionType == "states.hasState" || actionType == "hasState") {
+        outAction.type = ExternalModActionType::StatesHasState;
+        if (!ValidateRequiredString(json, "stateId", outAction.stateId, outError)) {
+            if (json.contains("state") && ValidateRequiredString(json, "state", outAction.stateId, outError)) {
+                // alias
+            } else {
+                outError = "states.hasState requires stateId";
+                return false;
+            }
+        }
+        if (json.contains("storeKey")) {
+            if (!ValidateRequiredString(json, "storeKey", outAction.variableKey, outError)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (actionType == "player.getStateFlags") {
+        outAction.type = ExternalModActionType::PlayerGetStateFlags;
+        if (json.contains("storeKey")) {
+            return ValidateRequiredString(json, "storeKey", outAction.variableKey, outError);
+        }
+        outAction.variableKey = "__player_state_flags";
+        return true;
+    }
+
+    if (actionType == "player.setStateFlag") {
+        outAction.type = ExternalModActionType::PlayerSetStateFlag;
+        return ValidateRequiredString(json, "flag", outAction.stateFlag, outError);
+    }
+
+    if (actionType == "player.clearStateFlag") {
+        outAction.type = ExternalModActionType::PlayerClearStateFlag;
+        return ValidateRequiredString(json, "flag", outAction.stateFlag, outError);
+    }
+
+    if (actionType == "player.setControlLock") {
+        outAction.type = ExternalModActionType::PlayerSetControlLock;
+        if (!json.contains("enabled") || !json["enabled"].is_boolean()) {
+            outError = "player.setControlLock.enabled must be boolean";
+            return false;
+        }
+        outAction.boolValue = json["enabled"].get<bool>();
+        outAction.hasBoolValue = true;
+        return true;
+    }
+
+    if (actionType == "player.setGravityScale") {
+        outAction.type = ExternalModActionType::PlayerSetGravityScale;
+        if (!json.contains("scale") || !json["scale"].is_number()) {
+            outError = "player.setGravityScale.scale must be numeric";
+            return false;
+        }
+        outAction.floatValue = json["scale"].get<float>();
+        outAction.hasFloatValue = true;
+        return true;
+    }
+
+    if (actionType == "player.setBoostType") {
+        outAction.type = ExternalModActionType::PlayerSetBoostType;
+        return ValidateRequiredString(json, "mode", outAction.stateControlMode, outError);
+    }
+
+    if (actionType == "player.setDamageResponse") {
+        outAction.type = ExternalModActionType::PlayerSetDamageResponse;
+        return ValidateRequiredString(json, "mode", outAction.stateControlMode, outError);
+    }
+
+    if (actionType == "spells.castSpell" || actionType == "castSpell") {
+        outAction.type = ExternalModActionType::SpellsCastSpell;
+        if (!ValidateRequiredString(json, "spellId", outAction.spellId, outError)) {
+            if (json.contains("spell") && ValidateRequiredString(json, "spell", outAction.spellId, outError)) {
+                // alias
+            } else {
+                outError = "spells.castSpell requires spellId";
+                return false;
+            }
+        }
+        return true;
+    }
+
     outError = "Unsupported action: " + actionType;
     return false;
 }
@@ -6714,6 +7066,95 @@ ExternalModRuntime::StatusEffectState* FindStatusStateByActor(ExternalModRuntime
     return &(*it);
 }
 
+ExternalModRuntime::ActiveStateState* FindActiveStateByActor(ExternalModRuntime& runtime, Actor* actor,
+                                                             const std::string& stateId,
+                                                             const std::string& sourceModId) {
+    if (actor == nullptr || stateId.empty()) {
+        return nullptr;
+    }
+
+    const auto actorAddress = reinterpret_cast<uintptr_t>(actor);
+    const auto it =
+        std::find_if(runtime.activeStates.begin(), runtime.activeStates.end(),
+                     [actorAddress, &stateId, &sourceModId](const ExternalModRuntime::ActiveStateState& state) {
+                         return state.actorAddress == actorAddress && state.stateId == stateId &&
+                                state.sourceModId == sourceModId;
+                     });
+    if (it == runtime.activeStates.end()) {
+        return nullptr;
+    }
+    return &(*it);
+}
+
+const ExternalModStateDefinition* ResolveStateDefinitionById(const ExternalModRuntime& runtime, const std::string& stateId) {
+    if (stateId.empty()) {
+        return nullptr;
+    }
+
+    if (const auto* direct = ExternalModContentRegistry::FindStateDefinitionById(runtime, stateId); direct != nullptr) {
+        return direct;
+    }
+
+    const auto normalizedStateId = ToLower(stateId);
+    const auto it = std::find_if(runtime.stateDefinitions.begin(), runtime.stateDefinitions.end(),
+                                 [&normalizedStateId](const ExternalModStateDefinition& definition) {
+                                     return std::any_of(definition.aliases.begin(), definition.aliases.end(),
+                                                        [&normalizedStateId](const std::string& alias) {
+                                                            return ToLower(alias) == normalizedStateId;
+                                                        });
+                                 });
+    if (it == runtime.stateDefinitions.end()) {
+        return nullptr;
+    }
+    return &(*it);
+}
+
+int32_t RegisterFxHandle(ExternalModRuntime& runtime, const std::string& key, uintptr_t actorAddress, int32_t ttlFrames,
+                         const std::string& source) {
+    ExternalModRuntime::ActiveFxHandleState handleState;
+    handleState.handle = std::max(1, runtime.nextFxHandle++);
+    handleState.key = key.empty() ? "__fx_" + std::to_string(handleState.handle) : key;
+    handleState.actorAddress = actorAddress;
+    handleState.ttlFrames = std::max(0, ttlFrames);
+    handleState.source = source;
+    runtime.fxHandleByKey[handleState.key] = handleState.handle;
+    runtime.activeFxHandles.push_back(std::move(handleState));
+    return runtime.nextFxHandle - 1;
+}
+
+void RemoveFxHandleByKey(ExternalModRuntime& runtime, const std::string& key) {
+    if (key.empty()) {
+        return;
+    }
+    const auto it = runtime.fxHandleByKey.find(key);
+    if (it == runtime.fxHandleByKey.end()) {
+        return;
+    }
+    const int32_t handle = it->second;
+    runtime.fxHandleByKey.erase(it);
+    runtime.activeFxHandles.erase(
+        std::remove_if(runtime.activeFxHandles.begin(), runtime.activeFxHandles.end(),
+                       [handle](const ExternalModRuntime::ActiveFxHandleState& state) { return state.handle == handle; }),
+        runtime.activeFxHandles.end());
+}
+
+void TickRuntimeFxHandles(ExternalModRuntime& runtime) {
+    for (size_t i = 0; i < runtime.activeFxHandles.size();) {
+        auto& state = runtime.activeFxHandles[i];
+        if (state.ttlFrames > 0) {
+            state.ttlFrames--;
+        }
+        if (state.ttlFrames == 0 && state.source != "persistent") {
+            if (!state.key.empty()) {
+                runtime.fxHandleByKey.erase(state.key);
+            }
+            runtime.activeFxHandles.erase(runtime.activeFxHandles.begin() + static_cast<std::ptrdiff_t>(i));
+            continue;
+        }
+        ++i;
+    }
+}
+
 ExternalModFreezeProfile ResolveFreezeProfileForStatus(const ExternalModRuntime& runtime, const std::string& statusId,
                                                        ExternalModStatusType statusType) {
     ExternalModFreezeProfile profile;
@@ -6893,6 +7334,14 @@ void BeginStatusOnActor(ExternalModRuntime& runtime, PlayState* play, Actor* act
     }
 
     ApplyStatusColorFilter(actor, statusType, intensity);
+
+    ExternalModHookEventContext hookContext;
+    hookContext.scene = static_cast<int16_t>(play->sceneNum);
+    hookContext.actorId = actor->id;
+    hookContext.actorCategory = actor->category;
+    hookContext.statusId = statusId;
+    hookContext.stackCount = state != nullptr ? std::max(1, state->stacks) : 1;
+    ExternalModManager::Instance().EmitExtendedHook(ExternalModHookType::OnStatusApplied, hookContext, "OnStatusApplied");
 }
 
 void ApplyStatusDamage(PlayState* play, Actor* actor, int32_t damagePerTick) {
@@ -7108,6 +7557,14 @@ void TickStatusEffects(ExternalModPackage& package, PlayState* play,
             if (statusDefinition != nullptr && !statusDefinition->onExpire.empty()) {
                 outDeferredCallbacks.push_back({ statusDefinition->onExpire, "statusOnExpire" });
             }
+            ExternalModHookEventContext hookContext;
+            hookContext.scene = static_cast<int16_t>(play->sceneNum);
+            hookContext.actorId = actor->id;
+            hookContext.actorCategory = actor->category;
+            hookContext.statusId = statusState.statusId;
+            hookContext.stackCount = std::max(1, statusState.stacks);
+            ExternalModManager::Instance().EmitExtendedHook(ExternalModHookType::OnStatusExpired, hookContext,
+                                                            "OnStatusExpired");
             RestoreStatusState(statusState, actor, play, true);
             runtime.statusEffects.erase(runtime.statusEffects.begin() + static_cast<std::ptrdiff_t>(i));
             continue;
@@ -7120,6 +7577,14 @@ void TickStatusEffects(ExternalModPackage& package, PlayState* play,
             if (statusDefinition != nullptr && !statusDefinition->onTick.empty()) {
                 outDeferredCallbacks.push_back({ statusDefinition->onTick, "statusOnTick" });
             }
+            ExternalModHookEventContext hookContext;
+            hookContext.scene = static_cast<int16_t>(play->sceneNum);
+            hookContext.actorId = actor->id;
+            hookContext.actorCategory = actor->category;
+            hookContext.statusId = statusState.statusId;
+            hookContext.stackCount = std::max(1, statusState.stacks);
+            ExternalModManager::Instance().EmitExtendedHook(ExternalModHookType::OnStatusTick, hookContext,
+                                                            "OnStatusTick");
         }
 
         switch (statusState.statusType) {
@@ -7398,10 +7863,11 @@ bool TickActiveAoEs(ExternalModPackage& package, PlayState* play, Player* player
             sourceItem = ExternalModContentRegistry::FindItemDefinitionById(package.runtime, activeAoE.sourceItemId);
         }
 
-        if (activeAoE.tickCountdown <= 0 && !aoeProfile->onTick.empty()) {
+        const auto& tickEffects = !aoeProfile->onStayTick.empty() ? aoeProfile->onStayTick : aoeProfile->onTick;
+        if (activeAoE.tickCountdown <= 0 && !tickEffects.empty()) {
             activeAoE.tickCountdown = std::max(1, activeAoE.tickFrames);
             std::string tickError;
-            if (!ExecuteUseProfileEffects(package, aoeProfile->onTick, aoeTargets, play, player, sourceItem, tickError)) {
+            if (!ExecuteUseProfileEffects(package, tickEffects, aoeTargets, play, player, sourceItem, tickError)) {
                 outError = "aoe onTick failed for profile '" + aoeProfile->id + "': " + tickError;
                 return false;
             }
@@ -7968,6 +8434,53 @@ bool ShouldIncludeAoEPlayer(ExternalModAoETargetScope scope) {
            scope == ExternalModAoETargetScope::AllWithPlayer;
 }
 
+bool IsPointInsideAoEProfile(const ExternalModAoEProfile& aoeProfile, const Vec3f& origin, const Vec3f& point,
+                             int16_t ownerYaw) {
+    const float dx = point.x - origin.x;
+    const float dy = point.y - origin.y;
+    const float dz = point.z - origin.z;
+
+    float localX = dx;
+    float localZ = dz;
+    if (aoeProfile.orientationType == ExternalModAoEOrientation::OwnerYaw) {
+        const float sinYaw = Math_SinS(ownerYaw);
+        const float cosYaw = Math_CosS(ownerYaw);
+        localX = dx * cosYaw + dz * sinYaw;
+        localZ = -dx * sinYaw + dz * cosYaw;
+    }
+
+    const float radius = std::max(aoeProfile.radius, aoeProfile.range);
+    switch (aoeProfile.shapeType) {
+        case ExternalModAoEShape::Sphere: {
+            const float distanceSq = dx * dx + dy * dy + dz * dz;
+            return distanceSq <= radius * radius;
+        }
+        case ExternalModAoEShape::Cylinder: {
+            const float radialSq = localX * localX + localZ * localZ;
+            const float halfHeight = std::max(aoeProfile.height * 0.5f, 0.0f);
+            return radialSq <= radius * radius && std::abs(dy) <= halfHeight;
+        }
+        case ExternalModAoEShape::Box: {
+            const float halfX = aoeProfile.halfExtents[0] > 0.0f ? aoeProfile.halfExtents[0] : radius;
+            const float halfY = aoeProfile.halfExtents[1] > 0.0f ? aoeProfile.halfExtents[1] : std::max(aoeProfile.height * 0.5f, radius);
+            const float halfZ = aoeProfile.halfExtents[2] > 0.0f ? aoeProfile.halfExtents[2] : radius;
+            return std::abs(localX) <= halfX && std::abs(dy) <= halfY && std::abs(localZ) <= halfZ;
+        }
+        case ExternalModAoEShape::Capsule: {
+            const float halfHeight =
+                aoeProfile.capsuleHalfHeight > 0.0f ? aoeProfile.capsuleHalfHeight : std::max(aoeProfile.height * 0.5f, 0.0f);
+            const float segmentY = std::clamp(dy, -halfHeight, halfHeight);
+            const float capsuleDx = localX;
+            const float capsuleDy = dy - segmentY;
+            const float capsuleDz = localZ;
+            const float distanceSq = capsuleDx * capsuleDx + capsuleDy * capsuleDy + capsuleDz * capsuleDz;
+            return distanceSq <= radius * radius;
+        }
+        default:
+            return false;
+    }
+}
+
 void CollectAoETargetsForProfile(const ExternalModAoEProfile& aoeProfile, PlayState* play, Player* player,
                                  const Vec3f& origin, std::vector<Actor*>& outTargets) {
     outTargets.clear();
@@ -7976,7 +8489,7 @@ void CollectAoETargetsForProfile(const ExternalModAoEProfile& aoeProfile, PlaySt
     }
 
     Vec3f originMutable = origin;
-    const float radius = std::max(aoeProfile.radius, aoeProfile.range);
+    const int16_t ownerYaw = player->actor.shape.rot.y;
     for (size_t category = 0; category < ARRAY_COUNT(play->actorCtx.actorLists); ++category) {
         if (!ShouldIncludeAoEActorCategory(aoeProfile.targetScope, category)) {
             continue;
@@ -7985,16 +8498,14 @@ void CollectAoETargetsForProfile(const ExternalModAoEProfile& aoeProfile, PlaySt
             if (actor == nullptr || actor->update == nullptr) {
                 continue;
             }
-            const float distance = Math_Vec3f_DistXYZ(&originMutable, &actor->world.pos);
-            if (distance <= radius) {
+            if (IsPointInsideAoEProfile(aoeProfile, originMutable, actor->world.pos, ownerYaw)) {
                 outTargets.push_back(actor);
             }
         }
     }
 
     if (ShouldIncludeAoEPlayer(aoeProfile.targetScope)) {
-        const float playerDistance = Math_Vec3f_DistXYZ(&originMutable, &player->actor.world.pos);
-        if (playerDistance <= radius) {
+        if (IsPointInsideAoEProfile(aoeProfile, originMutable, player->actor.world.pos, ownerYaw)) {
             outTargets.push_back(&player->actor);
         }
     }
@@ -8244,6 +8755,90 @@ bool ExecuteUseProfileEffects(ExternalModPackage& package, const std::vector<Ext
                 movementAction.damagePerTick = 0;
                 BeginStatusOnActor(package.runtime, play, &player->actor, movementAction, ExternalModStatusType::HighJump,
                                    true, movementAction.statusId, package.manifest.id);
+            }
+            continue;
+        }
+
+        if (effectAction == "fx.spawnpreset" || effectAction == "spawnpreset") {
+            const std::string resolvedPresetId = ResolveProfileIdForMod(package.manifest.id, effect.fxPresetId);
+            const auto* preset = ExternalModContentRegistry::FindFxPresetById(package.runtime, resolvedPresetId);
+            if (preset == nullptr) {
+                outError = "Unknown fx preset: " + resolvedPresetId;
+                return false;
+            }
+            ExternalModManager::ExecuteActionsPublic(package, preset->actions, "fx.spawnPreset");
+            continue;
+        }
+
+        if (effectAction == "states.applystate" || effectAction == "applystate") {
+            const std::string resolvedStateId = ResolveProfileIdForMod(package.manifest.id, effect.stateId);
+            const auto* stateDefinition = ResolveStateDefinitionById(package.runtime, resolvedStateId);
+            if (stateDefinition == nullptr) {
+                outError = "Unknown state id: " + resolvedStateId;
+                return false;
+            }
+            for (Actor* target : targets) {
+                if (target == nullptr) {
+                    continue;
+                }
+                auto* existingState =
+                    FindActiveStateByActor(package.runtime, target, stateDefinition->id, package.manifest.id);
+                if (existingState == nullptr) {
+                    ExternalModRuntime::ActiveStateState state;
+                    state.actorAddress = reinterpret_cast<uintptr_t>(target);
+                    state.actorId = target->id;
+                    state.stateId = stateDefinition->id;
+                    state.domain = stateDefinition->domain;
+                    state.sourceModId = package.manifest.id;
+                    state.framesRemaining = effect.durationFrames > 0
+                                                ? effect.durationFrames
+                                                : std::max(0, stateDefinition->defaultDurationFrames);
+                    state.wasAppliedThisFrame = true;
+                    package.runtime.activeStates.push_back(std::move(state));
+                    if (!stateDefinition->onApply.empty()) {
+                        ExternalModManager::ExecuteActionsPublic(package, stateDefinition->onApply, "states.onApply");
+                    }
+                } else {
+                    existingState->framesRemaining =
+                        effect.durationFrames > 0 ? effect.durationFrames
+                                                  : std::max(existingState->framesRemaining,
+                                                             std::max(0, stateDefinition->defaultDurationFrames));
+                }
+            }
+            continue;
+        }
+
+        if (effectAction == "spells.castspell" || effectAction == "castspell") {
+            const std::string resolvedSpellId = ResolveProfileIdForMod(package.manifest.id, effect.spellId);
+            const auto* spellDefinition = ExternalModContentRegistry::FindSpellDefinitionById(package.runtime, resolvedSpellId);
+            if (spellDefinition == nullptr) {
+                outError = "Unknown spell id: " + resolvedSpellId;
+                return false;
+            }
+            const auto cooldownIt = package.runtime.spellCooldownsById.find(spellDefinition->id);
+            if (cooldownIt != package.runtime.spellCooldownsById.end() && cooldownIt->second > 0) {
+                continue;
+            }
+
+            std::vector<Actor*> spellTargets = targets;
+            if (!spellDefinition->targetingProfileId.empty()) {
+                const auto* spellTargeting =
+                    ExternalModContentRegistry::FindTargetingProfileById(package.runtime, spellDefinition->targetingProfileId);
+                if (spellTargeting == nullptr) {
+                    outError = "Spell references unknown targeting profile: " + spellDefinition->targetingProfileId;
+                    return false;
+                }
+                spellTargets.clear();
+                ResolveTargetsForTargetingProfile(*spellTargeting, play, player, spellTargets);
+            }
+
+            if (!ExecuteUseProfileEffects(package, spellDefinition->effects, spellTargets, play, player, sourceItem,
+                                          outError)) {
+                outError = "castSpell failed for '" + spellDefinition->id + "': " + outError;
+                return false;
+            }
+            if (spellDefinition->cooldownFrames > 0) {
+                package.runtime.spellCooldownsById[spellDefinition->id] = spellDefinition->cooldownFrames;
             }
             continue;
         }
@@ -10952,6 +11547,104 @@ void ExternalModManager::Initialize() {
         }
         return lhs.id < rhs.id;
     });
+
+    std::unordered_map<std::string, size_t> providerIndexById;
+    for (const auto index : validIndices) {
+        const auto& modId = mPackages[index].manifest.id;
+        if (!providerIndexById.contains(modId)) {
+            providerIndexById[modId] = index;
+        }
+    }
+
+    std::vector<size_t> pendingIndices;
+    pendingIndices.reserve(validIndices.size());
+    for (const auto index : validIndices) {
+        auto& package = mPackages[index];
+
+        const auto providerIt = providerIndexById.find(package.manifest.id);
+        if (providerIt != providerIndexById.end() && providerIt->second != index) {
+            package.valid = false;
+            package.error = "Duplicate mod id resolved to higher-priority provider: " + package.manifest.id;
+            SPDLOG_WARN("[ExternalMods] Runtime disabled for {}: {}", package.sourcePath.string(), package.error);
+            continue;
+        }
+
+        bool dependencyError = false;
+        for (const auto& dependency : package.manifest.dependencies) {
+            if (dependency.modId == package.manifest.id) {
+                package.valid = false;
+                package.error = "Dependency cycle: mod depends on itself (" + dependency.modId + ")";
+                dependencyError = true;
+                break;
+            }
+
+            const auto dependencyProviderIt = providerIndexById.find(dependency.modId);
+            if (dependencyProviderIt == providerIndexById.end()) {
+                package.valid = false;
+                package.error = "Missing dependency: " + dependency.modId;
+                dependencyError = true;
+                break;
+            }
+
+            const auto& dependencyManifest = mPackages[dependencyProviderIt->second].manifest;
+            if (!IsVersionRangeSatisfied(dependencyManifest.version, dependency.versionRange)) {
+                package.valid = false;
+                package.error = "Dependency version mismatch: " + dependency.modId + " version " +
+                                dependencyManifest.version + " does not satisfy range '" + dependency.versionRange + "'";
+                dependencyError = true;
+                break;
+            }
+        }
+
+        if (dependencyError) {
+            SPDLOG_WARN("[ExternalMods] Runtime disabled for {}: {}", package.sourcePath.string(), package.error);
+            continue;
+        }
+
+        pendingIndices.push_back(index);
+    }
+
+    std::vector<size_t> dependencyOrderedIndices;
+    dependencyOrderedIndices.reserve(pendingIndices.size());
+    std::unordered_set<std::string> resolvedModIds;
+    while (!pendingIndices.empty()) {
+        bool resolvedAny = false;
+        for (auto it = pendingIndices.begin(); it != pendingIndices.end();) {
+            const auto index = *it;
+            const auto& package = mPackages[index];
+            bool ready = true;
+            for (const auto& dependency : package.manifest.dependencies) {
+                if (!resolvedModIds.contains(dependency.modId)) {
+                    ready = false;
+                    break;
+                }
+            }
+
+            if (!ready) {
+                ++it;
+                continue;
+            }
+
+            dependencyOrderedIndices.push_back(index);
+            resolvedModIds.insert(package.manifest.id);
+            it = pendingIndices.erase(it);
+            resolvedAny = true;
+        }
+
+        if (!resolvedAny) {
+            for (const auto blockedIndex : pendingIndices) {
+                auto& blockedPackage = mPackages[blockedIndex];
+                blockedPackage.valid = false;
+                blockedPackage.error = "Dependency cycle or unresolved dependency graph";
+                SPDLOG_WARN("[ExternalMods] Runtime disabled for {}: {}", blockedPackage.sourcePath.string(),
+                            blockedPackage.error);
+            }
+            pendingIndices.clear();
+        }
+    }
+
+    validIndices = dependencyOrderedIndices;
+
     size_t runtimeCount = 0;
     for (const auto index : validIndices) {
         auto& package = mPackages[index];
@@ -11396,6 +12089,9 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
         const bool hasQuestGraphCapability = ManifestHasCapability(outManifest, "quests.graph.v1");
         const bool hasDialogNodesCapability = ManifestHasCapability(outManifest, "dialog.nodes.v1");
         const bool hasSdkGeneratorsCapability = ManifestHasCapability(outManifest, "sdk.generators.v1");
+        const bool hasFxPresetsCapability = ManifestHasCapability(outManifest, "fx.presets.v1");
+        const bool hasStatesCatalogCapability = ManifestHasCapability(outManifest, "states.catalog.v1");
+        const bool hasSpellsCatalogCapability = ManifestHasCapability(outManifest, "spells.catalog.v1");
 
         if (outManifest.apiVersion >= 4 && hasAimCameraCatalogCapability) {
             outError = "camera.aim_profiles.v1 is legacy; use camera.aim_profiles.v2";
@@ -11549,7 +12245,13 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
             !parseCapabilityPath("dialogDefinitions", "dialog.nodes.v1", hasDialogNodesCapability,
                                  outManifest.dialogDefinitions) ||
             !parseCapabilityPath("sdkGeneratorDefinitions", "sdk.generators.v1", hasSdkGeneratorsCapability,
-                                 outManifest.sdkGeneratorDefinitions)) {
+                                 outManifest.sdkGeneratorDefinitions) ||
+            !parseCapabilityPath("fxPresetDefinitions", "fx.presets.v1", hasFxPresetsCapability,
+                                 outManifest.fxPresetDefinitions) ||
+            !parseCapabilityPath("stateDefinitions", "states.catalog.v1", hasStatesCatalogCapability,
+                                 outManifest.stateDefinitions) ||
+            !parseCapabilityPath("spellDefinitions", "spells.catalog.v1", hasSpellsCatalogCapability,
+                                 outManifest.spellDefinitions)) {
             return false;
         }
     }
@@ -13325,6 +14027,12 @@ bool TryParseUseProfileEffectObject(const nlohmann::json& effect, const std::str
         !parseOptionalString("aoeProfileId", outEffect.aoeProfileId) ||
         !parseOptionalString("movement", outEffect.movementProfileId) ||
         !parseOptionalString("movementProfileId", outEffect.movementProfileId) ||
+        !parseOptionalString("fxPresetId", outEffect.fxPresetId) ||
+        !parseOptionalString("presetId", outEffect.fxPresetId) ||
+        !parseOptionalString("stateId", outEffect.stateId) ||
+        !parseOptionalString("state", outEffect.stateId) ||
+        !parseOptionalString("spellId", outEffect.spellId) ||
+        !parseOptionalString("spell", outEffect.spellId) ||
         !parseOptionalInt("durationFrames", outEffect.durationFrames) ||
         !parseOptionalInt("tickFrames", outEffect.tickFrames) ||
         !parseOptionalInt("damagePerTick", outEffect.damagePerTick) ||
@@ -13350,6 +14058,21 @@ bool TryParseUseProfileEffectObject(const nlohmann::json& effect, const std::str
 
         outEffect.shockwaveOrigin = originToken;
         outEffect.shockwaveLife = std::clamp(outEffect.shockwaveLife, 1, 120);
+    } else if (actionToken == "fx.spawnpreset" || actionToken == "spawnpreset") {
+        if (outEffect.fxPresetId.empty()) {
+            outError = contextPath + " requires fxPresetId/presetId for fx.spawnPreset";
+            return false;
+        }
+    } else if (actionToken == "states.applystate" || actionToken == "applystate") {
+        if (outEffect.stateId.empty()) {
+            outError = contextPath + " requires stateId/state for states.applyState";
+            return false;
+        }
+    } else if (actionToken == "spells.castspell" || actionToken == "castspell") {
+        if (outEffect.spellId.empty()) {
+            outError = contextPath + " requires spellId/spell for spells.castSpell";
+            return false;
+        }
     }
 
     return true;
@@ -13577,6 +14300,72 @@ bool ExternalModManager::TryParseStatusDefinitions(const std::string& content, i
                 !ParseActionArray(effects["onExpire"], apiVersion, "onExpire", definition.onExpire, outError)) {
                 outError = "statuses[" + std::to_string(i) + "].effects.onExpire: " + outError;
                 return false;
+            }
+        }
+
+        if (status.contains("visuals")) {
+            if (!status["visuals"].is_object()) {
+                outError = "statuses[" + std::to_string(i) + "].visuals must be object";
+                return false;
+            }
+            const auto& visuals = status["visuals"];
+            const auto parseFxPresetList =
+                [&](const char* key, std::vector<std::string>& output) -> bool {
+                if (!visuals.contains(key)) {
+                    return true;
+                }
+                if (!visuals[key].is_array()) {
+                    outError = "statuses[" + std::to_string(i) + "].visuals." + key + " must be array";
+                    return false;
+                }
+                for (size_t fxIndex = 0; fxIndex < visuals[key].size(); ++fxIndex) {
+                    if (!visuals[key][fxIndex].is_string()) {
+                        outError = "statuses[" + std::to_string(i) + "].visuals." + key + "[" +
+                                   std::to_string(fxIndex) + "] must be string";
+                        return false;
+                    }
+                    output.push_back(visuals[key][fxIndex].get<std::string>());
+                }
+                return true;
+            };
+            if (!parseFxPresetList("startFx", definition.visualsStartFx) ||
+                !parseFxPresetList("loopFx", definition.visualsLoopFx) ||
+                !parseFxPresetList("endFx", definition.visualsEndFx)) {
+                return false;
+            }
+        }
+
+        if (status.contains("callbacks")) {
+            if (!status["callbacks"].is_object()) {
+                outError = "statuses[" + std::to_string(i) + "].callbacks must be object";
+                return false;
+            }
+            const auto& callbacks = status["callbacks"];
+            std::vector<ExternalModAction> callbackActions;
+            if (callbacks.contains("onApply")) {
+                callbackActions.clear();
+                if (!ParseActionArray(callbacks["onApply"], apiVersion, "callbacks.onApply", callbackActions, outError)) {
+                    outError = "statuses[" + std::to_string(i) + "].callbacks.onApply: " + outError;
+                    return false;
+                }
+                definition.onApply.insert(definition.onApply.end(), callbackActions.begin(), callbackActions.end());
+            }
+            if (callbacks.contains("onTick")) {
+                callbackActions.clear();
+                if (!ParseActionArray(callbacks["onTick"], apiVersion, "callbacks.onTick", callbackActions, outError)) {
+                    outError = "statuses[" + std::to_string(i) + "].callbacks.onTick: " + outError;
+                    return false;
+                }
+                definition.onTick.insert(definition.onTick.end(), callbackActions.begin(), callbackActions.end());
+            }
+            if (callbacks.contains("onExpire")) {
+                callbackActions.clear();
+                if (!ParseActionArray(callbacks["onExpire"], apiVersion, "callbacks.onExpire", callbackActions,
+                                      outError)) {
+                    outError = "statuses[" + std::to_string(i) + "].callbacks.onExpire: " + outError;
+                    return false;
+                }
+                definition.onExpire.insert(definition.onExpire.end(), callbackActions.begin(), callbackActions.end());
             }
         }
 
@@ -14082,7 +14871,36 @@ bool ExternalModManager::TryParseAoEDefinitions(const std::string& content, int3
                 outError = "aoe[" + std::to_string(i) + "].shape must be string";
                 return false;
             }
-            definition.shape = aoe["shape"].get<std::string>();
+            definition.shape = ToLower(aoe["shape"].get<std::string>());
+            if (definition.shape == "sphere") {
+                definition.shapeType = ExternalModAoEShape::Sphere;
+            } else if (definition.shape == "capsule") {
+                definition.shapeType = ExternalModAoEShape::Capsule;
+            } else if (definition.shape == "box") {
+                definition.shapeType = ExternalModAoEShape::Box;
+            } else if (definition.shape == "cylinder") {
+                definition.shapeType = ExternalModAoEShape::Cylinder;
+            } else {
+                outError = "aoe[" + std::to_string(i) + "].shape must be sphere|capsule|box|cylinder";
+                return false;
+            }
+        }
+        if (aoe.contains("orientation")) {
+            if (!aoe["orientation"].is_string()) {
+                outError = "aoe[" + std::to_string(i) + "].orientation must be string";
+                return false;
+            }
+            definition.orientation = ToLower(aoe["orientation"].get<std::string>());
+            if (definition.orientation == "world") {
+                definition.orientationType = ExternalModAoEOrientation::World;
+            } else if (definition.orientation == "owneryaw") {
+                definition.orientationType = ExternalModAoEOrientation::OwnerYaw;
+            } else if (definition.orientation == "targetnormal") {
+                definition.orientationType = ExternalModAoEOrientation::TargetNormal;
+            } else {
+                outError = "aoe[" + std::to_string(i) + "].orientation must be world|ownerYaw|targetNormal";
+                return false;
+            }
         }
         if (aoe.contains("targetScope")) {
             if (!aoe["targetScope"].is_string()) {
@@ -14116,6 +14934,31 @@ bool ExternalModManager::TryParseAoEDefinitions(const std::string& content, int3
                 return false;
             }
             definition.angle = std::clamp(aoe["angle"].get<float>(), 0.0f, 360.0f);
+        }
+        if (aoe.contains("halfExtents")) {
+            if (!aoe["halfExtents"].is_array() || aoe["halfExtents"].size() != 3 ||
+                !aoe["halfExtents"][0].is_number() || !aoe["halfExtents"][1].is_number() ||
+                !aoe["halfExtents"][2].is_number()) {
+                outError = "aoe[" + std::to_string(i) + "].halfExtents must be [x,y,z] numeric";
+                return false;
+            }
+            definition.halfExtents[0] = std::max(0.0f, aoe["halfExtents"][0].get<float>());
+            definition.halfExtents[1] = std::max(0.0f, aoe["halfExtents"][1].get<float>());
+            definition.halfExtents[2] = std::max(0.0f, aoe["halfExtents"][2].get<float>());
+        }
+        if (aoe.contains("height")) {
+            if (!aoe["height"].is_number()) {
+                outError = "aoe[" + std::to_string(i) + "].height must be numeric";
+                return false;
+            }
+            definition.height = std::max(0.0f, aoe["height"].get<float>());
+        }
+        if (aoe.contains("capsuleHalfHeight")) {
+            if (!aoe["capsuleHalfHeight"].is_number()) {
+                outError = "aoe[" + std::to_string(i) + "].capsuleHalfHeight must be numeric";
+                return false;
+            }
+            definition.capsuleHalfHeight = std::max(0.0f, aoe["capsuleHalfHeight"].get<float>());
         }
         if (aoe.contains("durationFrames")) {
             if (!aoe["durationFrames"].is_number_integer()) {
@@ -14158,7 +15001,7 @@ bool ExternalModManager::TryParseAoEDefinitions(const std::string& content, int3
             };
 
             if (!parseEffectList("onEnter", definition.onEnter) || !parseEffectList("onTick", definition.onTick) ||
-                !parseEffectList("onExit", definition.onExit)) {
+                !parseEffectList("onStayTick", definition.onStayTick) || !parseEffectList("onExit", definition.onExit)) {
                 return false;
             }
         }
@@ -14724,6 +15567,269 @@ bool ExternalModManager::TryParseCameraDefinitions(const std::string& content, i
                 outError = "profiles[" + std::to_string(i) + "].reticleVisibility must be aim_only|button_hold|selected";
                 return false;
             }
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseFxPresetDefinitions(const std::string& content, int32_t apiVersion,
+                                                     std::vector<ExternalModFxPresetDefinition>& outDefinitions,
+                                                     std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "fxPresetDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("fx_presets.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("presets") || !json["presets"].is_array()) {
+        outError = "fx_presets.json must be object with presets[]";
+        return false;
+    }
+    if (!json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "fx_presets.json schemaVersion must be 1";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& presets = json["presets"];
+    for (size_t i = 0; i < presets.size(); ++i) {
+        const auto& preset = presets[i];
+        if (!preset.is_object()) {
+            outError = "presets[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModFxPresetDefinition definition;
+        if (!ValidateRequiredString(preset, "id", definition.id, outError)) {
+            outError = "presets[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "presets[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate fx preset id: " + definition.id;
+            return false;
+        }
+        if (preset.contains("maxInstances")) {
+            if (!preset["maxInstances"].is_number_integer()) {
+                outError = "presets[" + std::to_string(i) + "].maxInstances must be integer";
+                return false;
+            }
+            definition.maxInstances = std::clamp(preset["maxInstances"].get<int32_t>(), 1, 1024);
+        }
+        if (!preset.contains("actions") || !preset["actions"].is_array()) {
+            outError = "presets[" + std::to_string(i) + "].actions must be array";
+            return false;
+        }
+        if (!ParseActionArray(preset["actions"], apiVersion, "actions", definition.actions, outError)) {
+            outError = "presets[" + std::to_string(i) + "].actions: " + outError;
+            return false;
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseStateDefinitions(const std::string& content, int32_t apiVersion,
+                                                  std::vector<ExternalModStateDefinition>& outDefinitions,
+                                                  std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "stateDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("states.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("states") || !json["states"].is_array()) {
+        outError = "states.json must be object with states[]";
+        return false;
+    }
+    if (!json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "states.json schemaVersion must be 1";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& states = json["states"];
+    for (size_t i = 0; i < states.size(); ++i) {
+        const auto& state = states[i];
+        if (!state.is_object()) {
+            outError = "states[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModStateDefinition definition;
+        if (!ValidateRequiredString(state, "id", definition.id, outError)) {
+            outError = "states[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "states[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate state id: " + definition.id;
+            return false;
+        }
+
+        if (state.contains("domain")) {
+            if (!state["domain"].is_string()) {
+                outError = "states[" + std::to_string(i) + "].domain must be string";
+                return false;
+            }
+            definition.domain = ToLower(state["domain"].get<std::string>());
+        }
+
+        if (state.contains("aliases")) {
+            if (!state["aliases"].is_array()) {
+                outError = "states[" + std::to_string(i) + "].aliases must be array";
+                return false;
+            }
+            for (size_t aliasIndex = 0; aliasIndex < state["aliases"].size(); ++aliasIndex) {
+                if (!state["aliases"][aliasIndex].is_string()) {
+                    outError = "states[" + std::to_string(i) + "].aliases[" + std::to_string(aliasIndex) +
+                               "] must be string";
+                    return false;
+                }
+                definition.aliases.push_back(state["aliases"][aliasIndex].get<std::string>());
+            }
+        }
+
+        if (state.contains("durationFrames")) {
+            if (!state["durationFrames"].is_number_integer()) {
+                outError = "states[" + std::to_string(i) + "].durationFrames must be integer";
+                return false;
+            }
+            definition.defaultDurationFrames = std::clamp(state["durationFrames"].get<int32_t>(), 0, 36000);
+        }
+
+        if (state.contains("apply")) {
+            if (!ParseActionArray(state["apply"], apiVersion, "apply", definition.onApply, outError)) {
+                outError = "states[" + std::to_string(i) + "].apply: " + outError;
+                return false;
+            }
+        }
+        if (state.contains("remove")) {
+            if (!ParseActionArray(state["remove"], apiVersion, "remove", definition.onRemove, outError)) {
+                outError = "states[" + std::to_string(i) + "].remove: " + outError;
+                return false;
+            }
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseSpellDefinitions(const std::string& content, int32_t apiVersion,
+                                                  std::vector<ExternalModSpellDefinition>& outDefinitions,
+                                                  std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "spellDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("spells.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("spells") || !json["spells"].is_array()) {
+        outError = "spells.json must be object with spells[]";
+        return false;
+    }
+    if (!json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "spells.json schemaVersion must be 1";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& spells = json["spells"];
+    for (size_t i = 0; i < spells.size(); ++i) {
+        const auto& spell = spells[i];
+        if (!spell.is_object()) {
+            outError = "spells[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModSpellDefinition definition;
+        if (!ValidateRequiredString(spell, "id", definition.id, outError)) {
+            outError = "spells[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "spells[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate spell id: " + definition.id;
+            return false;
+        }
+
+        if (spell.contains("targetingProfile")) {
+            if (!spell["targetingProfile"].is_string()) {
+                outError = "spells[" + std::to_string(i) + "].targetingProfile must be string";
+                return false;
+            }
+            definition.targetingProfileId = spell["targetingProfile"].get<std::string>();
+        } else if (spell.contains("targetingProfileId")) {
+            if (!spell["targetingProfileId"].is_string()) {
+                outError = "spells[" + std::to_string(i) + "].targetingProfileId must be string";
+                return false;
+            }
+            definition.targetingProfileId = spell["targetingProfileId"].get<std::string>();
+        }
+
+        if (spell.contains("cooldownFrames")) {
+            if (!spell["cooldownFrames"].is_number_integer()) {
+                outError = "spells[" + std::to_string(i) + "].cooldownFrames must be integer";
+                return false;
+            }
+            definition.cooldownFrames = std::clamp(spell["cooldownFrames"].get<int32_t>(), 0, 36000);
+        }
+
+        if (!spell.contains("effects") || !spell["effects"].is_array()) {
+            outError = "spells[" + std::to_string(i) + "].effects must be array";
+            return false;
+        }
+        for (size_t effectIndex = 0; effectIndex < spell["effects"].size(); ++effectIndex) {
+            ExternalModUseProfileEffect effectDefinition;
+            const std::string effectPath =
+                "spells[" + std::to_string(i) + "].effects[" + std::to_string(effectIndex) + "]";
+            if (!TryParseUseProfileEffectObject(spell["effects"][effectIndex], effectPath, effectDefinition, outError)) {
+                return false;
+            }
+            definition.effects.push_back(std::move(effectDefinition));
         }
 
         outDefinitions.push_back(std::move(definition));
@@ -15697,6 +16803,57 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             }
         }
 
+        if (ManifestHasCapability(package.manifest, "fx.presets.v1")) {
+            std::filesystem::path fxPresetPath;
+            if (!IsSafePackageRelativePath(package.manifest.fxPresetDefinitions, fxPresetPath, outError)) {
+                outError = "Invalid fxPresetDefinitions: " + outError;
+                return false;
+            }
+
+            std::string fxPresetContent;
+            if (!ReadFileFromPackage(package, fxPresetPath, kMaxFxPresetDefinitionBytes, fxPresetContent, outError)) {
+                outError = "Failed to read fxPresetDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseFxPresetDefinitions(fxPresetContent, runtime.apiVersion, runtime.fxPresets, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "states.catalog.v1")) {
+            std::filesystem::path statesPath;
+            if (!IsSafePackageRelativePath(package.manifest.stateDefinitions, statesPath, outError)) {
+                outError = "Invalid stateDefinitions: " + outError;
+                return false;
+            }
+
+            std::string statesContent;
+            if (!ReadFileFromPackage(package, statesPath, kMaxStateDefinitionBytes, statesContent, outError)) {
+                outError = "Failed to read stateDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseStateDefinitions(statesContent, runtime.apiVersion, runtime.stateDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "spells.catalog.v1")) {
+            std::filesystem::path spellsPath;
+            if (!IsSafePackageRelativePath(package.manifest.spellDefinitions, spellsPath, outError)) {
+                outError = "Invalid spellDefinitions: " + outError;
+                return false;
+            }
+
+            std::string spellsContent;
+            if (!ReadFileFromPackage(package, spellsPath, kMaxSpellDefinitionBytes, spellsContent, outError)) {
+                outError = "Failed to read spellDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseSpellDefinitions(spellsContent, runtime.apiVersion, runtime.spellDefinitions, outError)) {
+                return false;
+            }
+        }
+
         const auto validateV4CapabilityJsonFile = [&](const char* fieldName, const char* capabilityId,
                                                       const std::string& manifestPathValue, uint64_t maxBytes,
                                                       bool requireSchemaV1) -> bool {
@@ -15765,6 +16922,13 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
                                           kMaxDialogDefinitionBytes, true) ||
             !validateV4CapabilityJsonFile("sdkGeneratorDefinitions", "sdk.generators.v1",
                                           package.manifest.sdkGeneratorDefinitions, kMaxSdkGeneratorDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("fxPresetDefinitions", "fx.presets.v1",
+                                          package.manifest.fxPresetDefinitions, kMaxFxPresetDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("stateDefinitions", "states.catalog.v1",
+                                          package.manifest.stateDefinitions, kMaxStateDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("spellDefinitions", "spells.catalog.v1",
+                                          package.manifest.spellDefinitions, kMaxSpellDefinitionBytes,
                                           true)) {
             return false;
         }
@@ -15794,6 +16958,15 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
         const auto hasMovementRef = [&](const std::string& movementId) {
             return movementId.empty() || ExternalModContentRegistry::FindMovementProfileById(runtime, movementId) != nullptr;
         };
+        const auto hasFxPresetRef = [&](const std::string& presetId) {
+            return presetId.empty() || ExternalModContentRegistry::FindFxPresetById(runtime, presetId) != nullptr;
+        };
+        const auto hasStateRef = [&](const std::string& stateId) {
+            return stateId.empty() || ExternalModContentRegistry::FindStateDefinitionById(runtime, stateId) != nullptr;
+        };
+        const auto hasSpellRef = [&](const std::string& spellId) {
+            return spellId.empty() || ExternalModContentRegistry::FindSpellDefinitionById(runtime, spellId) != nullptr;
+        };
 
         for (const auto& profile : runtime.itemUseProfiles) {
             if (!hasTargetingRef(profile.targetingProfileId)) {
@@ -15804,8 +16977,24 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             for (const auto& effect : profile.effects) {
                 if (!hasDamageRef(effect.damageProfileId) || !hasStatusRef(effect.statusId) ||
                     !hasProjectileRef(effect.projectileProfileId) || !hasAoERef(effect.aoeProfileId) ||
-                    !hasMovementRef(effect.movementProfileId)) {
+                    !hasMovementRef(effect.movementProfileId) || !hasFxPresetRef(effect.fxPresetId) ||
+                    !hasStateRef(effect.stateId) || !hasSpellRef(effect.spellId)) {
                     outError = "use profile references missing catalog id: " + profile.id;
+                    return false;
+                }
+            }
+        }
+        for (const auto& spell : runtime.spellDefinitions) {
+            if (!hasTargetingRef(spell.targetingProfileId)) {
+                outError = "spell references unknown targetingProfile: " + spell.id + " -> " + spell.targetingProfileId;
+                return false;
+            }
+            for (const auto& effect : spell.effects) {
+                if (!hasDamageRef(effect.damageProfileId) || !hasStatusRef(effect.statusId) ||
+                    !hasProjectileRef(effect.projectileProfileId) || !hasAoERef(effect.aoeProfileId) ||
+                    !hasMovementRef(effect.movementProfileId) || !hasFxPresetRef(effect.fxPresetId) ||
+                    !hasStateRef(effect.stateId) || !hasSpellRef(effect.spellId)) {
+                    outError = "spell references missing catalog id: " + spell.id;
                     return false;
                 }
             }
@@ -16158,6 +17347,10 @@ bool ExternalModManager::MountAssetsForPackage(ExternalModPackage& package, std:
     }
 
     return true;
+}
+void ExternalModManager::ExecuteActionsPublic(ExternalModPackage& package, const std::vector<ExternalModAction>& actions,
+                                              const char* triggerName) {
+    ExecuteActions(package, actions, triggerName);
 }
 void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::vector<ExternalModAction>& actions,
                                         const char* triggerName) {
@@ -16858,6 +18051,248 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
                 CVarSetInteger(kAimCameraOverShoulderCVar, targetEnabled ? 1 : 0);
                 break;
             }
+            case ExternalModActionType::FxSpawnEffectSs: {
+                if (gPlayState == nullptr) {
+                    break;
+                }
+                auto* fxPlayer = GET_PLAYER(gPlayState);
+                if (fxPlayer == nullptr) {
+                    break;
+                }
+                const std::string effectName = ToLower(action.fxEffectName);
+                Vec3f fxPos = fxPlayer->actor.world.pos;
+                fxPos.y += 20.0f;
+                if (effectName == "fire" || effectName == "gfire" || effectName == "enfire") {
+                    EffectSsGFire_Spawn(gPlayState, &fxPos);
+                } else {
+                    Vec3f smokeVel = { 0.0f, std::max(0.05f, action.fxScale * 0.1f), 0.0f };
+                    Vec3f smokeAccel = { 0.0f, 0.03f, 0.0f };
+                    EffectSsIceSmoke_Spawn(gPlayState, &fxPos, &smokeVel, &smokeAccel,
+                                           std::clamp(action.fxLifeFrames, 1, 36000));
+                }
+                const std::string fxKey = action.fxStoreKey.empty()
+                                              ? "__fx_effect_" + std::to_string(package.runtime.nextFxHandle)
+                                              : action.fxStoreKey;
+                const int32_t handle = RegisterFxHandle(package.runtime, fxKey, reinterpret_cast<uintptr_t>(&fxPlayer->actor),
+                                                        std::max(1, action.fxLifeFrames), "effectss");
+                package.runtime.globalBlackboard[fxKey] = std::to_string(handle);
+                break;
+            }
+            case ExternalModActionType::FxSpawnActorFx: {
+                if (gPlayState == nullptr) {
+                    break;
+                }
+                auto* fxPlayer = GET_PLAYER(gPlayState);
+                if (fxPlayer == nullptr) {
+                    break;
+                }
+                const int32_t actorId = action.fxActorId >= 0 ? action.fxActorId : ACTOR_EN_CLEAR_TAG;
+                Vec3f spawnPos = fxPlayer->actor.world.pos;
+                spawnPos.y += 10.0f;
+                Actor* spawnedFx = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorId, spawnPos.x, spawnPos.y,
+                                               spawnPos.z, 0, fxPlayer->actor.shape.rot.y, 0, 0, true);
+                const std::string fxKey = action.fxStoreKey.empty()
+                                              ? "__fx_actor_" + std::to_string(package.runtime.nextFxHandle)
+                                              : action.fxStoreKey;
+                const int32_t handle =
+                    RegisterFxHandle(package.runtime, fxKey, reinterpret_cast<uintptr_t>(spawnedFx),
+                                     std::max(1, action.fxLifeFrames), "actorfx");
+                package.runtime.globalBlackboard[fxKey] = std::to_string(handle);
+                break;
+            }
+            case ExternalModActionType::FxSpawnPreset: {
+                const std::string resolvedPresetId = ResolveProfileIdForMod(package.manifest.id, action.fxPresetId);
+                const auto* preset = ExternalModContentRegistry::FindFxPresetById(package.runtime, resolvedPresetId);
+                if (preset == nullptr) {
+                    DisableRuntime(package, "fx.spawnPreset references unknown presetId: " + resolvedPresetId);
+                    return;
+                }
+                ExecuteActions(package, preset->actions, "fx.spawnPreset");
+                if (!action.fxStoreKey.empty()) {
+                    const int32_t handle =
+                        RegisterFxHandle(package.runtime, action.fxStoreKey, 0, 120, "persistent");
+                    package.runtime.globalBlackboard[action.fxStoreKey] = std::to_string(handle);
+                }
+                break;
+            }
+            case ExternalModActionType::FxStopFx:
+                if (!action.fxHandleKey.empty()) {
+                    RemoveFxHandleByKey(package.runtime, action.fxHandleKey);
+                    package.runtime.globalBlackboard.erase(action.fxHandleKey);
+                }
+                break;
+            case ExternalModActionType::StatesApplyState: {
+                if (gPlayState == nullptr) {
+                    break;
+                }
+                auto* statePlayer = GET_PLAYER(gPlayState);
+                if (statePlayer == nullptr) {
+                    break;
+                }
+                const std::string resolvedStateId = ResolveProfileIdForMod(package.manifest.id, action.stateId);
+                const auto* definition = ResolveStateDefinitionById(package.runtime, resolvedStateId);
+                if (definition == nullptr) {
+                    DisableRuntime(package, "states.applyState references unknown stateId: " + resolvedStateId);
+                    return;
+                }
+                auto* existingState =
+                    FindActiveStateByActor(package.runtime, &statePlayer->actor, definition->id, package.manifest.id);
+                if (existingState == nullptr) {
+                    ExternalModRuntime::ActiveStateState state;
+                    state.actorAddress = reinterpret_cast<uintptr_t>(&statePlayer->actor);
+                    state.actorId = statePlayer->actor.id;
+                    state.stateId = definition->id;
+                    state.domain = definition->domain;
+                    state.sourceModId = package.manifest.id;
+                    state.framesRemaining = action.durationFrames > 0 ? action.durationFrames : definition->defaultDurationFrames;
+                    state.wasAppliedThisFrame = true;
+                    package.runtime.activeStates.push_back(std::move(state));
+                    if (!definition->onApply.empty()) {
+                        ExecuteActions(package, definition->onApply, "states.onApply");
+                    }
+                    ExternalModHookEventContext context;
+                    context.scene = gPlayState->sceneNum;
+                    context.actorId = statePlayer->actor.id;
+                    context.actorCategory = statePlayer->actor.category;
+                    context.stateId = definition->id;
+                    ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnStateApplied, context,
+                                                                        "OnStateApplied");
+                } else {
+                    existingState->framesRemaining =
+                        action.durationFrames > 0 ? action.durationFrames
+                                                  : std::max(existingState->framesRemaining, definition->defaultDurationFrames);
+                }
+                break;
+            }
+            case ExternalModActionType::StatesClearState: {
+                if (gPlayState == nullptr) {
+                    break;
+                }
+                auto* statePlayer = GET_PLAYER(gPlayState);
+                if (statePlayer == nullptr) {
+                    break;
+                }
+                const std::string resolvedStateId = ResolveProfileIdForMod(package.manifest.id, action.stateId);
+                const auto* definition = ResolveStateDefinitionById(package.runtime, resolvedStateId);
+                const std::string canonicalStateId = definition != nullptr ? definition->id : resolvedStateId;
+                const auto actorAddress = reinterpret_cast<uintptr_t>(&statePlayer->actor);
+                const auto beforeCount = package.runtime.activeStates.size();
+                package.runtime.activeStates.erase(
+                    std::remove_if(package.runtime.activeStates.begin(), package.runtime.activeStates.end(),
+                                   [&](const ExternalModRuntime::ActiveStateState& state) {
+                                       return state.actorAddress == actorAddress && state.stateId == canonicalStateId &&
+                                              state.sourceModId == package.manifest.id;
+                                   }),
+                    package.runtime.activeStates.end());
+                if (package.runtime.activeStates.size() != beforeCount && definition != nullptr &&
+                    !definition->onRemove.empty()) {
+                    ExecuteActions(package, definition->onRemove, "states.onRemove");
+                }
+                ExternalModHookEventContext context;
+                context.scene = gPlayState->sceneNum;
+                context.actorId = statePlayer->actor.id;
+                context.actorCategory = statePlayer->actor.category;
+                context.stateId = canonicalStateId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnStateRemoved, context,
+                                                                    "OnStateRemoved");
+                break;
+            }
+            case ExternalModActionType::StatesHasState: {
+                if (gPlayState == nullptr) {
+                    break;
+                }
+                auto* statePlayer = GET_PLAYER(gPlayState);
+                if (statePlayer == nullptr) {
+                    break;
+                }
+                const std::string resolvedStateId = ResolveProfileIdForMod(package.manifest.id, action.stateId);
+                const auto* definition = ResolveStateDefinitionById(package.runtime, resolvedStateId);
+                const std::string canonicalStateId = definition != nullptr ? definition->id : resolvedStateId;
+                const bool hasState =
+                    FindActiveStateByActor(package.runtime, &statePlayer->actor, canonicalStateId, package.manifest.id) != nullptr;
+                const std::string key = action.variableKey.empty() ? "__has_state" : action.variableKey;
+                package.runtime.globalBlackboard[key] = hasState ? "1" : "0";
+                break;
+            }
+            case ExternalModActionType::PlayerGetStateFlags:
+                if (gPlayState != nullptr) {
+                    auto* statePlayer = GET_PLAYER(gPlayState);
+                    if (statePlayer != nullptr) {
+                        const std::string key =
+                            action.variableKey.empty() ? "__player_state_flags" : action.variableKey;
+                        std::ostringstream flags;
+                        flags << static_cast<int32_t>(statePlayer->stateFlags1) << ","
+                              << static_cast<int32_t>(statePlayer->stateFlags2);
+                        package.runtime.globalBlackboard[key] = flags.str();
+                    }
+                }
+                break;
+            case ExternalModActionType::PlayerSetStateFlag:
+                if (!action.stateFlag.empty()) {
+                    package.runtime.globalBlackboard["__player_stateflag." + ToLower(action.stateFlag)] = "1";
+                }
+                break;
+            case ExternalModActionType::PlayerClearStateFlag:
+                if (!action.stateFlag.empty()) {
+                    package.runtime.globalBlackboard["__player_stateflag." + ToLower(action.stateFlag)] = "0";
+                }
+                break;
+            case ExternalModActionType::PlayerSetControlLock:
+                package.runtime.globalBlackboard["__playerControlLocked"] =
+                    (action.hasBoolValue && action.boolValue) ? "1" : "0";
+                break;
+            case ExternalModActionType::PlayerSetGravityScale:
+                if (action.hasFloatValue) {
+                    package.runtime.globalBlackboard["__playerGravityScale"] = std::to_string(action.floatValue);
+                }
+                break;
+            case ExternalModActionType::PlayerSetBoostType:
+                package.runtime.globalBlackboard["__playerBoostType"] = action.stateControlMode;
+                break;
+            case ExternalModActionType::PlayerSetDamageResponse:
+                package.runtime.globalBlackboard["__playerDamageResponse"] = action.stateControlMode;
+                break;
+            case ExternalModActionType::SpellsCastSpell: {
+                if (gPlayState == nullptr) {
+                    break;
+                }
+                auto* spellPlayer = GET_PLAYER(gPlayState);
+                if (spellPlayer == nullptr) {
+                    break;
+                }
+                const std::string resolvedSpellId = ResolveProfileIdForMod(package.manifest.id, action.spellId);
+                const auto* spell = ExternalModContentRegistry::FindSpellDefinitionById(package.runtime, resolvedSpellId);
+                if (spell == nullptr) {
+                    DisableRuntime(package, "spells.castSpell references unknown spellId: " + resolvedSpellId);
+                    return;
+                }
+                const auto cooldownIt = package.runtime.spellCooldownsById.find(spell->id);
+                if (cooldownIt != package.runtime.spellCooldownsById.end() && cooldownIt->second > 0) {
+                    break;
+                }
+                std::vector<Actor*> spellTargets;
+                if (!spell->targetingProfileId.empty()) {
+                    const auto* targetingProfile =
+                        ExternalModContentRegistry::FindTargetingProfileById(package.runtime, spell->targetingProfileId);
+                    if (targetingProfile == nullptr) {
+                        DisableRuntime(package, "spell references unknown targetingProfile: " + spell->targetingProfileId);
+                        return;
+                    }
+                    ResolveTargetsForTargetingProfile(*targetingProfile, gPlayState, spellPlayer, spellTargets);
+                } else {
+                    spellTargets.push_back(&spellPlayer->actor);
+                }
+                std::string spellError;
+                if (!ExecuteUseProfileEffects(package, spell->effects, spellTargets, gPlayState, spellPlayer, nullptr,
+                                              spellError)) {
+                    DisableRuntime(package, "spells.castSpell failed for " + spell->id + ": " + spellError);
+                    return;
+                }
+                if (spell->cooldownFrames > 0) {
+                    package.runtime.spellCooldownsById[spell->id] = spell->cooldownFrames;
+                }
+                break;
+            }
             case ExternalModActionType::InvokeWasm: {
                 if (!package.runtime.wasmRuntime) {
                     DisableRuntime(package, "invokeWasm requested but runtime is unavailable");
@@ -16881,6 +18316,10 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
 void ExternalModManager::DisableRuntime(ExternalModPackage& package, const std::string& reason) {
     ClearStatusEffects(package.runtime, gPlayState, false);
     package.runtime.activeAoEs.clear();
+    package.runtime.activeStates.clear();
+    package.runtime.activeFxHandles.clear();
+    package.runtime.fxHandleByKey.clear();
+    package.runtime.spellCooldownsById.clear();
     ClearSurfState(package.runtime);
     package.runtime.wasmTargetHandles.clear();
     package.runtime.wasmNextTargetHandle = 1;
@@ -16893,6 +18332,11 @@ void ExternalModManager::DisableRuntime(ExternalModPackage& package, const std::
     }
     manager.PruneAimCameraStateForUnavailableProfiles();
     SPDLOG_ERROR("[ExternalMods] Disabled runtime for {}: {}", package.manifest.id, reason);
+}
+
+void ExternalModManager::EmitExtendedHook(ExternalModHookType hookType, const ExternalModHookEventContext& context,
+                                          const char* triggerName) {
+    DispatchExtendedHook(hookType, context, triggerName);
 }
 
 void ExternalModManager::DispatchExtendedHook(ExternalModHookType hookType, const ExternalModHookEventContext& context,
@@ -17074,6 +18518,11 @@ void ExternalModManager::OnLoadGame(int32_t fileNum) {
         try {
             ClearStatusEffects(package.runtime, gPlayState, false);
             ClearSurfState(package.runtime);
+            package.runtime.activeAoEs.clear();
+            package.runtime.activeStates.clear();
+            package.runtime.activeFxHandles.clear();
+            package.runtime.fxHandleByKey.clear();
+            package.runtime.spellCooldownsById.clear();
             for (auto& trigger : package.runtime.frameTriggers) {
                 trigger.wasInside = false;
                 trigger.cooldownRemaining = 0;
@@ -17144,6 +18593,11 @@ void ExternalModManager::OnSceneInit(int16_t sceneNum) {
         try {
             ClearStatusEffects(package.runtime, gPlayState, false);
             ClearSurfState(package.runtime);
+            package.runtime.activeAoEs.clear();
+            package.runtime.activeStates.clear();
+            package.runtime.activeFxHandles.clear();
+            package.runtime.fxHandleByKey.clear();
+            package.runtime.spellCooldownsById.clear();
             package.runtime.behaviorStepsThisFrame = 0;
             package.runtime.pendingSignals.clear();
             package.runtime.actorInstances.clear();
@@ -17295,6 +18749,50 @@ void ExternalModManager::OnPlayerUpdate() {
     if (gPlayState != nullptr) {
         auto* player = GET_PLAYER(gPlayState);
         if (player != nullptr) {
+            bool forceControlLock = false;
+            bool forceFrozenState = false;
+            float gravityScale = 1.0f;
+            bool hasGravityOverride = false;
+            for (const auto& package : mPackages) {
+                if (!package.runtime.enabled) {
+                    continue;
+                }
+                const auto lockIt = package.runtime.globalBlackboard.find("__playerControlLocked");
+                if (lockIt != package.runtime.globalBlackboard.end() && lockIt->second == "1") {
+                    forceControlLock = true;
+                }
+                const auto frozenIt = package.runtime.globalBlackboard.find("__player_stateflag.frozen");
+                if (frozenIt != package.runtime.globalBlackboard.end() && frozenIt->second == "1") {
+                    forceFrozenState = true;
+                }
+                const auto gravityIt = package.runtime.globalBlackboard.find("__playerGravityScale");
+                if (gravityIt != package.runtime.globalBlackboard.end()) {
+                    float parsed = 1.0f;
+                    if (TryParseFloatString(gravityIt->second, parsed)) {
+                        gravityScale = std::clamp(parsed, 0.1f, 5.0f);
+                        hasGravityOverride = true;
+                    }
+                }
+            }
+
+            if (forceControlLock) {
+                auto* input = &gPlayState->state.input[0];
+                input->cur.button = 0;
+                input->press.button = 0;
+                player->actor.speedXZ = 0.0f;
+            }
+
+            if (forceFrozenState && !(player->stateFlags2 & PLAYER_STATE2_FROZEN)) {
+                func_80837C0C(gPlayState, player, PLAYER_HIT_RESPONSE_ICE_TRAP, 0.0f, 0.0f, player->actor.shape.rot.y, 20);
+            } else if (!forceFrozenState && (player->stateFlags2 & PLAYER_STATE2_FROZEN) && player->actor.freezeTimer == 0) {
+                player->stateFlags2 &= ~PLAYER_STATE2_FROZEN;
+            }
+
+            if (hasGravityOverride) {
+                const float baseGravity = player->actor.gravity < -0.05f ? std::abs(player->actor.gravity) : 1.0f;
+                player->actor.gravity = -std::clamp(baseGravity * gravityScale, 0.1f, 20.0f);
+            }
+
             ExternalModPackage* selectedSurfPackage = nullptr;
             for (auto& package : mPackages) {
                 if (!package.runtime.enabled || !package.runtime.surfState.active) {
@@ -17355,7 +18853,52 @@ void ExternalModManager::OnGameFrameUpdate() {
             }
         }
 
+        for (auto it = package.runtime.spellCooldownsById.begin(); it != package.runtime.spellCooldownsById.end();) {
+            if (it->second > 0) {
+                it->second--;
+            }
+            if (it->second <= 0) {
+                it = package.runtime.spellCooldownsById.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        TickRuntimeFxHandles(package.runtime);
+
         try {
+            for (size_t stateIndex = 0; stateIndex < package.runtime.activeStates.size();) {
+                auto& state = package.runtime.activeStates[stateIndex];
+                Actor* stateActor = FindActorByAddress(gPlayState, state.actorAddress, state.actorId);
+                if (stateActor == nullptr || stateActor->update == nullptr) {
+                    package.runtime.activeStates.erase(package.runtime.activeStates.begin() +
+                                                      static_cast<std::ptrdiff_t>(stateIndex));
+                    continue;
+                }
+
+                if (state.framesRemaining > 0) {
+                    state.framesRemaining--;
+                }
+
+                if (state.framesRemaining == 0) {
+                    const auto* definition = ResolveStateDefinitionById(package.runtime, state.stateId);
+                    if (definition != nullptr && !definition->onRemove.empty()) {
+                        ExecuteActions(package, definition->onRemove, "states.onExpire");
+                    }
+                    ExternalModHookEventContext stateContext;
+                    stateContext.scene = static_cast<int16_t>(gPlayState->sceneNum);
+                    stateContext.actorId = state.actorId;
+                    stateContext.actorCategory = stateActor->category;
+                    stateContext.stateId = state.stateId;
+                    DispatchExtendedHook(ExternalModHookType::OnStateRemoved, stateContext, "OnStateRemoved");
+                    package.runtime.activeStates.erase(package.runtime.activeStates.begin() +
+                                                      static_cast<std::ptrdiff_t>(stateIndex));
+                    continue;
+                }
+
+                ++stateIndex;
+            }
+
             for (auto& trigger : package.runtime.frameTriggers) {
                 if (trigger.sceneId != sceneNum) {
                     trigger.wasInside = false;
@@ -17955,6 +19498,11 @@ void ExternalModManager::OnPlayDestroy() {
     for (auto& package : mPackages) {
         ClearStatusEffects(package.runtime, gPlayState, false);
         ClearSurfState(package.runtime);
+        package.runtime.activeAoEs.clear();
+        package.runtime.activeStates.clear();
+        package.runtime.activeFxHandles.clear();
+        package.runtime.fxHandleByKey.clear();
+        package.runtime.spellCooldownsById.clear();
         package.runtime.hasEffectImpactPosition = false;
         package.runtime.effectImpactPosX = 0.0f;
         package.runtime.effectImpactPosY = 0.0f;
@@ -18120,5 +19668,3 @@ int32_t ExternalMods_DrawCustomEquippedSlingshotModel(PlayState* play) {
     return SOH::ExternalModManager::Instance().DrawCustomEquippedSlingshotModel(play) ? 1 : 0;
 }
 }
-
-

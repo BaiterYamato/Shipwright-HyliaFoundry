@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "spells": [
+    {
+      "id": "com.sylian.sss_content_pack:firewall_cast_spell",
+      "targetingProfile": "com.sylian.sss_content_pack:self",
+      "cooldownFrames": 24,
+      "effects": [
+        {
+          "action": "fx.spawnPreset",
+          "presetId": "com.sylian.sss_content_pack:firewall_flash"
+        },
+        {
+          "action": "spawnAoE",
+          "aoe": "com.sylian.sss_content_pack:firewall_volume"
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss_content_pack:levitation_cast_spell",
+      "targetingProfile": "com.sylian.sss_content_pack:self",
+      "cooldownFrames": 45,
+      "effects": [
+        {
+          "action": "fx.spawnPreset",
+          "presetId": "com.sylian.sss_content_pack:levitation_pulse"
+        },
+        {
+          "action": "spawnAoE",
+          "aoe": "com.sylian.sss_content_pack:levitation_dome"
+        }
+      ]
+    }
+  ]
+}

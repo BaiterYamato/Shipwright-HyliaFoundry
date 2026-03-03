@@ -7,6 +7,8 @@ param(
 $ErrorActionPreference = "Stop"
 
 $demoNames = @(
+    "sss",
+    "sss_content_pack",
     "aim_ots_toggle_demo",
     "fire_staff_demo",
     "freeze_staff_demo",

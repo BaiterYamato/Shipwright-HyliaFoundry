@@ -53,6 +53,10 @@ class ExternalModManager {
     static std::string BuildEnabledCVarName(const std::string& modId);
     static std::string BuildBindingCVarName(const std::string& modId, const std::string& bindingId);
     static std::string BuildCameraHotkeyScancodeCVarName(const std::string& modId, const std::string& hotkeyId);
+    static void ExecuteActionsPublic(ExternalModPackage& package, const std::vector<ExternalModAction>& actions,
+                                     const char* triggerName);
+    void EmitExtendedHook(ExternalModHookType hookType, const ExternalModHookEventContext& context,
+                          const char* triggerName);
     bool TryConsumePendingSceneLoadRequest(int16_t sceneId, ExternalModPendingSceneLoadRequest& outRequest);
     void HandlePendingSceneLoadSuccess(const ExternalModPendingSceneLoadRequest& request);
     void HandlePendingSceneLoadFailure(const ExternalModPendingSceneLoadRequest& request, const std::string& error);
@@ -167,6 +171,15 @@ class ExternalModManager {
     static bool TryParseCameraDefinitions(const std::string& content, int32_t apiVersion,
                                           std::vector<ExternalModAimCameraProfile>& outDefinitions,
                                           std::string& outError);
+    static bool TryParseFxPresetDefinitions(const std::string& content, int32_t apiVersion,
+                                            std::vector<ExternalModFxPresetDefinition>& outDefinitions,
+                                            std::string& outError);
+    static bool TryParseStateDefinitions(const std::string& content, int32_t apiVersion,
+                                         std::vector<ExternalModStateDefinition>& outDefinitions,
+                                         std::string& outError);
+    static bool TryParseSpellDefinitions(const std::string& content, int32_t apiVersion,
+                                         std::vector<ExternalModSpellDefinition>& outDefinitions,
+                                         std::string& outError);
 
     static bool ReadManifestFromDirectory(const std::filesystem::path& dirPath, std::string& outContent,
                                           std::string& outError);
@@ -224,7 +237,6 @@ class ExternalModManager {
     int32_t WasmHostRaycast(const std::string& modId, const std::string& queryJson, ExternalModWasmRaycastHit& outHit);
     int32_t WasmHostRaycastAll(const std::string& modId, const std::string& queryJson, int32_t outCapacity,
                                std::vector<ExternalModWasmRaycastHit>& outHits);
-
     void DispatchExtendedHook(ExternalModHookType hookType, const ExternalModHookEventContext& context,
                               const char* triggerName);
 

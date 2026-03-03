@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "useProfiles": [
+    {
+      "id": "com.sylian.sss_content_pack:firewall_staff_profile",
+      "targetingProfile": "com.sylian.sss_content_pack:self",
+      "cooldownFrames": 24,
+      "effects": [
+        {
+          "action": "spawnShockwave",
+          "origin": "impact",
+          "primColor": [
+            255,
+            96,
+            24,
+            255
+          ],
+          "envColor": [
+            200,
+            48,
+            16,
+            255
+          ],
+          "life": 16,
+          "spawnIceSmoke": false
+        },
+        {
+          "action": "spells.castSpell",
+          "spellId": "com.sylian.sss_content_pack:firewall_cast_spell"
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss_content_pack:levitation_glove_profile",
+      "targetingProfile": "com.sylian.sss_content_pack:self",
+      "cooldownFrames": 45,
+      "effects": [
+        {
+          "action": "spawnShockwave",
+          "origin": "player",
+          "primColor": [
+            168,
+            64,
+            255,
+            255
+          ],
+          "envColor": [
+            96,
+            32,
+            180,
+            255
+          ],
+          "life": 18,
+          "spawnIceSmoke": false
+        },
+        {
+          "action": "spells.castSpell",
+          "spellId": "com.sylian.sss_content_pack:levitation_cast_spell"
+        }
+      ]
+    }
+  ]
+}

@@ -57,7 +57,10 @@ $catalogs = [ordered]@{
         @{ id = "world.patchsets.v1"; fileField = "worldPatchDefinitions"; fileDefault = "world/patchsets.json"; schemaVersion = 1 },
         @{ id = "quests.graph.v1"; fileField = "questDefinitions"; fileDefault = "quests/quests.json"; schemaVersion = 1 },
         @{ id = "dialog.nodes.v1"; fileField = "dialogDefinitions"; fileDefault = "dialog/dialogs.json"; schemaVersion = 1 },
-        @{ id = "sdk.generators.v1"; fileField = "sdkGeneratorDefinitions"; fileDefault = "sdk/generators.json"; schemaVersion = 1 }
+        @{ id = "sdk.generators.v1"; fileField = "sdkGeneratorDefinitions"; fileDefault = "sdk/generators.json"; schemaVersion = 1 },
+        @{ id = "fx.presets.v1"; fileField = "fxPresetDefinitions"; fileDefault = "fx/fx_presets.json"; schemaVersion = 1 },
+        @{ id = "states.catalog.v1"; fileField = "stateDefinitions"; fileDefault = "states/states.json"; schemaVersion = 1 },
+        @{ id = "spells.catalog.v1"; fileField = "spellDefinitions"; fileDefault = "spells/spells.json"; schemaVersion = 1 }
     )
     contracts = @{
         statuses = @{
@@ -117,6 +120,21 @@ $actions = [ordered]@{
         @{ name = "toggleAimCameraMode"; category = "camera" },
         @{ name = "setAimCameraMode"; category = "camera" },
         @{ name = "setAimCameraProfile"; category = "camera" },
+        @{ name = "fx.spawnEffectSs"; category = "fx" },
+        @{ name = "fx.spawnActorFx"; category = "fx" },
+        @{ name = "fx.spawnPreset"; category = "fx" },
+        @{ name = "fx.stopFx"; category = "fx" },
+        @{ name = "states.applyState"; category = "state" },
+        @{ name = "states.clearState"; category = "state" },
+        @{ name = "states.hasState"; category = "state" },
+        @{ name = "player.getStateFlags"; category = "player" },
+        @{ name = "player.setStateFlag"; category = "player" },
+        @{ name = "player.clearStateFlag"; category = "player" },
+        @{ name = "player.setControlLock"; category = "player" },
+        @{ name = "player.setGravityScale"; category = "player" },
+        @{ name = "player.setBoostType"; category = "player" },
+        @{ name = "player.setDamageResponse"; category = "player" },
+        @{ name = "spells.castSpell"; category = "spells" },
         @{ name = "invokeWasm"; category = "wasm" }
     )
     removedInApiV4 = @(
@@ -174,6 +192,11 @@ $events = [ordered]@{
         "onActorDestroy",
         "onEnemyDefeat",
         "onBossDefeat",
+        "onStatusApplied",
+        "onStatusTick",
+        "onStatusExpired",
+        "onStateApplied",
+        "onStateRemoved",
         "onPlayDestroy",
         "onGameFrameUpdate"
     )
@@ -224,6 +247,21 @@ $actionsRegistry = [ordered]@{
         @{ name = "toggleAimCameraMode"; params = @("profileId?", "itemId?") },
         @{ name = "setAimCameraMode"; params = @("mode", "profileId?", "itemId?") },
         @{ name = "setAimCameraProfile"; params = @("profileId") },
+        @{ name = "fx.spawnEffectSs"; params = @("name|effect|effectId", "scale?", "lifeFrames?", "attachFollow?", "storeKey?") },
+        @{ name = "fx.spawnActorFx"; params = @("actorId", "overlay?", "scale?", "lifeFrames?", "attachFollow?", "storeKey?") },
+        @{ name = "fx.spawnPreset"; params = @("presetId|preset", "storeKey?") },
+        @{ name = "fx.stopFx"; params = @("handleKey|storeKey|key") },
+        @{ name = "states.applyState"; params = @("stateId|state", "durationFrames?", "domain?") },
+        @{ name = "states.clearState"; params = @("stateId|state", "domain?") },
+        @{ name = "states.hasState"; params = @("stateId|state", "storeKey?") },
+        @{ name = "player.getStateFlags"; params = @("storeKey?") },
+        @{ name = "player.setStateFlag"; params = @("flag") },
+        @{ name = "player.clearStateFlag"; params = @("flag") },
+        @{ name = "player.setControlLock"; params = @("enabled") },
+        @{ name = "player.setGravityScale"; params = @("scale") },
+        @{ name = "player.setBoostType"; params = @("mode") },
+        @{ name = "player.setDamageResponse"; params = @("mode") },
+        @{ name = "spells.castSpell"; params = @("spellId|spell") },
         @{ name = "invokeWasm"; params = @("export", "args?") }
     )
 }
