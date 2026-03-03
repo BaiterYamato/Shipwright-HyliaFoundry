@@ -568,3 +568,14 @@ This file is the fixed, append-only plan ledger for this repository.
 - note: Post-completion finalize-plan-merge attempted and blocked: working tree not clean due dirty libultraship submodule marker.
 - refs:
   - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1,libultraship,docs/agents/Plans.md
+
+## [PLN-20260303-0002] Fix finalize-plan-merge Root parameter parsing
+- createdUtc: 2026-03-03T02:35:58Z
+- status: in_progress
+- scope: tooling
+- summary: Patch finalize-plan-merge.ps1 Resolve-TargetBranch boolean expression so finalize merge runs without duplicate Root parameter binding errors.
+- milestones:
+  1. Patch script boolean expression and verify finalize command,Run finalize-plan-merge for PLN-20260303-0001 after clean tree,Record updates in ledger and memory
+- tags: agents,git,tooling
+- refs:
+  - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1,docs/agents/Plans.md
