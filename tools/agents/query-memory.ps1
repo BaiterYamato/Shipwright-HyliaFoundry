@@ -2,6 +2,9 @@ param(
     [string]$Id,
     [string]$Tag,
     [string]$Topic,
+    [string]$PlanId,
+    [ValidateSet("decision", "incident", "task", "note")]
+    [string]$Kind,
     [ValidateSet("open", "done", "deprecated")]
     [string]$Status,
     [DateTime]$From,
@@ -133,6 +136,13 @@ if (-not [string]::IsNullOrWhiteSpace($Tag)) {
 }
 if (-not [string]::IsNullOrWhiteSpace($Topic)) {
     $filtered = $filtered | Where-Object { $_.topic -eq $Topic }
+}
+if (-not [string]::IsNullOrWhiteSpace($PlanId)) {
+    $topicValue = if ($PlanId.StartsWith("plan:")) { $PlanId } else { "plan:$PlanId" }
+    $filtered = $filtered | Where-Object { $_.topic -eq $topicValue }
+}
+if (-not [string]::IsNullOrWhiteSpace($Kind)) {
+    $filtered = $filtered | Where-Object { $_.kind -eq $Kind }
 }
 if (-not [string]::IsNullOrWhiteSpace($Status)) {
     $filtered = $filtered | Where-Object { $_.status -eq $Status }

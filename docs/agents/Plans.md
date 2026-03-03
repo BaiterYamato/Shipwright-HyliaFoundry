@@ -599,3 +599,20 @@ This file is the fixed, append-only plan ledger for this repository.
 - note: Finalize merge not rerun for PLN-20260303-0002 because checkpoint commits are already on develop after PLN-20260303-0001 merge; no separate source branch remained.
 - refs:
   - docs/agents/Plans.md,branch:develop,commit:df927fa19
+
+## [PLN-20260303-0003] Governance v4 skills refresh + critical skills + memory/index hardening
+- createdUtc: 2026-03-03T03:12:51Z
+- status: in_progress
+- scope: mixed
+- summary: Execute phased update: migrate agent skills/governance to API v4 baseline, add plan_tracks v5/v6 and 3 critical doc/memory skills, and harden memory index consistency workflows.
+- milestones:
+  1. Phase A: v4 updates + plan_tracks structure,Phase B: add docs-index-navigator, contract-delta-summarizer, plan-memory-reconciler skills,Phase C: harden memory/index scripts and reconcile backlog,Validation + checkpoints + finalize
+- tags: agents,skills,governance,memory,api-v4
+- refs:
+  - docs/agents/AGENTS.md,docs/agents/project_state.md,docs/agents/skills.manifest.json,tools/agents/rebuild-index.ps1
+
+## [PLN-20260303-0003][UPDATE] 2026-03-03T03:46:43Z
+- status: done
+- note: Completed phased governance package: added plan_tracks v5/v6, migrated priority skills to API v4 baseline, created 3 critical navigation/reconciliation skills, and hardened memory/index tooling with consistency checks.
+- refs:
+  - docs/agents/AGENTS.md,docs/agents/project_state.md,docs/agents/plan_tracks/README.md,docs/agents/skills.manifest.json,docs/agents/skills.index.json,tools/agents/rebuild-index.ps1,tools/agents/validate-memory.ps1,tools/agents/memory-hardening.ps1

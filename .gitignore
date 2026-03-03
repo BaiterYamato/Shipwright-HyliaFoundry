@@ -61,6 +61,7 @@ graphs/
 
 # Docs
 !docs/tutorial/
+!docs/agents/memory.log
 
 # Per-user configuration
 .python-version

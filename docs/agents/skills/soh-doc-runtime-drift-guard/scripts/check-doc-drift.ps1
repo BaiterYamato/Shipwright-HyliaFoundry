@@ -18,7 +18,10 @@ $docs = @(
 $legacyTokens = @(
     "igniteFrontTarget",
     "freezeFrontTarget",
-    "freezeOnMeleeHit"
+    "freezeOnMeleeHit",
+    "apiVersion: 3",
+    "apiVersion = 3",
+    "API v3"
 )
 
 $issues = @()
@@ -35,6 +38,9 @@ foreach ($doc in $docs) {
     }
     if ($content -notmatch "apiVersion") {
         $issues += "$doc does not mention apiVersion contract."
+    }
+    if (($content -notmatch "apiVersion[^0-9]*4") -and ($content -notmatch "API v4")) {
+        $issues += "$doc does not mention v4 contract baseline."
     }
 }
 
@@ -53,4 +59,3 @@ if ($issues.Count -gt 0) {
 
 Write-Host "Doc drift check passed."
 exit 0
-

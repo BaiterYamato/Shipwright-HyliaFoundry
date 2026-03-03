@@ -1,4 +1,4 @@
-# Error Map v3
+# Error Map v4
 
 ## Unsupported macro
 Symptom:

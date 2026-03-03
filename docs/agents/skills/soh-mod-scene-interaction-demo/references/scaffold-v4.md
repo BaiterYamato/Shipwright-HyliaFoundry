@@ -1,4 +1,4 @@
-# Scaffold v3
+# Scaffold v4
 
 Required files:
 1. `mod.json`
@@ -12,7 +12,7 @@ Required files:
 9. `assets/README.txt`
 
 Minimum constraints:
-- `apiVersion = 3`
+- `apiVersion = 4`
 - no legacy actions
 - all IDs namespaced
 - deterministic fallback path

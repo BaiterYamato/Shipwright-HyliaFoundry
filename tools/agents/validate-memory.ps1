@@ -40,6 +40,7 @@ if (-not (Test-Path $paths.Manifest)) { Fail "Missing archive.manifest.json." }
 
 $allowedKinds = @("decision", "incident", "task", "note")
 $allowedStatus = @("open", "done", "deprecated")
+$summaryMaxLen = 180
 
 $entries = @()
 $seenIds = @{}
@@ -69,6 +70,11 @@ foreach ($line in Get-Content -Path $paths.Log -Encoding UTF8) {
         Fail "Invalid status '$($entry.status)' at line $lineNo."
     }
 
+    $summaryText = [string]$entry.summary
+    if ($summaryText.Length -gt $summaryMaxLen) {
+        Fail "Summary exceeds $summaryMaxLen chars at line $lineNo (id=$id)."
+    }
+
     $null = [DateTime]$entry.ts
     $entries += $entry
 }
@@ -88,13 +94,27 @@ foreach ($entry in $entries) {
 }
 
 $index = Get-Content -Path $paths.Index -Raw -Encoding UTF8 | ConvertFrom-Json
-if ([int]$index.version -ne 1) {
+if (([int]$index.version -ne 1) -and ([int]$index.version -ne 2)) {
     Fail "Unsupported memory.index.json version: $($index.version)"
+}
+
+if (([int]$index.version -eq 2) -and $index.PSObject.Properties.Name.Contains("consistency")) {
+    foreach ($dup in @($index.consistency.duplicateIds)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$dup)) {
+            Fail "memory.index.json consistency reports duplicate id: $dup"
+        }
+    }
 }
 
 foreach ($id in $entryIds.Keys) {
     if (-not $index.byId.PSObject.Properties.Name.Contains($id)) {
         Fail "Index missing id from memory.log: $id"
+    }
+}
+
+if ($index.PSObject.Properties.Name.Contains("stats")) {
+    if ([int]$index.stats.entryCount -ne $entryIds.Keys.Count) {
+        Fail "Index stats.entryCount mismatch: expected $($entryIds.Keys.Count), got $($index.stats.entryCount)"
     }
 }
 

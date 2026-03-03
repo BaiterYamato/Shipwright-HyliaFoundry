@@ -1,184 +1,232 @@
-﻿{
-    "schemaVersion":  1,
-    "indexGeneratedAtUtc":  "2026-02-25T04:30:49Z",
-    "skills":  {
-                   "soh-external-mod-capability-design":  {
-                                                              "triggerHints":  [
-                                                                                   "new capability",
-                                                                                   "new action",
-                                                                                   "schema",
-                                                                                   "parser/runtime contract"
-                                                                               ],
-                                                              "tags":  [
-                                                                           "external-mods",
-                                                                           "design",
-                                                                           "v3"
-                                                                       ]
-                                                          },
-                   "soh-external-mod-log-triage":  {
-                                                       "triggerHints":  [
-                                                                            "runtime disabled",
-                                                                            "missing field",
-                                                                            "mod failed to load",
-                                                                            "log triage"
-                                                                        ],
-                                                       "tags":  [
-                                                                    "logs",
-                                                                    "triage",
-                                                                    "v3"
-                                                                ]
-                                                   },
-                   "soh-fast64-conversion-rescue":  {
-                                                        "triggerHints":  [
-                                                                             "unsupported macros",
-                                                                             "model conversion",
-                                                                             "texture filter",
-                                                                             "o2r archive"
-                                                                         ],
-                                                        "tags":  [
-                                                                     "fast64",
-                                                                     "render",
-                                                                     "conversion"
-                                                                 ]
-                                                    },
-                   "soh-mod-scene-interaction-demo":  {
-                                                          "triggerHints":  [
-                                                                               "scene demo",
-                                                                               "loadModScene",
-                                                                               "interaction mod"
-                                                                           ],
-                                                          "tags":  [
-                                                                       "demo",
-                                                                       "scenes",
-                                                                       "behaviors"
-                                                                   ]
-                                                      },
-                   "soh-path-symbol-finder":  {
-                                                  "triggerHints":  [
-                                                                       "find function",
-                                                                       "find path",
-                                                                       "entrypoint"
-                                                                   ],
-                                                  "tags":  [
-                                                               "search",
-                                                               "symbols",
-                                                               "paths"
-                                                           ]
-                                              },
-                   "soh-build-test-windows":  {
-                                                  "triggerHints":  [
-                                                                       "build release",
-                                                                       "link lock",
-                                                                       "windows build"
-                                                                   ],
-                                                  "tags":  [
-                                                               "build",
-                                                               "windows",
-                                                               "test"
-                                                           ]
-                                              },
-                   "soh-smoke-regression-matrix":  {
-                                                       "triggerHints":  [
-                                                                            "smoke",
-                                                                            "regression",
-                                                                            "quick validation"
-                                                                        ],
-                                                       "tags":  [
-                                                                    "qa",
-                                                                    "smoke",
-                                                                    "regression"
-                                                                ]
-                                                   },
-                   "soh-demo-sync-validator":  {
-                                                   "triggerHints":  [
-                                                                        "sync demos",
-                                                                        "docs/examples",
-                                                                        "runtime mods"
-                                                                    ],
-                                                   "tags":  [
-                                                                "sync",
-                                                                "demo",
-                                                                "validation"
-                                                            ]
-                                               },
-                   "soh-doc-runtime-drift-guard":  {
-                                                       "triggerHints":  [
-                                                                            "docs drift",
-                                                                            "runtime contract",
-                                                                            "legacy mention"
-                                                                        ],
-                                                       "tags":  [
-                                                                    "docs",
-                                                                    "contract",
-                                                                    "drift"
-                                                                ]
-                                                   },
-                   "soh-crash-stack-triage":  {
-                                                  "triggerHints":  [
-                                                                       "crash stack",
-                                                                       "exception",
-                                                                       "traceback"
-                                                                   ],
-                                                  "tags":  [
-                                                               "crash",
-                                                               "stack",
-                                                               "triage"
-                                                           ]
-                                              },
-                   "soh-agent-memory-optimizer":  {
-                                                      "triggerHints":  [
-                                                                           "memory log",
-                                                                           "compact memory",
-                                                                           "project state"
-                                                                       ],
-                                                      "tags":  [
-                                                                   "memory",
-                                                                   "index",
-                                                                   "compaction"
-                                                               ]
-                                                  },
-                   "soh-token-budget-context-packer":  {
-                                                           "triggerHints":  [
-                                                                                "token budget",
-                                                                                "context pack",
-                                                                                "minimal context"
-                                                                            ],
-                                                           "tags":  [
-                                                                        "token",
-                                                                        "context",
-                                                                        "budget"
-                                                                    ]
-                                                       },
-                   "soh-agents-plan-ledger":  {
-                                                  "triggerHints":  [
-                                                                       "new plan",
-                                                                       "plan milestone",
-                                                                       "save plan",
-                                                                       "plans ledger",
-                                                                       "update plan progress"
-                                                                   ],
-                                                  "tags":  [
-                                                               "plans",
-                                                               "agents",
-                                                               "ledger",
-                                                               "memory"
-                                                           ]
-                                              },
-                   "soh-git-checkpoint-merge":  {
-                                                    "triggerHints":  [
-                                                                         "feature checkpoint",
-                                                                         "build checkpoint",
-                                                                         "finalize plan merge",
-                                                                         "merge local branch",
-                                                                         "conventional commit plan"
-                                                                     ],
-                                                    "tags":  [
-                                                                 "git",
-                                                                 "commits",
-                                                                 "merge",
-                                                                 "plans",
-                                                                 "automation"
-                                                             ]
-                                                }
-               }
+{
+    "schemaVersion": 1,
+    "indexGeneratedAtUtc": "2026-03-03T03:24:28Z",
+    "skills": {
+        "soh-external-mod-capability-design": {
+            "triggerHints": [
+                "new capability",
+                "new action",
+                "schema",
+                "parser/runtime contract",
+                "api v4 contract"
+            ],
+            "tags": [
+                "external-mods",
+                "design",
+                "v4"
+            ]
+        },
+        "soh-external-mod-log-triage": {
+            "triggerHints": [
+                "runtime disabled",
+                "missing field",
+                "mod failed to load",
+                "log triage",
+                "api mismatch"
+            ],
+            "tags": [
+                "logs",
+                "triage",
+                "v4"
+            ]
+        },
+        "soh-fast64-conversion-rescue": {
+            "triggerHints": [
+                "unsupported macros",
+                "model conversion",
+                "texture filter",
+                "o2r archive"
+            ],
+            "tags": [
+                "fast64",
+                "render",
+                "conversion",
+                "v4"
+            ]
+        },
+        "soh-mod-scene-interaction-demo": {
+            "triggerHints": [
+                "scene demo",
+                "loadModScene",
+                "interaction mod"
+            ],
+            "tags": [
+                "demo",
+                "scenes",
+                "behaviors",
+                "v4"
+            ]
+        },
+        "soh-path-symbol-finder": {
+            "triggerHints": [
+                "find function",
+                "find path",
+                "entrypoint"
+            ],
+            "tags": [
+                "search",
+                "symbols",
+                "paths"
+            ]
+        },
+        "soh-build-test-windows": {
+            "triggerHints": [
+                "build release",
+                "link lock",
+                "windows build"
+            ],
+            "tags": [
+                "build",
+                "windows",
+                "test"
+            ]
+        },
+        "soh-smoke-regression-matrix": {
+            "triggerHints": [
+                "smoke",
+                "regression",
+                "quick validation"
+            ],
+            "tags": [
+                "qa",
+                "smoke",
+                "regression"
+            ]
+        },
+        "soh-demo-sync-validator": {
+            "triggerHints": [
+                "sync demos",
+                "docs/examples",
+                "runtime mods"
+            ],
+            "tags": [
+                "sync",
+                "demo",
+                "validation",
+                "v4"
+            ]
+        },
+        "soh-doc-runtime-drift-guard": {
+            "triggerHints": [
+                "docs drift",
+                "runtime contract",
+                "legacy mention"
+            ],
+            "tags": [
+                "docs",
+                "contract",
+                "drift",
+                "v4"
+            ]
+        },
+        "soh-crash-stack-triage": {
+            "triggerHints": [
+                "crash stack",
+                "exception",
+                "traceback"
+            ],
+            "tags": [
+                "crash",
+                "stack",
+                "triage"
+            ]
+        },
+        "soh-agent-memory-optimizer": {
+            "triggerHints": [
+                "memory log",
+                "compact memory",
+                "project state"
+            ],
+            "tags": [
+                "memory",
+                "index",
+                "compaction"
+            ]
+        },
+        "soh-token-budget-context-packer": {
+            "triggerHints": [
+                "token budget",
+                "context pack",
+                "minimal context"
+            ],
+            "tags": [
+                "token",
+                "context",
+                "budget"
+            ]
+        },
+        "soh-agents-plan-ledger": {
+            "triggerHints": [
+                "new plan",
+                "plan milestone",
+                "save plan",
+                "plans ledger",
+                "update plan progress"
+            ],
+            "tags": [
+                "plans",
+                "agents",
+                "ledger",
+                "memory"
+            ]
+        },
+        "soh-git-checkpoint-merge": {
+            "triggerHints": [
+                "feature checkpoint",
+                "build checkpoint",
+                "finalize plan merge",
+                "merge local branch",
+                "conventional commit plan"
+            ],
+            "tags": [
+                "git",
+                "commits",
+                "merge",
+                "plans",
+                "automation"
+            ]
+        },
+        "soh-docs-index-navigator": {
+            "triggerHints": [
+                "find docs fast",
+                "capability lookup",
+                "quick heading lookup",
+                "minimal context retrieval"
+            ],
+            "tags": [
+                "docs",
+                "index",
+                "search",
+                "token"
+            ]
+        },
+        "soh-contract-delta-summarizer": {
+            "triggerHints": [
+                "contract diff",
+                "what changed",
+                "release notes",
+                "registry delta"
+            ],
+            "tags": [
+                "docs",
+                "contract",
+                "delta",
+                "runtime-reference"
+            ]
+        },
+        "soh-plan-memory-reconciler": {
+            "triggerHints": [
+                "plan memory mismatch",
+                "close open plan topics",
+                "ledger reconciliation"
+            ],
+            "tags": [
+                "plans",
+                "memory",
+                "reconcile",
+                "governance"
+            ]
+        }
+    },
+    "contractVersion": 2
 }

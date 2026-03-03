@@ -1,7 +1,7 @@
 ﻿[CmdletBinding()]
 param(
     [string]$RepoRoot = ".",
-    [string]$DemoId = "scene_interact_demo_v3",
+    [string]$DemoId = "scene_interact_demo_v4",
     [switch]$DryRun
 )
 
@@ -36,11 +36,11 @@ foreach ($p in $paths) {
 
 $modJson = @'
 {
-  "apiVersion": 3,
-  "id": "com.example.scene_interact_demo_v3",
-  "name": "Scene Interact Demo V3",
+  "apiVersion": 4,
+  "id": "com.example.scene_interact_demo_v4",
+  "name": "Scene Interact Demo V4",
   "version": "0.1.0",
-  "capabilities": ["behaviors.graph.v1", "scenes.bundle.v1", "actors.generic.v1"],
+  "capabilities": ["behaviors.graph.v1", "scenes.bundle.v1", "actors.generic.v1", "input.bindings.v2"],
   "runtime": { "module": "scripts/noop.wat", "provider": "wasm3-v1" },
   "entryScript": "scripts/init.json",
   "inputDefinitions": "config/input.json",
@@ -60,8 +60,8 @@ $noopWat = @'
 
 $initJson = @'
 {
-  "onGameLoaded": [
-    { "action": "showNotification", "message": "Demo v3 loaded. Use Mod Action 3 + C-Up." }
+  "onInit": [
+    { "action": "showNotification", "message": "Demo v4 loaded. Use Mod Action 3 + C-Up." }
   ]
 }
 '@
@@ -85,4 +85,3 @@ Set-Content -Path (Join-Path $demoDir "assets\README.txt") -Value $assetsReadme 
 
 Write-Host "Created demo scaffold: $demoDir"
 exit 0
-

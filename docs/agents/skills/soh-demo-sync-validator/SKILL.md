@@ -11,7 +11,7 @@ description: Keep external-mod demos synchronized between docs/examples and runt
 
 2. Validate shape.
 - Use `scripts/validate-demos.ps1`.
-- Check required files and API version.
+- Check required files and `apiVersion: 4` baseline.
 
 3. Keep drift visible.
 - Fail on missing or mismatched demos.

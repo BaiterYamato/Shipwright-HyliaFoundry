@@ -1,9 +1,9 @@
 ---
 name: soh-external-mod-log-triage
-description: Triage Ship of Harkinian external-mod logs to isolate the first blocker and map it to patch targets in API v3 runtime. Use when a mod is disabled, parser errors appear, runtime throws, or behavior/action execution is incorrect.
+description: Triage Ship of Harkinian external-mod logs to isolate the first blocker and map it to patch targets in API v4 runtime. Use when a mod is disabled, parser errors appear, runtime throws, or behavior/action execution is incorrect.
 ---
 
-# SOH External Mod Log Triage (v3)
+# SOH External Mod Log Triage (v4)
 
 1. Isolate first blocker.
 - Use `scripts/extract-blocker.ps1`.
@@ -35,4 +35,4 @@ description: Triage Ship of Harkinian external-mod logs to isolate the first blo
 - "Primeiro erro: `Missing or invalid field: itemUseProfiles` -> corrigir `mod.json` e parser de path opcional."
 
 ## Reference
-- Read `references/signatures-v3.md`.
+- Read `references/signatures-v4.md`.

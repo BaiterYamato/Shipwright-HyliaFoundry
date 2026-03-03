@@ -1,13 +1,13 @@
 ---
 name: soh-mod-scene-interaction-demo
-description: Scaffold a runnable Ship of Harkinian API v3 external-mod scene interaction demo with deterministic fallback behavior, input bindings, scene definitions, and actor/behavior interactions.
+description: Scaffold a runnable Ship of Harkinian API v4 external-mod scene interaction demo with deterministic fallback behavior, input bindings, scene definitions, and actor/behavior interactions.
 ---
 
-# SOH Scene Interaction Demo (v3)
+# SOH Scene Interaction Demo (v4)
 
 1. Scaffold minimum package.
 - Create `mod.json`, `scripts`, `config`, `scenes`, `actors`, `behaviors`, `items`, `assets`.
-- Keep `apiVersion` exactly `3`.
+- Keep `apiVersion` exactly `4`.
 
 2. Provide two entry paths.
 - Input combo entry (`MOD_ACTION3 + C-Up`).
@@ -29,4 +29,4 @@ description: Scaffold a runnable Ship of Harkinian API v3 external-mod scene int
 - "Sem `.otr` custom, o demo ainda entra em cena host e permite testar interacao."
 
 ## Reference
-- Read `references/scaffold-v3.md`.
+- Read `references/scaffold-v4.md`.

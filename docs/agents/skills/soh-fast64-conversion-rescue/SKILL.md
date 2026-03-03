@@ -1,9 +1,9 @@
 ---
 name: soh-fast64-conversion-rescue
-description: Diagnose and patch Fast64 conversion failures for Ship of Harkinian API v3 mods, including unsupported macros, archive finalization, texture filter/tile issues, and custom model load crashes.
+description: Diagnose and patch Fast64 conversion failures for Ship of Harkinian API v4 mods, including unsupported macros, archive finalization, texture filter/tile issues, and custom model load crashes.
 ---
 
-# SOH Fast64 Conversion Rescue (v3)
+# SOH Fast64 Conversion Rescue (v4)
 
 1. Capture minimal evidence.
 - First conversion blocker from log.
@@ -37,4 +37,4 @@ description: Diagnose and patch Fast64 conversion failures for Ship of Harkinian
 - "Erro `gsDPSetTextureDetail`: mapear macro para comando equivalente ou soft-ignore seguro com warning consolidado."
 
 ## Reference
-- Read `references/error-map-v3.md`.
+- Read `references/error-map-v4.md`.

@@ -1,6 +1,6 @@
 ﻿# Project State Snapshot
 
-Last updated: 2026-02-25T18:10:00Z
+Last updated: 2026-03-03T03:20:00Z
 
 ## Current Governance and Architecture State
 
@@ -15,18 +15,20 @@ Last updated: 2026-02-25T18:10:00Z
   - `docs/runtime_contract/conditions.registry.json`
 - Example mods source of truth is `docs/examples/external_mods` with runtime mirror in `x64/Release/mods`.
 - Agent governance is repository-local under `docs/agents`.
-- Skill Pack mirror under `docs/agents/skills` currently has **14 skills**.
+- Skill Pack mirror under `docs/agents/skills` currently has **17 skills**.
 - Plans ledger is append-only at `docs/agents/Plans.md`.
+- Future-version planning tracks live under `docs/agents/plan_tracks` (`v5`, `v6`) and are linked from execution plans.
 
 ## Active Decisions
 
 1. Every implementation must register a plan in `Plans.md` before code changes.
 2. Plan progress/completion is append-only via `[UPDATE]`; existing entries are immutable.
-3. Memory policy is append-only with `summary <= 180` and compaction threshold `200 entries / 60 days`.
-4. Commit discipline follows `soh-git-checkpoint-merge` checkpoints (feature/build/finalize).
-5. Doc/runtime drift checks are mandatory; current policy remains soft gate for unrelated urgent fixes.
-6. Contract changes must regenerate runtime reference exports with `tools/external_mods/export_runtime_reference.ps1`.
-7. API v4 migration scaffolding is active via `tools/external_mods/migrate_mods_v3_to_v4.ps1` and `tools/external_mods/validate_mod.ps1`.
+3. `plan_tracks/v*` files are companion roadmaps only; they never replace execution entries in `Plans.md`.
+4. Memory policy is append-only with `summary <= 180` and compaction threshold `200 entries / 60 days`.
+5. Commit discipline follows `soh-git-checkpoint-merge` checkpoints (feature/build/finalize).
+6. Doc/runtime drift checks are mandatory; current policy remains soft gate for unrelated urgent fixes.
+7. Contract changes must regenerate runtime reference exports with `tools/external_mods/export_runtime_reference.ps1`.
+8. API v4 migration scaffolding is active via `tools/external_mods/migrate_mods_v3_to_v4.ps1` and `tools/external_mods/validate_mod.ps1`.
 
 ## Open Risks
 
@@ -44,6 +46,7 @@ Last updated: 2026-02-25T18:10:00Z
 4. Preserve memory/index integrity (`rebuild-index` + `validate-memory`) after memory operations.
 5. Preserve strict plan-first workflow for all new implementation scopes.
 6. Advance v4 milestones M3+ (runtime modularization, item state machine, camera/hud/effects graphs).
+7. Harden docs retrieval and plan-memory reconciliation via new critical skills and memory pipeline tooling.
 
 ## Out of Scope (Current Snapshot)
 

@@ -6,9 +6,10 @@ This directory is the long-term operational memory and governance layer for agen
 
 1. `docs/agents/project_state.md` is the active truth for current decisions, risks, and priorities.
 2. `docs/agents/Plans.md` is the append-only execution ledger and must be updated before implementation starts.
-3. `docs/agents/memory.log` is append-only historical memory (decisions/incidents/tasks/notes).
-4. `docs/agents/memory.index.json` and `docs/agents/archive.manifest.json` are retrieval/integrity metadata.
-5. For external mods contract work, baseline is API v4 (`apiVersion: 4`) and current runtime references under `docs/*.json` plus `docs/runtime_contract/*.json`.
+3. `docs/agents/plan_tracks/` stores future-version roadmap tracks (`v5`, `v6`, ...). It is complementary and never replaces `Plans.md`.
+4. `docs/agents/memory.log` is append-only historical memory (decisions/incidents/tasks/notes).
+5. `docs/agents/memory.index.json` and `docs/agents/archive.manifest.json` are retrieval/integrity metadata.
+6. For external mods contract work, baseline is API v4 (`apiVersion: 4`) and current runtime references under `docs/*.json` plus `docs/runtime_contract/*.json`.
 
 ## 2) Skill Pack Integration
 
@@ -18,7 +19,7 @@ This directory is the long-term operational memory and governance layer for agen
   - `docs/agents/skills.manifest.json`
   - `docs/agents/skills.index.json`
 
-Current mirror baseline: **14 skills**.
+Current mirror baseline: **17 skills**.
 
 ## 3) Required Read Matrix
 
@@ -48,6 +49,12 @@ Current mirror baseline: **14 skills**.
   - `docs/agents/skills.manifest.json`
   - `docs/agents/skills.index.json`
   - `tools/agents/validate-skills.ps1`
+
+- Future roadmap planning work:
+  - `docs/agents/plan_tracks/README.md`
+  - `docs/agents/plan_tracks/v5/*`
+  - `docs/agents/plan_tracks/v6/*`
+  - (execution plans must still be appended to `docs/agents/Plans.md`)
 
 ## 4) Execution Gates (Mandatory)
 
@@ -111,6 +118,7 @@ JSONL entry contract:
    - mark superseded plan via `[UPDATE]` as `canceled` or `done`,
    - reference the surviving `PlanId`,
    - add a memory note linking both ids.
+3. If long-form planning is needed, add details under `plan_tracks/v*` and reference those files from the corresponding `Plans.md` entry.
 
 ## 8) Token Budget Defaults
 
@@ -132,6 +140,7 @@ JSONL entry contract:
 - `compact-memory.ps1` - archive older entries.
 - `rebuild-index.ps1` - rebuild `memory.index.json`.
 - `validate-memory.ps1` - integrity validation.
+- `memory-hardening.ps1` - run reconcile + rebuild + validate pipeline.
 - `sync-skills.ps1` - sync mirror -> global path.
 - `install-skills.ps1` - install skills to operational path.
 - `validate-skills.ps1` - validate skill pack structure.

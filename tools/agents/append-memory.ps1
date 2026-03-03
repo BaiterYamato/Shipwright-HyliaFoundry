@@ -87,6 +87,10 @@ $entry = [ordered]@{
     supersedes = @($Supersedes)
 }
 
+if ([string]$entry.summary -and ([string]$entry.summary).Length -gt 180) {
+    throw "summary must be <= 180 chars."
+}
+
 $jsonLine = $entry | ConvertTo-Json -Compress -Depth 8
 Add-Content -Path $paths.Log -Value $jsonLine -Encoding UTF8
 

@@ -1,6 +1,6 @@
-# Design Checklist v3 (No Legacy)
+# Design Checklist v4 (No Legacy)
 
-1. Capability declaration is explicit in `mod.json`.
+1. Capability declaration is explicit in `mod.json` (`apiVersion: 4`).
 2. Required file exists when capability is declared.
 3. `schemaVersion` is supported; unknown value is fatal for that mod.
 4. Every ID is namespaced: `modId:*` or `core:*`.

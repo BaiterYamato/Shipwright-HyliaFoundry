@@ -37,8 +37,8 @@ foreach ($demo in $demos) {
 
     try {
         $modJson = Get-Content -Raw -Path $modJsonPath -Encoding UTF8 | ConvertFrom-Json
-        if ($modJson.apiVersion -ne 3) {
-            $issues += "apiVersion != 3 in $($demo.Name)"
+        if ($modJson.apiVersion -ne 4) {
+            $issues += "apiVersion != 4 in $($demo.Name)"
         }
     }
     catch {
@@ -61,4 +61,3 @@ if ($issues.Count -gt 0) {
 
 Write-Host "Demo validation passed."
 exit 0
-

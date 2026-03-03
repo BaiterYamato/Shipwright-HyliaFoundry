@@ -17,6 +17,7 @@ description: Operate repository-local long-term memory for Ship of Harkinian age
 3. Run memory cycle.
 - Use `scripts/memory-cycle.ps1`.
 - Compact when thresholds are exceeded.
+- For reconciliation and integrity in one pass, use `tools/agents/memory-hardening.ps1`.
 
 4. Validate integrity.
 - Rebuild index.

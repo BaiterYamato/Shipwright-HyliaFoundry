@@ -1,13 +1,13 @@
-# Signature Map v3
+# Signature Map v4
 
 ## Parser / Contract
 - `Missing or invalid field:` -> invalid schema or missing required file for declared capability.
-- `Unsupported apiVersion` -> `apiVersion` is not `3`.
+- `Unsupported apiVersion` -> `apiVersion` is not `4`.
 - `Unknown schemaVersion` -> unsupported catalog schema.
 
 ## Runtime / Actions
 - `Runtime disabled for ...` -> fatal validation or runtime structural failure in that mod.
-- `Unknown action` -> behavior action not in v3 contract.
+- `Unknown action` -> behavior action not in v4 runtime contract.
 - `condition ... invalid` -> malformed behavior condition payload.
 
 ## Fast64 / Render
