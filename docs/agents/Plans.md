@@ -702,3 +702,29 @@ This file is the fixed, append-only plan ledger for this repository.
 - refs:
   - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1
   - branch:develop
+
+## [PLN-20260303-0007] Runtime grafico real v7.1 (PBR + world graphics aplicado em jogo)
+- createdUtc: 2026-03-03T11:39:41Z
+- status: in_progress
+- scope: mixed
+- summary: Transformar scaffolding v7 em runtime visual real: aplicar scene/room/postfx/skylight/lights/material overrides em frame, habilitar path PBR GL+DX11 com fallback Metal, alinhar demos/tooling/docs.
+- milestones:
+  1. Modulo dedicado de world graphics runtime com resolucao cross-mod
+  2. Aplicacao real em draw hooks (envCtx/lightCtx) + lifecycle de luzes
+  3. Bridge PBR GL+DX11 + fallback Metal + debug inspector
+  4. Atualizar demos v7, export/validate/drift/build
+- tags: external-mods, v7.1, render, pbr, world-graphics
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+  - libultraship/src/fast/backends/gfx_opengl.cpp
+  - libultraship/src/fast/backends/gfx_direct3d11.cpp
+  - docs/examples/external_mods
+
+## [PLN-20260303-0007][UPDATE] 2026-03-03T12:59:26Z
+- status: in_progress
+- note: Advanced v7.1 runtime graphics from scaffolding to real draw-time execution: added ExternalModWorldGraphicsRuntime module, draw begin/end hooks, deterministic scene/room/postfx/skylight resolution, dynamic light lifecycle (attach/follow/world), parser/action/hook extensions, and validated Release build + export + demo mod validation + drift check.
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModWorldGraphicsRuntime.cpp
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+  - docs/agents/plan_tracks/v7/milestones/patch_v7_runtime_graphics_real.md
+  - tools/external_mods/export_runtime_reference.ps1

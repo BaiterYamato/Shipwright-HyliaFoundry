@@ -13,6 +13,7 @@ struct GetItemEntry;
 struct PlayState;
 struct Player;
 #include "ExternalModTypes.h"
+#include "ExternalModWorldGraphicsRuntime.h"
 
 namespace SOH {
 
@@ -116,6 +117,8 @@ class ExternalModManager {
     uint32_t mOnSceneFlagUnsetHook = 0;
     uint32_t mOnPlayerUpdateHook = 0;
     uint32_t mOnGameFrameHook = 0;
+    uint32_t mOnPlayDrawBeginHook = 0;
+    uint32_t mOnPlayDrawEndHook = 0;
     uint32_t mOnPlayerUseItemHook = 0;
     uint32_t mOnPlayerHealthChangeHook = 0;
     uint32_t mOnItemReceiveHook = 0;
@@ -127,6 +130,7 @@ class ExternalModManager {
     uint32_t mOnEnemyDefeatHook = 0;
     uint32_t mOnBossDefeatHook = 0;
     uint32_t mOnPlayDestroyHook = 0;
+    std::unique_ptr<ExternalModWorldGraphicsRuntime> mWorldGraphicsRuntime;
 
     static bool TryParseManifest(const std::string& content, ExternalModManifest& outManifest, std::string& outError);
     static bool TryParseEntryScript(const std::string& content, int32_t apiVersion, ExternalModRuntime& outRuntime,
@@ -316,6 +320,8 @@ class ExternalModManager {
     void OnSceneFlagUnset(int16_t sceneNum, int16_t flagType, int16_t flag);
     void OnPlayerUpdate();
     void OnGameFrameUpdate();
+    void OnPlayDrawBegin();
+    void OnPlayDrawEnd();
     void OnPlayerUseItem(void* player, int32_t itemId, bool* allowVanilla);
     void OnPlayerHealthChange(int16_t amount);
     void OnItemReceive(int16_t itemId);

@@ -9,3 +9,4 @@
 ## Milestone files
 - `milestones/patch_v7_world_graphics_core.md`
 - `milestones/patch_v7_world_graphics_reference_suite.md`
+- `milestones/patch_v7_runtime_graphics_real.md`

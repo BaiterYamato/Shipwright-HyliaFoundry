@@ -315,8 +315,12 @@ enum class ExternalModActionType {
     WorldSetRoomProfile,
     RenderSetPostFxPreset,
     RenderSpawnLight,
+    RenderDespawnLight,
     RenderSetSkylight,
+    RenderClearPostFxPreset,
+    RenderClearSkylight,
     RenderOverrideMaterial,
+    RenderClearMaterialOverrides,
 };
 
 enum class ExternalModStatusType {
@@ -435,10 +439,16 @@ struct ExternalModAction {
     std::string renderProfileId;
     std::string renderMatch;
     std::string renderScope;
+    std::string renderAttach;
     int32_t sceneId = -1;
     int32_t roomId = -1;
     int32_t durationMs = 0;
     float blendValue = 1.0f;
+    bool renderFollow = true;
+    bool hasWorldPos = false;
+    float worldPosX = 0.0f;
+    float worldPosY = 0.0f;
+    float worldPosZ = 0.0f;
     bool boolValue = false;
     bool hasBoolValue = false;
     float floatValue = 0.0f;
@@ -904,12 +914,28 @@ struct ExternalModDebugOverlayDefinition {
 };
 
 struct ExternalModMaterialDefinition {
+    struct Bind {
+        std::string otrPath;
+        int16_t sceneId = -1;
+        int16_t roomId = -1;
+        bool hasSceneId = false;
+        bool hasRoomId = false;
+    };
+
     std::string id;
     std::string bindOtrPath;
+    std::vector<Bind> binds;
+    std::string mapAlbedoAsset;
+    std::string mapNormalAsset;
+    std::string mapOrmAsset;
+    std::string mapHeightAsset;
+    std::string mapEmissiveAsset;
     std::string shadingModel = "lit_legacy";
     float normalScale = 1.0f;
     float emissiveIntensity = 1.0f;
     float parallaxScale = 0.0f;
+    int32_t parallaxSteps = 8;
+    std::string parallaxMode = "off";
     std::string alphaMode = "opaque";
 };
 
@@ -919,14 +945,23 @@ struct ExternalModPbrDefinition {
     bool enablePom = false;
     int32_t pomSteps = 8;
     float pomMaxDistance = 1200.0f;
+    int32_t maxDynamicLightsNear = 32;
+    int32_t maxDynamicLightsTotal = 128;
+    std::string backendPolicy = "auto";
 };
 
 struct ExternalModLightProfileDefinition {
     std::string id;
     std::string lightType = "point";
     std::array<float, 3> colorLinear = { { 1.0f, 1.0f, 1.0f } };
+    float kelvin = 0.0f;
+    bool hasKelvin = false;
     float intensity = 1.0f;
     float radius = 250.0f;
+    std::string falloff = "inverse_square";
+    float innerConeDeg = 20.0f;
+    float outerConeDeg = 40.0f;
+    std::array<float, 3> direction = { { 0.0f, -1.0f, 0.0f } };
     bool flicker = false;
     float flickerAmount = 0.0f;
     int32_t defaultLifetimeMs = 0;
@@ -940,6 +975,12 @@ struct ExternalModPostFxPresetDefinition {
     float bloom = 0.0f;
     std::array<float, 4> fogColor = { { 0.0f, 0.0f, 0.0f, 1.0f } };
     float fogDensity = 0.0f;
+    int32_t fogNear = 996;
+    int32_t fogFar = 12800;
+    bool hasFogNear = false;
+    bool hasFogFar = false;
+    float vignette = 0.0f;
+    float saturation = 1.0f;
 };
 
 struct ExternalModSceneProfileDefinition {
@@ -1111,6 +1152,10 @@ enum class ExternalModHookType {
     OnWorldOverworldTick,
     OnWorldTimeOfDayChanged,
     OnWorldSkyboxChanged,
+    OnRenderProfileResolved,
+    OnRenderLightSpawned,
+    OnRenderLightExpired,
+    OnRenderFallbackApplied,
     OnPlayDestroy,
     OnGameFrameUpdate,
 };
@@ -1276,11 +1321,16 @@ struct ExternalModRuntime {
     struct DynamicLightState {
         int32_t handle = 0;
         std::string profileId;
+        std::string profileOwnerModId;
         uintptr_t actorAddress = 0;
         int16_t actorId = -1;
+        uint32_t actorHandle = 0;
         float posX = 0.0f;
         float posY = 0.0f;
         float posZ = 0.0f;
+        bool hasWorldPos = false;
+        bool follow = true;
+        std::string attach = "player";
         int32_t remainingMs = 0;
     };
     struct MaterialOverrideState {
@@ -1322,6 +1372,10 @@ struct ExternalModRuntime {
     std::string activeRoomProfileId;
     std::string activePostFxPresetId;
     std::string activeSkylightProfileId;
+    std::string activePostFxOwnerModId;
+    int32_t activePostFxDurationMs = 0;
+    int32_t activePostFxRemainingMs = 0;
+    float activePostFxBlend = 1.0f;
     SurfState surfState;
     int32_t nextFxHandle = 1;
     int32_t nextNavPathHandle = 1;
