@@ -616,3 +616,9 @@ This file is the fixed, append-only plan ledger for this repository.
 - note: Completed phased governance package: added plan_tracks v5/v6, migrated priority skills to API v4 baseline, created 3 critical navigation/reconciliation skills, and hardened memory/index tooling with consistency checks.
 - refs:
   - docs/agents/AGENTS.md,docs/agents/project_state.md,docs/agents/plan_tracks/README.md,docs/agents/skills.manifest.json,docs/agents/skills.index.json,tools/agents/rebuild-index.ps1,tools/agents/validate-memory.ps1,tools/agents/memory-hardening.ps1
+
+## [PLN-20260303-0003][UPDATE] 2026-03-03T03:50:02Z
+- status: done
+- note: finalize-plan-merge was run and correctly stopped because source and target are both develop; checkpoint commit already landed directly on target branch.
+- refs:
+  - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1,branch:develop,commit:fa1035a82
