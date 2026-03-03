@@ -22,6 +22,12 @@ v6 reference suite:
 - Content demos: `demo_mini_inventory_h`, `demo_bag_inventory_ext`, `demo_furnace_system`, `demo_firewall_staff`,
   `demo_purple_din_lev_glove`, `demo_npc_patrol`, `demo_enemy_templates`, `demo_vanilla_adapters`
 
+v7 world graphics suite:
+
+- Frameworks: `lighting_kit`, `world_profiles`, `material_helpers`
+- Content demos: `demo_room_profiles`, `demo_actor_lights`, `demo_green_fire_magic`
+- Authoring guides: `docs/examples/external_mods/v7_reference_suite_docs/*`
+
 Operational references:
 
 - Runtime exports: `docs/actions.json`, `docs/events.json`, `docs/catalogs.json`

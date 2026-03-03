@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-03-03T08:18:16Z",
+    "generatedUtc":  "2026-03-03T10:43:43Z",
     "apiVersion":  4,
     "runtime":  {
                     "budgetDefaults":  {
@@ -269,9 +269,66 @@
                              "schemaVersion":  1,
                              "fileField":  "spellDefinitions",
                              "id":  "spells.catalog.v1"
+                         },
+                         {
+                             "fileDefault":  "render/materials.json",
+                             "schemaVersion":  1,
+                             "fileField":  "materialDefinitions",
+                             "id":  "render.materials.v1"
+                         },
+                         {
+                             "fileDefault":  "render/pbr_profiles.json",
+                             "schemaVersion":  1,
+                             "fileField":  "pbrDefinitions",
+                             "id":  "render.pbr.v1"
+                         },
+                         {
+                             "fileDefault":  "render/light_profiles.json",
+                             "schemaVersion":  1,
+                             "fileField":  "lightingDefinitions",
+                             "id":  "render.lighting.v1"
+                         },
+                         {
+                             "fileDefault":  "render/postfx_presets.json",
+                             "schemaVersion":  1,
+                             "fileField":  "postFxDefinitions",
+                             "id":  "render.postfx.v1"
+                         },
+                         {
+                             "fileDefault":  "world/scene_profiles.json",
+                             "schemaVersion":  1,
+                             "fileField":  "sceneProfileDefinitions",
+                             "id":  "world.scenes.v1"
+                         },
+                         {
+                             "fileDefault":  "world/room_profiles.json",
+                             "schemaVersion":  1,
+                             "fileField":  "roomProfileDefinitions",
+                             "id":  "world.rooms.v1"
+                         },
+                         {
+                             "fileDefault":  "assets/packs.json",
+                             "schemaVersion":  1,
+                             "fileField":  "assetPackDefinitions",
+                             "id":  "assets.packs.v2"
+                         },
+                         {
+                             "fileDefault":  "debug/render_inspector.json",
+                             "schemaVersion":  1,
+                             "fileField":  "renderInspectorDefinitions",
+                             "id":  "debug.render_inspector.v1"
                          }
                      ],
     "contracts":  {
+                      "statuses":  {
+                                       "coreStatusPresets":  [
+                                                                 "core:freeze_ice_trap_no_damage"
+                                                             ],
+                                       "freezeProfileMode":  [
+                                                                 "legacy_timer",
+                                                                 "ice_trap_no_damage"
+                                                             ]
+                                   },
                       "aoe":  {
                                   "targetScope":  [
                                                       "all_non_player",
@@ -281,14 +338,23 @@
                                                       "all_with_player"
                                                   ]
                               },
-                      "statuses":  {
-                                       "coreStatusPresets":  [
-                                                                 "core:freeze_ice_trap_no_damage"
-                                                             ],
-                                       "freezeProfileMode":  [
-                                                                 "legacy_timer",
-                                                                 "ice_trap_no_damage"
-                                                             ]
-                                   }
+                      "worldGraphics":  {
+                                            "tickHooks":  [
+                                                              "onWorldOverworldTick",
+                                                              "onWorldTimeOfDayChanged",
+                                                              "onWorldSkyboxChanged"
+                                                          ],
+                                            "renderActions":  [
+                                                                  "render.setPostFxPreset",
+                                                                  "render.spawnLight",
+                                                                  "render.setSkylight",
+                                                                  "render.overrideMaterial"
+                                                              ],
+                                            "sceneHooks":  [
+                                                               "onWorldSceneLoaded",
+                                                               "onWorldRoomEntered",
+                                                               "onWorldRoomExited"
+                                                           ]
+                                        }
                   }
 }

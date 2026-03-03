@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-03-03T08:18:16Z",
+    "generatedUtc":  "2026-03-03T10:43:43Z",
     "apiVersion":  4,
     "hooks":  [
                   "onLoadGame",
@@ -40,6 +40,12 @@
                   "onBehaviorNodeChanged",
                   "onPathRequested",
                   "onPathFailed",
+                  "onWorldSceneLoaded",
+                  "onWorldRoomEntered",
+                  "onWorldRoomExited",
+                  "onWorldOverworldTick",
+                  "onWorldTimeOfDayChanged",
+                  "onWorldSkyboxChanged",
                   "onPlayDestroy",
                   "onGameFrameUpdate"
               ],

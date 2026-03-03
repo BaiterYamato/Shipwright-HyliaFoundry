@@ -668,3 +668,21 @@ This file is the fixed, append-only plan ledger for this repository.
 - note: finalize-plan-merge executed and stopped with source==target on develop; checkpoints already committed directly on target branch.
 - refs:
   - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1,branch:develop
+
+## [PLN-20260303-0006] Patch v7 world graphics core + reference suite rollout
+- createdUtc: 2026-03-03T10:08:33Z
+- status: in_progress
+- scope: mixed
+- summary: Implement v7 capability scaffolding for world/render contracts, parser/runtime action hooks, and deliver v7 framework/content reference suite with docs/tooling sync.
+- milestones:
+  1. Phase0: establish v7 governance track and prerequisite gate note
+  2. Phase1-3: add v7 capabilities, manifest fields, parsers, actions, hooks, runtime blackboard scaffolding
+  3. Phase4: ship v7 reference frameworks, packs metadata stubs, and demos under docs/examples
+  4. Phase5: update tooling exports/validation/sync lists and run build+validation checks
+  5. Phase6: checkpoint commits, plan update, memory append, and finalize merge attempt
+- tags: external-mods, api-v4, v7, world-graphics, reference-suite
+- refs:
+  - docs/agents/plan_tracks/v7
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+  - soh/soh/Enhancements/external-mods/ExternalModTypes.h
+  - docs/examples/external_mods

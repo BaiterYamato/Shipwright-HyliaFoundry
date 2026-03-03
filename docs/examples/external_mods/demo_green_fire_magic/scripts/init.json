@@ -1,0 +1,20 @@
+{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "render.setPostFxPreset",
+      "profileId": "com.sylian.demo_green_fire_magic:green_flame_flash",
+      "durationMs": 2000,
+      "blend": 1.0
+    },
+    {
+      "action": "render.spawnLight",
+      "profileId": "com.sylian.lighting_kit:fire_green",
+      "durationMs": 6000
+    },
+    {
+      "action": "showNotification",
+      "text": "Demo Green Fire Magic: postfx flash + green light spawned."
+    }
+  ]
+}

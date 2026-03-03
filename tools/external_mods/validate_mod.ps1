@@ -59,6 +59,14 @@ function Resolve-CapabilityPathMap {
         "fx.presets.v1" = "fxPresetDefinitions"
         "states.catalog.v1" = "stateDefinitions"
         "spells.catalog.v1" = "spellDefinitions"
+        "render.materials.v1" = "materialDefinitions"
+        "render.pbr.v1" = "pbrDefinitions"
+        "render.lighting.v1" = "lightingDefinitions"
+        "render.postfx.v1" = "postFxDefinitions"
+        "world.scenes.v1" = "sceneProfileDefinitions"
+        "world.rooms.v1" = "roomProfileDefinitions"
+        "assets.packs.v2" = "assetPackDefinitions"
+        "debug.render_inspector.v1" = "renderInspectorDefinitions"
     }
 }
 

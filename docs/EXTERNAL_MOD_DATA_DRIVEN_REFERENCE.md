@@ -170,3 +170,45 @@ tools/external_mods/export_runtime_reference.ps1
 ## 13) Example packs
 
 See `docs/examples/external_mods/` for runnable reference mods.
+
+## 14) v7 world graphics contracts
+
+New capabilities:
+
+- `render.materials.v1`
+- `render.pbr.v1`
+- `render.lighting.v1`
+- `render.postfx.v1`
+- `world.scenes.v1`
+- `world.rooms.v1`
+- `assets.packs.v2`
+- `debug.render_inspector.v1`
+
+Capability-gated manifest fields:
+
+- `materialDefinitions` -> `materials/materials.json`
+- `pbrDefinitions` -> `render/pbr_profiles.json`
+- `lightingDefinitions` -> `lighting/light_profiles.json`
+- `postFxDefinitions` -> `render/postfx_presets.json`
+- `sceneProfileDefinitions` -> `world/scene_profiles.json`
+- `roomProfileDefinitions` -> `world/room_profiles.json`
+- `assetPackDefinitions` -> `assets/packs.json`
+- `renderInspectorDefinitions` -> `debug/render_inspector.json`
+
+v7 action family additions:
+
+- `world.setSceneProfile`
+- `world.setRoomProfile`
+- `render.setPostFxPreset`
+- `render.spawnLight`
+- `render.setSkylight`
+- `render.overrideMaterial`
+
+v7 extended hooks:
+
+- `onWorldSceneLoaded`
+- `onWorldRoomEntered`
+- `onWorldRoomExited`
+- `onWorldOverworldTick`
+- `onWorldTimeOfDayChanged`
+- `onWorldSkyboxChanged`

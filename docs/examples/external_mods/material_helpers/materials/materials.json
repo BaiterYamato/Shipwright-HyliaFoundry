@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "materials": [
+    {
+      "id": "com.sylian.material_helpers:night_window_emissive",
+      "bindOtrPath": "textures/hyrule_window.rgba16",
+      "shadingModel": "pbr_metal_rough",
+      "normalScale": 1.0,
+      "emissiveIntensity": 2.5,
+      "parallaxScale": 0.02,
+      "alphaMode": "opaque"
+    }
+  ]
+}

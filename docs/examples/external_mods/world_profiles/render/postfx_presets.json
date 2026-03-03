@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    {
+      "id": "com.sylian.world_profiles:overworld_clear",
+      "tonemap": "filmic",
+      "exposure": 1.08,
+      "bloom": 0.2,
+      "fogColor": [
+        0.67,
+        0.8,
+        1.0,
+        1.0
+      ],
+      "fogDensity": 0.02
+    },
+    {
+      "id": "com.sylian.world_profiles:cave_cold",
+      "tonemap": "filmic",
+      "exposure": 0.75,
+      "bloom": 0.05,
+      "fogColor": [
+        0.25,
+        0.38,
+        0.7,
+        1.0
+      ],
+      "fogDensity": 0.08
+    }
+  ]
+}

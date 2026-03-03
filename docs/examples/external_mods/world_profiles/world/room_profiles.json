@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "com.sylian.world_profiles:field_room_0",
+      "sceneId": 81,
+      "roomId": 0,
+      "postFxPresetId": "com.sylian.world_profiles:overworld_clear",
+      "skylightProfileId": "com.sylian.world_profiles:sky_white"
+    },
+    {
+      "id": "com.sylian.world_profiles:cave_room_0",
+      "sceneId": 88,
+      "roomId": 0,
+      "postFxPresetId": "com.sylian.world_profiles:cave_cold",
+      "skylightProfileId": "com.sylian.world_profiles:cave_blue"
+    }
+  ]
+}

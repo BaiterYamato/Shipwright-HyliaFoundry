@@ -1,6 +1,6 @@
 ﻿# Project State Snapshot
 
-Last updated: 2026-03-03T03:20:00Z
+Last updated: 2026-03-03T13:45:00Z
 
 ## Current Governance and Architecture State
 
@@ -17,7 +17,7 @@ Last updated: 2026-03-03T03:20:00Z
 - Agent governance is repository-local under `docs/agents`.
 - Skill Pack mirror under `docs/agents/skills` currently has **17 skills**.
 - Plans ledger is append-only at `docs/agents/Plans.md`.
-- Future-version planning tracks live under `docs/agents/plan_tracks` (`v5`, `v6`) and are linked from execution plans.
+- Future-version planning tracks live under `docs/agents/plan_tracks` (`v5`, `v6`, `v7`) and are linked from execution plans.
 
 ## Active Decisions
 
@@ -46,7 +46,8 @@ Last updated: 2026-03-03T03:20:00Z
 4. Preserve memory/index integrity (`rebuild-index` + `validate-memory`) after memory operations.
 5. Preserve strict plan-first workflow for all new implementation scopes.
 6. Advance v4 milestones M3+ (runtime modularization, item state machine, camera/hud/effects graphs).
-7. Harden docs retrieval and plan-memory reconciliation via new critical skills and memory pipeline tooling.
+7. Execute v7 world-graphics contract rollout with reference suite frameworks/demos.
+8. Harden docs retrieval and plan-memory reconciliation via new critical skills and memory pipeline tooling.
 
 ## Out of Scope (Current Snapshot)
 

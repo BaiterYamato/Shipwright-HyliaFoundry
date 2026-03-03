@@ -54,6 +54,7 @@ Current mirror baseline: **17 skills**.
   - `docs/agents/plan_tracks/README.md`
   - `docs/agents/plan_tracks/v5/*`
   - `docs/agents/plan_tracks/v6/*`
+  - `docs/agents/plan_tracks/v7/*`
   - (execution plans must still be appended to `docs/agents/Plans.md`)
 
 ## 4) Execution Gates (Mandatory)

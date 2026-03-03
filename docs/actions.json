@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-03-03T08:18:16Z",
+    "generatedUtc":  "2026-03-03T10:43:43Z",
     "apiVersion":  4,
     "actions":  [
                     {
@@ -345,6 +345,30 @@
                     {
                         "category":  "debug",
                         "name":  "debug.hideOverlay"
+                    },
+                    {
+                        "category":  "world",
+                        "name":  "world.setSceneProfile"
+                    },
+                    {
+                        "category":  "world",
+                        "name":  "world.setRoomProfile"
+                    },
+                    {
+                        "category":  "render",
+                        "name":  "render.setPostFxPreset"
+                    },
+                    {
+                        "category":  "render",
+                        "name":  "render.spawnLight"
+                    },
+                    {
+                        "category":  "render",
+                        "name":  "render.setSkylight"
+                    },
+                    {
+                        "category":  "render",
+                        "name":  "render.overrideMaterial"
                     },
                     {
                         "category":  "wasm",

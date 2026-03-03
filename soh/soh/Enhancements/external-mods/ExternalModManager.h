@@ -210,6 +210,30 @@ class ExternalModManager {
     static bool TryParseDebugOverlayDefinitions(const std::string& content, int32_t apiVersion,
                                                 std::vector<ExternalModDebugOverlayDefinition>& outDefinitions,
                                                 std::string& outError);
+    static bool TryParseMaterialDefinitions(const std::string& content, int32_t apiVersion,
+                                            std::vector<ExternalModMaterialDefinition>& outDefinitions,
+                                            std::string& outError);
+    static bool TryParsePbrDefinitions(const std::string& content, int32_t apiVersion,
+                                       std::vector<ExternalModPbrDefinition>& outDefinitions,
+                                       std::string& outError);
+    static bool TryParseLightingDefinitions(const std::string& content, int32_t apiVersion,
+                                            std::vector<ExternalModLightProfileDefinition>& outDefinitions,
+                                            std::string& outError);
+    static bool TryParsePostFxDefinitions(const std::string& content, int32_t apiVersion,
+                                          std::vector<ExternalModPostFxPresetDefinition>& outDefinitions,
+                                          std::string& outError);
+    static bool TryParseSceneProfileDefinitions(const std::string& content, int32_t apiVersion,
+                                                std::vector<ExternalModSceneProfileDefinition>& outDefinitions,
+                                                std::string& outError);
+    static bool TryParseRoomProfileDefinitions(const std::string& content, int32_t apiVersion,
+                                               std::vector<ExternalModRoomProfileDefinition>& outDefinitions,
+                                               std::string& outError);
+    static bool TryParseAssetPackDefinitions(const std::string& content, int32_t apiVersion,
+                                             std::vector<ExternalModAssetPackDefinition>& outDefinitions,
+                                             std::string& outError);
+    static bool TryParseRenderInspectorDefinitions(const std::string& content, int32_t apiVersion,
+                                                   std::vector<ExternalModRenderInspectorDefinition>& outDefinitions,
+                                                   std::string& outError);
     static bool TryParseFxPresetDefinitions(const std::string& content, int32_t apiVersion,
                                             std::vector<ExternalModFxPresetDefinition>& outDefinitions,
                                             std::string& outError);

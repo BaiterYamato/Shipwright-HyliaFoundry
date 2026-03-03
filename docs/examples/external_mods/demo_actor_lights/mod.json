@@ -1,0 +1,40 @@
+{
+  "id": "com.sylian.demo_actor_lights",
+  "name": "demo actor lights",
+  "version": "0.1.0",
+  "apiVersion": 4,
+  "loadPriority": 318,
+  "entryScript": "scripts/init.json",
+  "assets": [],
+  "dependencies": [
+    {
+      "id": "com.sylian.lighting_kit",
+      "versionRange": ">=0.1.0 <0.2.0"
+    }
+  ],
+  "capabilities": [],
+  "runtime": {
+    "type": "wasm3-v1",
+    "module": "scripts/noop.wat",
+    "maxMemoryKb": 1024,
+    "maxCallMs": 2,
+    "maxFrameBudgetMs": 2,
+    "maxHookCallsPerFrame": 256,
+    "maxActorInstances": 64,
+    "maxActiveStatuses": 256
+  },
+  "itemDefinitions": "items/items.json",
+  "inputDefinitions": "config/input.json",
+  "engineVersionRange": ">=9.1.2 <10.0.0",
+  "permissions": [],
+  "entrypoints": {
+    "items": "items/items.json",
+    "combat": "combat",
+    "movement": "movement",
+    "camera": "camera/camera_profiles.json",
+    "ui": "ui",
+    "actors": "actors",
+    "quests": "quests",
+    "wasm": "scripts/noop.wat"
+  }
+}

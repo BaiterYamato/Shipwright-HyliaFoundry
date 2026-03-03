@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-03-03T08:18:16Z",
+    "generatedUtc":  "2026-03-03T10:43:43Z",
     "apiVersion":  4,
     "description":  "Declarative registry for action validation/dispatch contracts.",
     "actions":  [
@@ -372,6 +372,53 @@
                                        "overlayId|overlay"
                                    ],
                         "name":  "debug.hideOverlay"
+                    },
+                    {
+                        "params":  [
+                                       "profileId|profile",
+                                       "sceneId?"
+                                   ],
+                        "name":  "world.setSceneProfile"
+                    },
+                    {
+                        "params":  [
+                                       "profileId|profile",
+                                       "roomId",
+                                       "sceneId?"
+                                   ],
+                        "name":  "world.setRoomProfile"
+                    },
+                    {
+                        "params":  [
+                                       "presetId|profileId|preset",
+                                       "durationMs?",
+                                       "blend?"
+                                   ],
+                        "name":  "render.setPostFxPreset"
+                    },
+                    {
+                        "params":  [
+                                       "profileId|profile",
+                                       "actorHandle?",
+                                       "lifetimeMs?|durationMs?",
+                                       "storeKey?"
+                                   ],
+                        "name":  "render.spawnLight"
+                    },
+                    {
+                        "params":  [
+                                       "profileId|profile"
+                                   ],
+                        "name":  "render.setSkylight"
+                    },
+                    {
+                        "params":  [
+                                       "materialId|material",
+                                       "match?",
+                                       "scope?",
+                                       "durationFrames?"
+                                   ],
+                        "name":  "render.overrideMaterial"
                     },
                     {
                         "params":  [

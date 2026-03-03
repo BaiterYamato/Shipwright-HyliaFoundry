@@ -73,7 +73,15 @@ $catalogs = [ordered]@{
         @{ id = "sdk.generators.v1"; fileField = "sdkGeneratorDefinitions"; fileDefault = "sdk/generators.json"; schemaVersion = 1 },
         @{ id = "fx.presets.v1"; fileField = "fxPresetDefinitions"; fileDefault = "fx/fx_presets.json"; schemaVersion = 1 },
         @{ id = "states.catalog.v1"; fileField = "stateDefinitions"; fileDefault = "states/states.json"; schemaVersion = 1 },
-        @{ id = "spells.catalog.v1"; fileField = "spellDefinitions"; fileDefault = "spells/spells.json"; schemaVersion = 1 }
+        @{ id = "spells.catalog.v1"; fileField = "spellDefinitions"; fileDefault = "spells/spells.json"; schemaVersion = 1 },
+        @{ id = "render.materials.v1"; fileField = "materialDefinitions"; fileDefault = "render/materials.json"; schemaVersion = 1 },
+        @{ id = "render.pbr.v1"; fileField = "pbrDefinitions"; fileDefault = "render/pbr_profiles.json"; schemaVersion = 1 },
+        @{ id = "render.lighting.v1"; fileField = "lightingDefinitions"; fileDefault = "render/light_profiles.json"; schemaVersion = 1 },
+        @{ id = "render.postfx.v1"; fileField = "postFxDefinitions"; fileDefault = "render/postfx_presets.json"; schemaVersion = 1 },
+        @{ id = "world.scenes.v1"; fileField = "sceneProfileDefinitions"; fileDefault = "world/scene_profiles.json"; schemaVersion = 1 },
+        @{ id = "world.rooms.v1"; fileField = "roomProfileDefinitions"; fileDefault = "world/room_profiles.json"; schemaVersion = 1 },
+        @{ id = "assets.packs.v2"; fileField = "assetPackDefinitions"; fileDefault = "assets/packs.json"; schemaVersion = 1 },
+        @{ id = "debug.render_inspector.v1"; fileField = "renderInspectorDefinitions"; fileDefault = "debug/render_inspector.json"; schemaVersion = 1 }
     )
     contracts = @{
         statuses = @{
@@ -82,6 +90,11 @@ $catalogs = [ordered]@{
         }
         aoe = @{
             targetScope = @("all_non_player", "enemies_bosses", "enemies_bosses_props", "player_enemies_bosses", "all_with_player")
+        }
+        worldGraphics = @{
+            sceneHooks = @("onWorldSceneLoaded", "onWorldRoomEntered", "onWorldRoomExited")
+            tickHooks = @("onWorldOverworldTick", "onWorldTimeOfDayChanged", "onWorldSkyboxChanged")
+            renderActions = @("render.setPostFxPreset", "render.spawnLight", "render.setSkylight", "render.overrideMaterial")
         }
     }
 }
@@ -176,6 +189,12 @@ $actions = [ordered]@{
         @{ name = "nav.releasePath"; category = "nav" },
         @{ name = "debug.showOverlay"; category = "debug" },
         @{ name = "debug.hideOverlay"; category = "debug" },
+        @{ name = "world.setSceneProfile"; category = "world" },
+        @{ name = "world.setRoomProfile"; category = "world" },
+        @{ name = "render.setPostFxPreset"; category = "render" },
+        @{ name = "render.spawnLight"; category = "render" },
+        @{ name = "render.setSkylight"; category = "render" },
+        @{ name = "render.overrideMaterial"; category = "render" },
         @{ name = "invokeWasm"; category = "wasm" }
     )
     removedInApiV4 = @(
@@ -251,6 +270,12 @@ $events = [ordered]@{
         "onBehaviorNodeChanged",
         "onPathRequested",
         "onPathFailed",
+        "onWorldSceneLoaded",
+        "onWorldRoomEntered",
+        "onWorldRoomExited",
+        "onWorldOverworldTick",
+        "onWorldTimeOfDayChanged",
+        "onWorldSkyboxChanged",
         "onPlayDestroy",
         "onGameFrameUpdate"
     )
@@ -344,6 +369,12 @@ $actionsRegistry = [ordered]@{
         @{ name = "nav.releasePath"; params = @("handleKey|storeKey") },
         @{ name = "debug.showOverlay"; params = @("overlayId|overlay") },
         @{ name = "debug.hideOverlay"; params = @("overlayId|overlay") },
+        @{ name = "world.setSceneProfile"; params = @("profileId|profile", "sceneId?") },
+        @{ name = "world.setRoomProfile"; params = @("profileId|profile", "roomId", "sceneId?") },
+        @{ name = "render.setPostFxPreset"; params = @("presetId|profileId|preset", "durationMs?", "blend?") },
+        @{ name = "render.spawnLight"; params = @("profileId|profile", "actorHandle?", "lifetimeMs?|durationMs?", "storeKey?") },
+        @{ name = "render.setSkylight"; params = @("profileId|profile") },
+        @{ name = "render.overrideMaterial"; params = @("materialId|material", "match?", "scope?", "durationFrames?") },
         @{ name = "invokeWasm"; params = @("export", "args?") }
     )
 }

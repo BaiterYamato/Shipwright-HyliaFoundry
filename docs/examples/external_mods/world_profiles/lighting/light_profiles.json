@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "com.sylian.world_profiles:sky_white",
+      "type": "directional",
+      "color": [
+        0.95,
+        0.99,
+        1.0
+      ],
+      "intensity": 1.2,
+      "radius": 0.0
+    },
+    {
+      "id": "com.sylian.world_profiles:cave_blue",
+      "type": "point",
+      "color": [
+        0.45,
+        0.6,
+        1.0
+      ],
+      "intensity": 95.0,
+      "radius": 280.0
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "showNotification",
+      "text": "Lighting Kit loaded: torch/sky/fire profiles ready."
+    }
+  ]
+}

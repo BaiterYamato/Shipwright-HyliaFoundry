@@ -1,0 +1,16 @@
+{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "render.overrideMaterial",
+      "materialId": "com.sylian.material_helpers:night_window_emissive",
+      "match": "textures/hyrule_window",
+      "scope": "global",
+      "durationFrames": 180
+    },
+    {
+      "action": "showNotification",
+      "text": "Material Helpers loaded: runtime material override sample applied."
+    }
+  ]
+}

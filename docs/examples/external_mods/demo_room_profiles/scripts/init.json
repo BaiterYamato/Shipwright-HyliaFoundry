@@ -1,0 +1,19 @@
+{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "world.setSceneProfile",
+      "profileId": "com.sylian.world_profiles:field_day"
+    },
+    {
+      "action": "world.setRoomProfile",
+      "sceneId": 81,
+      "roomId": 0,
+      "profileId": "com.sylian.world_profiles:field_room_0"
+    },
+    {
+      "action": "showNotification",
+      "text": "Demo Room Profiles: scene/room profile actions dispatched."
+    }
+  ]
+}

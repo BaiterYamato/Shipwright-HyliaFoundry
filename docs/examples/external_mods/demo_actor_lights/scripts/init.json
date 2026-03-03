@@ -1,0 +1,18 @@
+{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "render.setSkylight",
+      "profileId": "com.sylian.lighting_kit:sky_white"
+    },
+    {
+      "action": "render.spawnLight",
+      "profileId": "com.sylian.lighting_kit:torch_orange",
+      "durationMs": 12000
+    },
+    {
+      "action": "showNotification",
+      "text": "Demo Actor Lights: skylight + runtime torch light action sent."
+    }
+  ]
+}

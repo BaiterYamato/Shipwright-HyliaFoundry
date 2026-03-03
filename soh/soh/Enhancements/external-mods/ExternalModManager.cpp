@@ -116,6 +116,14 @@ constexpr uint64_t kMaxSdkGeneratorDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxFxPresetDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxStateDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxSpellDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxMaterialDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxPbrDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxLightingDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxPostFxDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxSceneProfileDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxRoomProfileDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxAssetPackDefinitionBytes = 256 * 1024;
+constexpr uint64_t kMaxRenderInspectorDefinitionBytes = 256 * 1024;
 constexpr uint64_t kMaxItemIconBytes = 4ull * 1024ull * 1024ull;
 constexpr uint64_t kMaxItemModelBytes = 8ull * 1024ull * 1024ull;
 constexpr uint64_t kMaxItemModelTextureBytes = 16ull * 1024ull * 1024ull;
@@ -831,6 +839,14 @@ const std::unordered_set<std::string> kSupportedCapabilities = {
     "fx.presets.v1",
     "states.catalog.v1",
     "spells.catalog.v1",
+    "render.materials.v1",
+    "render.pbr.v1",
+    "render.lighting.v1",
+    "render.postfx.v1",
+    "world.scenes.v1",
+    "world.rooms.v1",
+    "assets.packs.v2",
+    "debug.render_inspector.v1",
 };
 
 const std::unordered_set<std::string> kSupportedRuntimePermissions = {
@@ -879,6 +895,12 @@ const std::unordered_map<std::string, ExternalModHookType> kHookAliases = {
     { "onbehaviornodechanged", ExternalModHookType::OnBehaviorNodeChanged },
     { "onpathrequested", ExternalModHookType::OnPathRequested },
     { "onpathfailed", ExternalModHookType::OnPathFailed },
+    { "onworldsceneloaded", ExternalModHookType::OnWorldSceneLoaded },
+    { "onworldroomentered", ExternalModHookType::OnWorldRoomEntered },
+    { "onworldroomexited", ExternalModHookType::OnWorldRoomExited },
+    { "onworldoverworldtick", ExternalModHookType::OnWorldOverworldTick },
+    { "onworldtimeofdaychanged", ExternalModHookType::OnWorldTimeOfDayChanged },
+    { "onworldskyboxchanged", ExternalModHookType::OnWorldSkyboxChanged },
     { "onplaydestroy", ExternalModHookType::OnPlayDestroy },
     { "ongameframeupdate", ExternalModHookType::OnGameFrameUpdate },
 };
@@ -5378,6 +5400,145 @@ bool ParseAction(const nlohmann::json& json, int32_t apiVersion, ExternalModActi
             !ValidateRequiredString(json, "overlay", outAction.overlayId, outError)) {
             outError = "debug.hideOverlay requires overlayId/overlay";
             return false;
+        }
+        return true;
+    }
+
+    if (actionType == "world.setSceneProfile") {
+        outAction.type = ExternalModActionType::WorldSetSceneProfile;
+        if (!ValidateRequiredString(json, "profileId", outAction.renderProfileId, outError) &&
+            !ValidateRequiredString(json, "profile", outAction.renderProfileId, outError)) {
+            outError = "world.setSceneProfile requires profileId/profile";
+            return false;
+        }
+        if (json.contains("sceneId")) {
+            if (!json["sceneId"].is_number_integer()) {
+                outError = "world.setSceneProfile.sceneId must be integer";
+                return false;
+            }
+            outAction.sceneId = json["sceneId"].get<int32_t>();
+        }
+        return true;
+    }
+
+    if (actionType == "world.setRoomProfile") {
+        outAction.type = ExternalModActionType::WorldSetRoomProfile;
+        if (!ValidateRequiredString(json, "profileId", outAction.renderProfileId, outError) &&
+            !ValidateRequiredString(json, "profile", outAction.renderProfileId, outError)) {
+            outError = "world.setRoomProfile requires profileId/profile";
+            return false;
+        }
+        if (!json.contains("roomId") || !json["roomId"].is_number_integer()) {
+            outError = "world.setRoomProfile requires integer roomId";
+            return false;
+        }
+        outAction.roomId = json["roomId"].get<int32_t>();
+        if (json.contains("sceneId")) {
+            if (!json["sceneId"].is_number_integer()) {
+                outError = "world.setRoomProfile.sceneId must be integer";
+                return false;
+            }
+            outAction.sceneId = json["sceneId"].get<int32_t>();
+        }
+        return true;
+    }
+
+    if (actionType == "render.setPostFxPreset") {
+        outAction.type = ExternalModActionType::RenderSetPostFxPreset;
+        if (!ValidateRequiredString(json, "presetId", outAction.renderProfileId, outError) &&
+            !ValidateRequiredString(json, "profileId", outAction.renderProfileId, outError) &&
+            !ValidateRequiredString(json, "preset", outAction.renderProfileId, outError)) {
+            outError = "render.setPostFxPreset requires presetId/profileId/preset";
+            return false;
+        }
+        if (json.contains("durationMs")) {
+            if (!json["durationMs"].is_number_integer()) {
+                outError = "render.setPostFxPreset.durationMs must be integer";
+                return false;
+            }
+            outAction.durationMs = std::clamp(json["durationMs"].get<int32_t>(), 0, 600000);
+        }
+        if (json.contains("blend")) {
+            if (!json["blend"].is_number()) {
+                outError = "render.setPostFxPreset.blend must be numeric";
+                return false;
+            }
+            outAction.blendValue = std::clamp(json["blend"].get<float>(), 0.0f, 1.0f);
+        }
+        return true;
+    }
+
+    if (actionType == "render.spawnLight") {
+        outAction.type = ExternalModActionType::RenderSpawnLight;
+        if (!ValidateRequiredString(json, "profileId", outAction.renderProfileId, outError) &&
+            !ValidateRequiredString(json, "profile", outAction.renderProfileId, outError)) {
+            outError = "render.spawnLight requires profileId/profile";
+            return false;
+        }
+        if (json.contains("actorHandle")) {
+            if (!json["actorHandle"].is_number_integer()) {
+                outError = "render.spawnLight.actorHandle must be integer";
+                return false;
+            }
+            outAction.actorHandle = static_cast<uint32_t>(std::max(0, json["actorHandle"].get<int32_t>()));
+        }
+        if (json.contains("lifetimeMs")) {
+            if (!json["lifetimeMs"].is_number_integer()) {
+                outError = "render.spawnLight.lifetimeMs must be integer";
+                return false;
+            }
+            outAction.durationMs = std::clamp(json["lifetimeMs"].get<int32_t>(), 0, 600000);
+        } else if (json.contains("durationMs")) {
+            if (!json["durationMs"].is_number_integer()) {
+                outError = "render.spawnLight.durationMs must be integer";
+                return false;
+            }
+            outAction.durationMs = std::clamp(json["durationMs"].get<int32_t>(), 0, 600000);
+        }
+        if (json.contains("storeKey")) {
+            if (!ValidateRequiredString(json, "storeKey", outAction.fxStoreKey, outError)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (actionType == "render.setSkylight") {
+        outAction.type = ExternalModActionType::RenderSetSkylight;
+        if (!ValidateRequiredString(json, "profileId", outAction.renderProfileId, outError) &&
+            !ValidateRequiredString(json, "profile", outAction.renderProfileId, outError)) {
+            outError = "render.setSkylight requires profileId/profile";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "render.overrideMaterial") {
+        outAction.type = ExternalModActionType::RenderOverrideMaterial;
+        if (!ValidateRequiredString(json, "materialId", outAction.renderProfileId, outError) &&
+            !ValidateRequiredString(json, "material", outAction.renderProfileId, outError)) {
+            outError = "render.overrideMaterial requires materialId/material";
+            return false;
+        }
+        if (json.contains("match")) {
+            if (!ValidateRequiredString(json, "match", outAction.renderMatch, outError)) {
+                return false;
+            }
+        }
+        if (json.contains("scope")) {
+            if (!ValidateRequiredString(json, "scope", outAction.renderScope, outError)) {
+                return false;
+            }
+            outAction.renderScope = ToLower(outAction.renderScope);
+        } else {
+            outAction.renderScope = "global";
+        }
+        if (json.contains("durationFrames")) {
+            if (!json["durationFrames"].is_number_integer()) {
+                outError = "render.overrideMaterial.durationFrames must be integer";
+                return false;
+            }
+            outAction.durationFrames = std::clamp(json["durationFrames"].get<int32_t>(), 0, 36000);
         }
         return true;
     }
@@ -11934,9 +12095,16 @@ void ExternalModManager::Shutdown() {
         package.runtime.inventoryExtPages.clear();
         package.runtime.activeContainerProcesses.clear();
         package.runtime.activeNavPaths.clear();
+        package.runtime.activeDynamicLights.clear();
+        package.runtime.materialOverrides.clear();
         package.runtime.openUiScreens.clear();
         package.runtime.debugOverlayVisibility.clear();
+        package.runtime.activeSceneProfileId.clear();
+        package.runtime.activeRoomProfileId.clear();
+        package.runtime.activePostFxPresetId.clear();
+        package.runtime.activeSkylightProfileId.clear();
         package.runtime.nextNavPathHandle = 1;
+        package.runtime.nextDynamicLightHandle = 1;
         ClearSurfState(package.runtime);
         UnmountAssetsForPackage(package);
         package.runtime.enabled = false;
@@ -12691,6 +12859,14 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
         const bool hasFxPresetsCapability = ManifestHasCapability(outManifest, "fx.presets.v1");
         const bool hasStatesCatalogCapability = ManifestHasCapability(outManifest, "states.catalog.v1");
         const bool hasSpellsCatalogCapability = ManifestHasCapability(outManifest, "spells.catalog.v1");
+        const bool hasRenderMaterialsCapability = ManifestHasCapability(outManifest, "render.materials.v1");
+        const bool hasRenderPbrCapability = ManifestHasCapability(outManifest, "render.pbr.v1");
+        const bool hasRenderLightingCapability = ManifestHasCapability(outManifest, "render.lighting.v1");
+        const bool hasRenderPostFxCapability = ManifestHasCapability(outManifest, "render.postfx.v1");
+        const bool hasWorldScenesCapability = ManifestHasCapability(outManifest, "world.scenes.v1");
+        const bool hasWorldRoomsCapability = ManifestHasCapability(outManifest, "world.rooms.v1");
+        const bool hasAssetPacksCapability = ManifestHasCapability(outManifest, "assets.packs.v2");
+        const bool hasRenderInspectorCapability = ManifestHasCapability(outManifest, "debug.render_inspector.v1");
 
         if (outManifest.apiVersion >= 4 && hasAimCameraCatalogCapability) {
             outError = "camera.aim_profiles.v1 is legacy; use camera.aim_profiles.v2";
@@ -12876,7 +13052,22 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
             !parseCapabilityPath("stateDefinitions", "states.catalog.v1", hasStatesCatalogCapability,
                                  outManifest.stateDefinitions) ||
             !parseCapabilityPath("spellDefinitions", "spells.catalog.v1", hasSpellsCatalogCapability,
-                                 outManifest.spellDefinitions)) {
+                                 outManifest.spellDefinitions) ||
+            !parseCapabilityPath("materialDefinitions", "render.materials.v1", hasRenderMaterialsCapability,
+                                 outManifest.materialDefinitions) ||
+            !parseCapabilityPath("pbrDefinitions", "render.pbr.v1", hasRenderPbrCapability, outManifest.pbrDefinitions) ||
+            !parseCapabilityPath("lightingDefinitions", "render.lighting.v1", hasRenderLightingCapability,
+                                 outManifest.lightingDefinitions) ||
+            !parseCapabilityPath("postFxDefinitions", "render.postfx.v1", hasRenderPostFxCapability,
+                                 outManifest.postFxDefinitions) ||
+            !parseCapabilityPath("sceneProfileDefinitions", "world.scenes.v1", hasWorldScenesCapability,
+                                 outManifest.sceneProfileDefinitions) ||
+            !parseCapabilityPath("roomProfileDefinitions", "world.rooms.v1", hasWorldRoomsCapability,
+                                 outManifest.roomProfileDefinitions) ||
+            !parseCapabilityPath("assetPackDefinitions", "assets.packs.v2", hasAssetPacksCapability,
+                                 outManifest.assetPackDefinitions) ||
+            !parseCapabilityPath("renderInspectorDefinitions", "debug.render_inspector.v1", hasRenderInspectorCapability,
+                                 outManifest.renderInspectorDefinitions)) {
             return false;
         }
     }
@@ -17151,6 +17342,728 @@ bool ExternalModManager::TryParseDebugOverlayDefinitions(const std::string& cont
     return true;
 }
 
+bool ExternalModManager::TryParseMaterialDefinitions(const std::string& content, int32_t apiVersion,
+                                                     std::vector<ExternalModMaterialDefinition>& outDefinitions,
+                                                     std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "materialDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("materials.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "materials.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("materials") || !json["materials"].is_array()) {
+        outError = "materials.json must contain materials[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    for (size_t i = 0; i < json["materials"].size(); ++i) {
+        const auto& material = json["materials"][i];
+        if (!material.is_object()) {
+            outError = "materials[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModMaterialDefinition definition;
+        if (!ValidateRequiredString(material, "id", definition.id, outError)) {
+            outError = "materials[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "materials[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate material id: " + definition.id;
+            return false;
+        }
+
+        if (material.contains("bindOtrPath")) {
+            if (!material["bindOtrPath"].is_string()) {
+                outError = "materials[" + std::to_string(i) + "].bindOtrPath must be string";
+                return false;
+            }
+            definition.bindOtrPath = material["bindOtrPath"].get<std::string>();
+        }
+        if (material.contains("shadingModel")) {
+            if (!material["shadingModel"].is_string()) {
+                outError = "materials[" + std::to_string(i) + "].shadingModel must be string";
+                return false;
+            }
+            definition.shadingModel = ToLower(material["shadingModel"].get<std::string>());
+        }
+        if (material.contains("normalScale")) {
+            if (!material["normalScale"].is_number()) {
+                outError = "materials[" + std::to_string(i) + "].normalScale must be numeric";
+                return false;
+            }
+            definition.normalScale = std::clamp(material["normalScale"].get<float>(), 0.0f, 8.0f);
+        }
+        if (material.contains("emissiveIntensity")) {
+            if (!material["emissiveIntensity"].is_number()) {
+                outError = "materials[" + std::to_string(i) + "].emissiveIntensity must be numeric";
+                return false;
+            }
+            definition.emissiveIntensity = std::clamp(material["emissiveIntensity"].get<float>(), 0.0f, 32.0f);
+        }
+        if (material.contains("parallaxScale")) {
+            if (!material["parallaxScale"].is_number()) {
+                outError = "materials[" + std::to_string(i) + "].parallaxScale must be numeric";
+                return false;
+            }
+            definition.parallaxScale = std::clamp(material["parallaxScale"].get<float>(), 0.0f, 0.2f);
+        }
+        if (material.contains("alphaMode")) {
+            if (!material["alphaMode"].is_string()) {
+                outError = "materials[" + std::to_string(i) + "].alphaMode must be string";
+                return false;
+            }
+            definition.alphaMode = ToLower(material["alphaMode"].get<std::string>());
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParsePbrDefinitions(const std::string& content, int32_t apiVersion,
+                                                std::vector<ExternalModPbrDefinition>& outDefinitions,
+                                                std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "pbrDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("pbr_profiles.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "pbr_profiles.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("profiles") || !json["profiles"].is_array()) {
+        outError = "pbr_profiles.json must contain profiles[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    for (size_t i = 0; i < json["profiles"].size(); ++i) {
+        const auto& profile = json["profiles"][i];
+        if (!profile.is_object()) {
+            outError = "profiles[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModPbrDefinition definition;
+        if (!ValidateRequiredString(profile, "id", definition.id, outError)) {
+            outError = "profiles[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "profiles[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate pbr profile id: " + definition.id;
+            return false;
+        }
+
+        if (profile.contains("enabled")) {
+            if (!profile["enabled"].is_boolean()) {
+                outError = "profiles[" + std::to_string(i) + "].enabled must be boolean";
+                return false;
+            }
+            definition.enabled = profile["enabled"].get<bool>();
+        }
+        if (profile.contains("enablePom")) {
+            if (!profile["enablePom"].is_boolean()) {
+                outError = "profiles[" + std::to_string(i) + "].enablePom must be boolean";
+                return false;
+            }
+            definition.enablePom = profile["enablePom"].get<bool>();
+        }
+        if (profile.contains("pomSteps")) {
+            if (!profile["pomSteps"].is_number_integer()) {
+                outError = "profiles[" + std::to_string(i) + "].pomSteps must be integer";
+                return false;
+            }
+            definition.pomSteps = std::clamp(profile["pomSteps"].get<int32_t>(), 1, 64);
+        }
+        if (profile.contains("pomMaxDistance")) {
+            if (!profile["pomMaxDistance"].is_number()) {
+                outError = "profiles[" + std::to_string(i) + "].pomMaxDistance must be numeric";
+                return false;
+            }
+            definition.pomMaxDistance = std::clamp(profile["pomMaxDistance"].get<float>(), 0.0f, 10000.0f);
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseLightingDefinitions(const std::string& content, int32_t apiVersion,
+                                                     std::vector<ExternalModLightProfileDefinition>& outDefinitions,
+                                                     std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "lightingDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("light_profiles.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "light_profiles.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("profiles") || !json["profiles"].is_array()) {
+        outError = "light_profiles.json must contain profiles[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    for (size_t i = 0; i < json["profiles"].size(); ++i) {
+        const auto& profile = json["profiles"][i];
+        if (!profile.is_object()) {
+            outError = "profiles[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModLightProfileDefinition definition;
+        if (!ValidateRequiredString(profile, "id", definition.id, outError)) {
+            outError = "profiles[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "profiles[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate light profile id: " + definition.id;
+            return false;
+        }
+
+        if (profile.contains("type")) {
+            if (!profile["type"].is_string()) {
+                outError = "profiles[" + std::to_string(i) + "].type must be string";
+                return false;
+            }
+            definition.lightType = ToLower(profile["type"].get<std::string>());
+        }
+        if (profile.contains("color")) {
+            if (!profile["color"].is_array() || profile["color"].size() != 3 ||
+                !profile["color"][0].is_number() || !profile["color"][1].is_number() || !profile["color"][2].is_number()) {
+                outError = "profiles[" + std::to_string(i) + "].color must be [r,g,b] numeric";
+                return false;
+            }
+            definition.colorLinear = { {
+                std::clamp(profile["color"][0].get<float>(), 0.0f, 16.0f),
+                std::clamp(profile["color"][1].get<float>(), 0.0f, 16.0f),
+                std::clamp(profile["color"][2].get<float>(), 0.0f, 16.0f),
+            } };
+        }
+        if (profile.contains("intensity")) {
+            if (!profile["intensity"].is_number()) {
+                outError = "profiles[" + std::to_string(i) + "].intensity must be numeric";
+                return false;
+            }
+            definition.intensity = std::clamp(profile["intensity"].get<float>(), 0.0f, 50000.0f);
+        }
+        if (profile.contains("radius")) {
+            if (!profile["radius"].is_number()) {
+                outError = "profiles[" + std::to_string(i) + "].radius must be numeric";
+                return false;
+            }
+            definition.radius = std::clamp(profile["radius"].get<float>(), 0.0f, 10000.0f);
+        }
+        if (profile.contains("flicker")) {
+            if (!profile["flicker"].is_boolean()) {
+                outError = "profiles[" + std::to_string(i) + "].flicker must be boolean";
+                return false;
+            }
+            definition.flicker = profile["flicker"].get<bool>();
+        }
+        if (profile.contains("flickerAmount")) {
+            if (!profile["flickerAmount"].is_number()) {
+                outError = "profiles[" + std::to_string(i) + "].flickerAmount must be numeric";
+                return false;
+            }
+            definition.flickerAmount = std::clamp(profile["flickerAmount"].get<float>(), 0.0f, 1.0f);
+        }
+        if (profile.contains("defaultLifetimeMs")) {
+            if (!profile["defaultLifetimeMs"].is_number_integer()) {
+                outError = "profiles[" + std::to_string(i) + "].defaultLifetimeMs must be integer";
+                return false;
+            }
+            definition.defaultLifetimeMs = std::clamp(profile["defaultLifetimeMs"].get<int32_t>(), 0, 600000);
+        }
+        if (profile.contains("castShadows")) {
+            if (!profile["castShadows"].is_boolean()) {
+                outError = "profiles[" + std::to_string(i) + "].castShadows must be boolean";
+                return false;
+            }
+            definition.castShadows = profile["castShadows"].get<bool>();
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParsePostFxDefinitions(const std::string& content, int32_t apiVersion,
+                                                   std::vector<ExternalModPostFxPresetDefinition>& outDefinitions,
+                                                   std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "postFxDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("postfx_presets.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "postfx_presets.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("presets") || !json["presets"].is_array()) {
+        outError = "postfx_presets.json must contain presets[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    for (size_t i = 0; i < json["presets"].size(); ++i) {
+        const auto& preset = json["presets"][i];
+        if (!preset.is_object()) {
+            outError = "presets[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModPostFxPresetDefinition definition;
+        if (!ValidateRequiredString(preset, "id", definition.id, outError)) {
+            outError = "presets[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "presets[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate postfx preset id: " + definition.id;
+            return false;
+        }
+
+        if (preset.contains("tonemap")) {
+            if (!preset["tonemap"].is_string()) {
+                outError = "presets[" + std::to_string(i) + "].tonemap must be string";
+                return false;
+            }
+            definition.tonemap = ToLower(preset["tonemap"].get<std::string>());
+        }
+        if (preset.contains("exposure")) {
+            if (!preset["exposure"].is_number()) {
+                outError = "presets[" + std::to_string(i) + "].exposure must be numeric";
+                return false;
+            }
+            definition.exposure = std::clamp(preset["exposure"].get<float>(), 0.0f, 8.0f);
+        }
+        if (preset.contains("bloom")) {
+            if (!preset["bloom"].is_number()) {
+                outError = "presets[" + std::to_string(i) + "].bloom must be numeric";
+                return false;
+            }
+            definition.bloom = std::clamp(preset["bloom"].get<float>(), 0.0f, 10.0f);
+        }
+        if (preset.contains("fogColor")) {
+            if (!preset["fogColor"].is_array() || preset["fogColor"].size() != 4) {
+                outError = "presets[" + std::to_string(i) + "].fogColor must be [r,g,b,a]";
+                return false;
+            }
+            for (size_t c = 0; c < 4; ++c) {
+                if (!preset["fogColor"][c].is_number()) {
+                    outError = "presets[" + std::to_string(i) + "].fogColor must be numeric";
+                    return false;
+                }
+                definition.fogColor[c] = std::clamp(preset["fogColor"][c].get<float>(), 0.0f, 1.0f);
+            }
+        }
+        if (preset.contains("fogDensity")) {
+            if (!preset["fogDensity"].is_number()) {
+                outError = "presets[" + std::to_string(i) + "].fogDensity must be numeric";
+                return false;
+            }
+            definition.fogDensity = std::clamp(preset["fogDensity"].get<float>(), 0.0f, 1.0f);
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseSceneProfileDefinitions(const std::string& content, int32_t apiVersion,
+                                                         std::vector<ExternalModSceneProfileDefinition>& outDefinitions,
+                                                         std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "sceneProfileDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("scene_profiles.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "scene_profiles.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("profiles") || !json["profiles"].is_array()) {
+        outError = "scene_profiles.json must contain profiles[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    for (size_t i = 0; i < json["profiles"].size(); ++i) {
+        const auto& profile = json["profiles"][i];
+        if (!profile.is_object()) {
+            outError = "profiles[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModSceneProfileDefinition definition;
+        if (!ValidateRequiredString(profile, "id", definition.id, outError)) {
+            outError = "profiles[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "profiles[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate scene profile id: " + definition.id;
+            return false;
+        }
+        if (profile.contains("sceneId")) {
+            if (!profile["sceneId"].is_number_integer()) {
+                outError = "profiles[" + std::to_string(i) + "].sceneId must be integer";
+                return false;
+            }
+            definition.sceneId = static_cast<int16_t>(profile["sceneId"].get<int32_t>());
+        }
+        if (profile.contains("postFxPresetId")) {
+            if (!profile["postFxPresetId"].is_string()) {
+                outError = "profiles[" + std::to_string(i) + "].postFxPresetId must be string";
+                return false;
+            }
+            definition.postFxPresetId = profile["postFxPresetId"].get<std::string>();
+        }
+        if (profile.contains("skylightProfileId")) {
+            if (!profile["skylightProfileId"].is_string()) {
+                outError = "profiles[" + std::to_string(i) + "].skylightProfileId must be string";
+                return false;
+            }
+            definition.skylightProfileId = profile["skylightProfileId"].get<std::string>();
+        }
+        if (profile.contains("ambientColor")) {
+            if (!profile["ambientColor"].is_array() || profile["ambientColor"].size() != 3) {
+                outError = "profiles[" + std::to_string(i) + "].ambientColor must be [r,g,b]";
+                return false;
+            }
+            for (size_t c = 0; c < 3; ++c) {
+                if (!profile["ambientColor"][c].is_number()) {
+                    outError = "profiles[" + std::to_string(i) + "].ambientColor must be numeric";
+                    return false;
+                }
+                definition.ambientColor[c] = std::clamp(profile["ambientColor"][c].get<float>(), 0.0f, 1.0f);
+            }
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseRoomProfileDefinitions(const std::string& content, int32_t apiVersion,
+                                                        std::vector<ExternalModRoomProfileDefinition>& outDefinitions,
+                                                        std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "roomProfileDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("room_profiles.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "room_profiles.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("profiles") || !json["profiles"].is_array()) {
+        outError = "room_profiles.json must contain profiles[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    for (size_t i = 0; i < json["profiles"].size(); ++i) {
+        const auto& profile = json["profiles"][i];
+        if (!profile.is_object()) {
+            outError = "profiles[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModRoomProfileDefinition definition;
+        if (!ValidateRequiredString(profile, "id", definition.id, outError)) {
+            outError = "profiles[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "profiles[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate room profile id: " + definition.id;
+            return false;
+        }
+
+        if (!profile.contains("roomId") || !profile["roomId"].is_number_integer()) {
+            outError = "profiles[" + std::to_string(i) + "].roomId must be integer";
+            return false;
+        }
+        definition.roomId = static_cast<int16_t>(profile["roomId"].get<int32_t>());
+
+        if (profile.contains("sceneId")) {
+            if (!profile["sceneId"].is_number_integer()) {
+                outError = "profiles[" + std::to_string(i) + "].sceneId must be integer";
+                return false;
+            }
+            definition.sceneId = static_cast<int16_t>(profile["sceneId"].get<int32_t>());
+        }
+        if (profile.contains("postFxPresetId")) {
+            if (!profile["postFxPresetId"].is_string()) {
+                outError = "profiles[" + std::to_string(i) + "].postFxPresetId must be string";
+                return false;
+            }
+            definition.postFxPresetId = profile["postFxPresetId"].get<std::string>();
+        }
+        if (profile.contains("skylightProfileId")) {
+            if (!profile["skylightProfileId"].is_string()) {
+                outError = "profiles[" + std::to_string(i) + "].skylightProfileId must be string";
+                return false;
+            }
+            definition.skylightProfileId = profile["skylightProfileId"].get<std::string>();
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseAssetPackDefinitions(const std::string& content, int32_t apiVersion,
+                                                      std::vector<ExternalModAssetPackDefinition>& outDefinitions,
+                                                      std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "assetPackDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("packs.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "packs.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("packs") || !json["packs"].is_array()) {
+        outError = "packs.json must contain packs[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    for (size_t i = 0; i < json["packs"].size(); ++i) {
+        const auto& pack = json["packs"][i];
+        if (!pack.is_object()) {
+            outError = "packs[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModAssetPackDefinition definition;
+        if (!ValidateRequiredString(pack, "id", definition.id, outError)) {
+            outError = "packs[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "packs[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate asset pack id: " + definition.id;
+            return false;
+        }
+
+        if (pack.contains("priority")) {
+            if (!pack["priority"].is_number_integer()) {
+                outError = "packs[" + std::to_string(i) + "].priority must be integer";
+                return false;
+            }
+            definition.priority = std::clamp(pack["priority"].get<int32_t>(), -4096, 4096);
+        }
+        if (pack.contains("materialSetPath")) {
+            if (!pack["materialSetPath"].is_string()) {
+                outError = "packs[" + std::to_string(i) + "].materialSetPath must be string";
+                return false;
+            }
+            definition.materialSetPath = pack["materialSetPath"].get<std::string>();
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseRenderInspectorDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModRenderInspectorDefinition>& outDefinitions,
+    std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "renderInspectorDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("render_inspector.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "render_inspector.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("overlays") || !json["overlays"].is_array()) {
+        outError = "render_inspector.json must contain overlays[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    for (size_t i = 0; i < json["overlays"].size(); ++i) {
+        const auto& overlay = json["overlays"][i];
+        if (!overlay.is_object()) {
+            outError = "overlays[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModRenderInspectorDefinition definition;
+        if (!ValidateRequiredString(overlay, "id", definition.id, outError)) {
+            outError = "overlays[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "overlays[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate render inspector overlay id: " + definition.id;
+            return false;
+        }
+
+        if (overlay.contains("enabledByDefault")) {
+            if (!overlay["enabledByDefault"].is_boolean()) {
+                outError = "overlays[" + std::to_string(i) + "].enabledByDefault must be boolean";
+                return false;
+            }
+            definition.enabledByDefault = overlay["enabledByDefault"].get<bool>();
+        }
+        if (overlay.contains("showMaterialUnderCursor")) {
+            if (!overlay["showMaterialUnderCursor"].is_boolean()) {
+                outError = "overlays[" + std::to_string(i) + "].showMaterialUnderCursor must be boolean";
+                return false;
+            }
+            definition.showMaterialUnderCursor = overlay["showMaterialUnderCursor"].get<bool>();
+        }
+        if (overlay.contains("showLightBudget")) {
+            if (!overlay["showLightBudget"].is_boolean()) {
+                outError = "overlays[" + std::to_string(i) + "].showLightBudget must be boolean";
+                return false;
+            }
+            definition.showLightBudget = overlay["showLightBudget"].get<bool>();
+        }
+        if (overlay.contains("showPostFxState")) {
+            if (!overlay["showPostFxState"].is_boolean()) {
+                outError = "overlays[" + std::to_string(i) + "].showPostFxState must be boolean";
+                return false;
+            }
+            definition.showPostFxState = overlay["showPostFxState"].get<bool>();
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
 bool ExternalModManager::TryParseFxPresetDefinitions(const std::string& content, int32_t apiVersion,
                                                      std::vector<ExternalModFxPresetDefinition>& outDefinitions,
                                                      std::string& outError) {
@@ -18660,6 +19573,146 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             }
         }
 
+        if (ManifestHasCapability(package.manifest, "render.materials.v1")) {
+            std::filesystem::path materialsPath;
+            if (!IsSafePackageRelativePath(package.manifest.materialDefinitions, materialsPath, outError)) {
+                outError = "Invalid materialDefinitions: " + outError;
+                return false;
+            }
+
+            std::string materialsContent;
+            if (!ReadFileFromPackage(package, materialsPath, kMaxMaterialDefinitionBytes, materialsContent, outError)) {
+                outError = "Failed to read materialDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseMaterialDefinitions(materialsContent, runtime.apiVersion, runtime.materialDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "render.pbr.v1")) {
+            std::filesystem::path pbrPath;
+            if (!IsSafePackageRelativePath(package.manifest.pbrDefinitions, pbrPath, outError)) {
+                outError = "Invalid pbrDefinitions: " + outError;
+                return false;
+            }
+
+            std::string pbrContent;
+            if (!ReadFileFromPackage(package, pbrPath, kMaxPbrDefinitionBytes, pbrContent, outError)) {
+                outError = "Failed to read pbrDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParsePbrDefinitions(pbrContent, runtime.apiVersion, runtime.pbrDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "render.lighting.v1")) {
+            std::filesystem::path lightingPath;
+            if (!IsSafePackageRelativePath(package.manifest.lightingDefinitions, lightingPath, outError)) {
+                outError = "Invalid lightingDefinitions: " + outError;
+                return false;
+            }
+
+            std::string lightingContent;
+            if (!ReadFileFromPackage(package, lightingPath, kMaxLightingDefinitionBytes, lightingContent, outError)) {
+                outError = "Failed to read lightingDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseLightingDefinitions(lightingContent, runtime.apiVersion, runtime.lightProfiles, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "render.postfx.v1")) {
+            std::filesystem::path postFxPath;
+            if (!IsSafePackageRelativePath(package.manifest.postFxDefinitions, postFxPath, outError)) {
+                outError = "Invalid postFxDefinitions: " + outError;
+                return false;
+            }
+
+            std::string postFxContent;
+            if (!ReadFileFromPackage(package, postFxPath, kMaxPostFxDefinitionBytes, postFxContent, outError)) {
+                outError = "Failed to read postFxDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParsePostFxDefinitions(postFxContent, runtime.apiVersion, runtime.postFxPresets, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "world.scenes.v1")) {
+            std::filesystem::path sceneProfilesPath;
+            if (!IsSafePackageRelativePath(package.manifest.sceneProfileDefinitions, sceneProfilesPath, outError)) {
+                outError = "Invalid sceneProfileDefinitions: " + outError;
+                return false;
+            }
+
+            std::string sceneProfilesContent;
+            if (!ReadFileFromPackage(package, sceneProfilesPath, kMaxSceneProfileDefinitionBytes, sceneProfilesContent,
+                                     outError)) {
+                outError = "Failed to read sceneProfileDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseSceneProfileDefinitions(sceneProfilesContent, runtime.apiVersion, runtime.sceneProfiles, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "world.rooms.v1")) {
+            std::filesystem::path roomProfilesPath;
+            if (!IsSafePackageRelativePath(package.manifest.roomProfileDefinitions, roomProfilesPath, outError)) {
+                outError = "Invalid roomProfileDefinitions: " + outError;
+                return false;
+            }
+
+            std::string roomProfilesContent;
+            if (!ReadFileFromPackage(package, roomProfilesPath, kMaxRoomProfileDefinitionBytes, roomProfilesContent,
+                                     outError)) {
+                outError = "Failed to read roomProfileDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseRoomProfileDefinitions(roomProfilesContent, runtime.apiVersion, runtime.roomProfiles, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "assets.packs.v2")) {
+            std::filesystem::path assetPackPath;
+            if (!IsSafePackageRelativePath(package.manifest.assetPackDefinitions, assetPackPath, outError)) {
+                outError = "Invalid assetPackDefinitions: " + outError;
+                return false;
+            }
+
+            std::string assetPackContent;
+            if (!ReadFileFromPackage(package, assetPackPath, kMaxAssetPackDefinitionBytes, assetPackContent, outError)) {
+                outError = "Failed to read assetPackDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseAssetPackDefinitions(assetPackContent, runtime.apiVersion, runtime.assetPackDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "debug.render_inspector.v1")) {
+            std::filesystem::path inspectorPath;
+            if (!IsSafePackageRelativePath(package.manifest.renderInspectorDefinitions, inspectorPath, outError)) {
+                outError = "Invalid renderInspectorDefinitions: " + outError;
+                return false;
+            }
+
+            std::string inspectorContent;
+            if (!ReadFileFromPackage(package, inspectorPath, kMaxRenderInspectorDefinitionBytes, inspectorContent,
+                                     outError)) {
+                outError = "Failed to read renderInspectorDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseRenderInspectorDefinitions(inspectorContent, runtime.apiVersion, runtime.renderInspectorDefinitions,
+                                                    outError)) {
+                return false;
+            }
+        }
+
         const auto validateV4CapabilityJsonFile = [&](const char* fieldName, const char* capabilityId,
                                                       const std::string& manifestPathValue, uint64_t maxBytes,
                                                       bool requireSchemaV1) -> bool {
@@ -18765,6 +19818,24 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
                                           package.manifest.stateDefinitions, kMaxStateDefinitionBytes, true) ||
             !validateV4CapabilityJsonFile("spellDefinitions", "spells.catalog.v1",
                                           package.manifest.spellDefinitions, kMaxSpellDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("materialDefinitions", "render.materials.v1",
+                                          package.manifest.materialDefinitions, kMaxMaterialDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("pbrDefinitions", "render.pbr.v1", package.manifest.pbrDefinitions,
+                                          kMaxPbrDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("lightingDefinitions", "render.lighting.v1",
+                                          package.manifest.lightingDefinitions, kMaxLightingDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("postFxDefinitions", "render.postfx.v1", package.manifest.postFxDefinitions,
+                                          kMaxPostFxDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("sceneProfileDefinitions", "world.scenes.v1",
+                                          package.manifest.sceneProfileDefinitions, kMaxSceneProfileDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("roomProfileDefinitions", "world.rooms.v1",
+                                          package.manifest.roomProfileDefinitions, kMaxRoomProfileDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("assetPackDefinitions", "assets.packs.v2",
+                                          package.manifest.assetPackDefinitions, kMaxAssetPackDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("renderInspectorDefinitions", "debug.render_inspector.v1",
+                                          package.manifest.renderInspectorDefinitions, kMaxRenderInspectorDefinitionBytes,
                                           true)) {
             return false;
         }
@@ -18802,6 +19873,18 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
         };
         const auto hasSpellRef = [&](const std::string& spellId) {
             return spellId.empty() || ExternalModContentRegistry::FindSpellDefinitionById(runtime, spellId) != nullptr;
+        };
+        const auto hasPostFxPresetRef = [&](const std::string& presetId) {
+            return presetId.empty() || std::find_if(runtime.postFxPresets.begin(), runtime.postFxPresets.end(),
+                                                    [&](const ExternalModPostFxPresetDefinition& definition) {
+                                                        return definition.id == presetId;
+                                                    }) != runtime.postFxPresets.end();
+        };
+        const auto hasLightProfileRef = [&](const std::string& profileId) {
+            return profileId.empty() || std::find_if(runtime.lightProfiles.begin(), runtime.lightProfiles.end(),
+                                                     [&](const ExternalModLightProfileDefinition& definition) {
+                                                         return definition.id == profileId;
+                                                     }) != runtime.lightProfiles.end();
         };
 
         for (const auto& profile : runtime.itemUseProfiles) {
@@ -18869,6 +19952,30 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
         for (const auto& itemDefinition : runtime.itemDefinitions) {
             if (!itemDefinition.useProfile.empty() && ExternalModContentRegistry::FindItemUseProfileById(runtime, itemDefinition.useProfile) == nullptr) {
                 outError = "item references unknown useProfile: " + itemDefinition.id + " -> " + itemDefinition.useProfile;
+                return false;
+            }
+        }
+        for (const auto& sceneProfile : runtime.sceneProfiles) {
+            if (!hasPostFxPresetRef(sceneProfile.postFxPresetId)) {
+                outError = "scene profile references unknown postFx preset: " + sceneProfile.id + " -> " +
+                           sceneProfile.postFxPresetId;
+                return false;
+            }
+            if (!hasLightProfileRef(sceneProfile.skylightProfileId)) {
+                outError = "scene profile references unknown skylight profile: " + sceneProfile.id + " -> " +
+                           sceneProfile.skylightProfileId;
+                return false;
+            }
+        }
+        for (const auto& roomProfile : runtime.roomProfiles) {
+            if (!hasPostFxPresetRef(roomProfile.postFxPresetId)) {
+                outError = "room profile references unknown postFx preset: " + roomProfile.id + " -> " +
+                           roomProfile.postFxPresetId;
+                return false;
+            }
+            if (!hasLightProfileRef(roomProfile.skylightProfileId)) {
+                outError = "room profile references unknown skylight profile: " + roomProfile.id + " -> " +
+                           roomProfile.skylightProfileId;
                 return false;
             }
         }
@@ -20543,6 +21650,161 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
             case ExternalModActionType::DebugHideOverlay:
                 package.runtime.debugOverlayVisibility[action.overlayId] = false;
                 break;
+            case ExternalModActionType::WorldSetSceneProfile: {
+                const std::string resolvedProfileId = ResolveProfileIdForMod(package.manifest.id, action.renderProfileId);
+                const auto sceneProfile =
+                    std::find_if(package.runtime.sceneProfiles.begin(), package.runtime.sceneProfiles.end(),
+                                 [&](const ExternalModSceneProfileDefinition& definition) {
+                                     return definition.id == resolvedProfileId;
+                                 });
+                if (sceneProfile == package.runtime.sceneProfiles.end()) {
+                    DisableRuntime(package, "world.setSceneProfile references unknown profileId: " + resolvedProfileId);
+                    return;
+                }
+                const int16_t resolvedScene = action.sceneId >= 0
+                                                  ? static_cast<int16_t>(action.sceneId)
+                                                  : static_cast<int16_t>(gPlayState != nullptr ? gPlayState->sceneNum : -1);
+                package.runtime.activeSceneProfileId = resolvedProfileId;
+                package.runtime.globalBlackboard["__world_scene_profile"] = resolvedProfileId;
+                package.runtime.globalBlackboard["__world_scene_profile_scene"] = std::to_string(resolvedScene);
+                ExternalModHookEventContext context;
+                context.scene = resolvedScene;
+                context.value = resolvedProfileId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnWorldSceneLoaded, context,
+                                                                    "OnWorldSceneLoaded");
+                break;
+            }
+            case ExternalModActionType::WorldSetRoomProfile: {
+                const std::string resolvedProfileId = ResolveProfileIdForMod(package.manifest.id, action.renderProfileId);
+                const auto roomProfile =
+                    std::find_if(package.runtime.roomProfiles.begin(), package.runtime.roomProfiles.end(),
+                                 [&](const ExternalModRoomProfileDefinition& definition) {
+                                     return definition.id == resolvedProfileId;
+                                 });
+                if (roomProfile == package.runtime.roomProfiles.end()) {
+                    DisableRuntime(package, "world.setRoomProfile references unknown profileId: " + resolvedProfileId);
+                    return;
+                }
+                const int16_t resolvedScene = action.sceneId >= 0
+                                                  ? static_cast<int16_t>(action.sceneId)
+                                                  : static_cast<int16_t>(gPlayState != nullptr ? gPlayState->sceneNum : -1);
+                const int16_t resolvedRoom = action.roomId >= 0
+                                                 ? static_cast<int16_t>(action.roomId)
+                                                 : static_cast<int16_t>(gPlayState != nullptr ? gPlayState->roomCtx.curRoom.num
+                                                                                             : -1);
+                package.runtime.activeRoomProfileId = resolvedProfileId;
+                package.runtime.globalBlackboard["__world_room_profile"] = resolvedProfileId;
+                package.runtime.globalBlackboard["__world_room_profile_scene"] = std::to_string(resolvedScene);
+                package.runtime.globalBlackboard["__world_room_profile_room"] = std::to_string(resolvedRoom);
+                ExternalModHookEventContext context;
+                context.scene = resolvedScene;
+                context.value = resolvedProfileId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnWorldRoomEntered, context,
+                                                                    "OnWorldRoomEntered");
+                break;
+            }
+            case ExternalModActionType::RenderSetPostFxPreset: {
+                const std::string resolvedPresetId = ResolveProfileIdForMod(package.manifest.id, action.renderProfileId);
+                const auto preset =
+                    std::find_if(package.runtime.postFxPresets.begin(), package.runtime.postFxPresets.end(),
+                                 [&](const ExternalModPostFxPresetDefinition& definition) {
+                                     return definition.id == resolvedPresetId;
+                                 });
+                if (preset == package.runtime.postFxPresets.end()) {
+                    DisableRuntime(package, "render.setPostFxPreset references unknown presetId: " + resolvedPresetId);
+                    return;
+                }
+                package.runtime.activePostFxPresetId = resolvedPresetId;
+                package.runtime.globalBlackboard["__render_postfx_preset"] = resolvedPresetId;
+                package.runtime.globalBlackboard["__render_postfx_blend"] = std::to_string(action.blendValue);
+                if (action.durationMs > 0) {
+                    package.runtime.globalBlackboard["__render_postfx_duration_ms"] = std::to_string(action.durationMs);
+                }
+                break;
+            }
+            case ExternalModActionType::RenderSpawnLight: {
+                const std::string resolvedProfileId = ResolveProfileIdForMod(package.manifest.id, action.renderProfileId);
+                const auto lightProfile =
+                    std::find_if(package.runtime.lightProfiles.begin(), package.runtime.lightProfiles.end(),
+                                 [&](const ExternalModLightProfileDefinition& definition) {
+                                     return definition.id == resolvedProfileId;
+                                 });
+                if (lightProfile == package.runtime.lightProfiles.end()) {
+                    DisableRuntime(package, "render.spawnLight references unknown profileId: " + resolvedProfileId);
+                    return;
+                }
+                ExternalModRuntime::DynamicLightState state;
+                state.handle = package.runtime.nextDynamicLightHandle++;
+                state.profileId = resolvedProfileId;
+                const int32_t lightLifetimeMs =
+                    action.durationMs > 0 ? action.durationMs : std::max(0, lightProfile->defaultLifetimeMs);
+                state.remainingMs = lightLifetimeMs > 0 ? lightLifetimeMs : -1;
+                if (action.actorHandle != 0) {
+                    if (auto* actorInstance = FindActorInstance(package.runtime, action.actorHandle); actorInstance != nullptr) {
+                        state.actorAddress = 0;
+                        state.actorId = -1;
+                        state.posX = actorInstance->posX;
+                        state.posY = actorInstance->posY;
+                        state.posZ = actorInstance->posZ;
+                    }
+                } else if (gPlayState != nullptr) {
+                    auto* lightPlayer = GET_PLAYER(gPlayState);
+                    if (lightPlayer != nullptr) {
+                        state.actorAddress = reinterpret_cast<uintptr_t>(&lightPlayer->actor);
+                        state.actorId = lightPlayer->actor.id;
+                        state.posX = lightPlayer->actor.world.pos.x;
+                        state.posY = lightPlayer->actor.world.pos.y;
+                        state.posZ = lightPlayer->actor.world.pos.z;
+                    }
+                }
+                package.runtime.activeDynamicLights.push_back(state);
+                if (!action.fxStoreKey.empty()) {
+                    package.runtime.globalBlackboard[action.fxStoreKey] = std::to_string(state.handle);
+                } else {
+                    package.runtime.globalBlackboard["__render_last_light_handle"] = std::to_string(state.handle);
+                }
+                break;
+            }
+            case ExternalModActionType::RenderSetSkylight: {
+                const std::string resolvedProfileId = ResolveProfileIdForMod(package.manifest.id, action.renderProfileId);
+                const auto lightProfile =
+                    std::find_if(package.runtime.lightProfiles.begin(), package.runtime.lightProfiles.end(),
+                                 [&](const ExternalModLightProfileDefinition& definition) {
+                                     return definition.id == resolvedProfileId;
+                                 });
+                if (lightProfile == package.runtime.lightProfiles.end()) {
+                    DisableRuntime(package, "render.setSkylight references unknown profileId: " + resolvedProfileId);
+                    return;
+                }
+                package.runtime.activeSkylightProfileId = resolvedProfileId;
+                package.runtime.globalBlackboard["__render_skylight_profile"] = resolvedProfileId;
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                context.value = resolvedProfileId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnWorldSkyboxChanged, context,
+                                                                    "OnWorldSkyboxChanged");
+                break;
+            }
+            case ExternalModActionType::RenderOverrideMaterial: {
+                const std::string resolvedMaterialId = ResolveProfileIdForMod(package.manifest.id, action.renderProfileId);
+                const auto materialDefinition =
+                    std::find_if(package.runtime.materialDefinitions.begin(), package.runtime.materialDefinitions.end(),
+                                 [&](const ExternalModMaterialDefinition& definition) {
+                                     return definition.id == resolvedMaterialId;
+                                 });
+                if (materialDefinition == package.runtime.materialDefinitions.end()) {
+                    DisableRuntime(package, "render.overrideMaterial references unknown materialId: " + resolvedMaterialId);
+                    return;
+                }
+                ExternalModRuntime::MaterialOverrideState overrideState;
+                overrideState.match = action.renderMatch;
+                overrideState.materialId = resolvedMaterialId;
+                overrideState.scope = action.renderScope.empty() ? "global" : action.renderScope;
+                overrideState.framesRemaining = action.durationFrames > 0 ? action.durationFrames : -1;
+                package.runtime.materialOverrides.push_back(std::move(overrideState));
+                package.runtime.globalBlackboard["__render_last_material_override"] = resolvedMaterialId;
+                break;
+            }
             case ExternalModActionType::InvokeWasm: {
                 if (!package.runtime.wasmRuntime) {
                     DisableRuntime(package, "invokeWasm requested but runtime is unavailable");
@@ -20573,9 +21835,16 @@ void ExternalModManager::DisableRuntime(ExternalModPackage& package, const std::
     package.runtime.inventoryExtPages.clear();
     package.runtime.activeContainerProcesses.clear();
     package.runtime.activeNavPaths.clear();
+    package.runtime.activeDynamicLights.clear();
+    package.runtime.materialOverrides.clear();
     package.runtime.openUiScreens.clear();
     package.runtime.debugOverlayVisibility.clear();
+    package.runtime.activeSceneProfileId.clear();
+    package.runtime.activeRoomProfileId.clear();
+    package.runtime.activePostFxPresetId.clear();
+    package.runtime.activeSkylightProfileId.clear();
     package.runtime.nextNavPathHandle = 1;
+    package.runtime.nextDynamicLightHandle = 1;
     ClearSurfState(package.runtime);
     package.runtime.wasmTargetHandles.clear();
     package.runtime.wasmNextTargetHandle = 1;
@@ -20782,9 +22051,16 @@ void ExternalModManager::OnLoadGame(int32_t fileNum) {
             package.runtime.inventoryExtPages.clear();
             package.runtime.activeContainerProcesses.clear();
             package.runtime.activeNavPaths.clear();
+            package.runtime.activeDynamicLights.clear();
+            package.runtime.materialOverrides.clear();
             package.runtime.openUiScreens.clear();
             package.runtime.debugOverlayVisibility.clear();
+            package.runtime.activeSceneProfileId.clear();
+            package.runtime.activeRoomProfileId.clear();
+            package.runtime.activePostFxPresetId.clear();
+            package.runtime.activeSkylightProfileId.clear();
             package.runtime.nextNavPathHandle = 1;
+            package.runtime.nextDynamicLightHandle = 1;
             for (auto& trigger : package.runtime.frameTriggers) {
                 trigger.wasInside = false;
                 trigger.cooldownRemaining = 0;
@@ -20807,6 +22083,7 @@ void ExternalModManager::OnLoadGame(int32_t fileNum) {
             package.runtime.sceneBlackboard.clear();
             package.runtime.lastSceneSeen = -1;
             package.runtime.lastRoomSeen = -1;
+            package.runtime.lastSkyboxSeen = -1;
             package.runtime.hasLastDayNight = false;
             package.runtime.lastIsNight = false;
             package.runtime.switchSnapshotInitialized = false;
@@ -20863,9 +22140,16 @@ void ExternalModManager::OnSceneInit(int16_t sceneNum) {
             package.runtime.inventoryExtPages.clear();
             package.runtime.activeContainerProcesses.clear();
             package.runtime.activeNavPaths.clear();
+            package.runtime.activeDynamicLights.clear();
+            package.runtime.materialOverrides.clear();
             package.runtime.openUiScreens.clear();
             package.runtime.debugOverlayVisibility.clear();
+            package.runtime.activeSceneProfileId.clear();
+            package.runtime.activeRoomProfileId.clear();
+            package.runtime.activePostFxPresetId.clear();
+            package.runtime.activeSkylightProfileId.clear();
             package.runtime.nextNavPathHandle = 1;
+            package.runtime.nextDynamicLightHandle = 1;
             package.runtime.behaviorStepsThisFrame = 0;
             package.runtime.pendingSignals.clear();
             package.runtime.actorInstances.clear();
@@ -20875,6 +22159,7 @@ void ExternalModManager::OnSceneInit(int16_t sceneNum) {
             package.runtime.lastSceneSeen = sceneNum;
             package.runtime.lastRoomSeen =
                 gPlayState != nullptr ? static_cast<int16_t>(gPlayState->roomCtx.curRoom.num) : static_cast<int16_t>(-1);
+            package.runtime.lastSkyboxSeen = -1;
             package.runtime.hasLastDayNight = false;
             package.runtime.lastIsNight = false;
             package.runtime.switchSnapshotInitialized = false;
@@ -20957,6 +22242,7 @@ void ExternalModManager::OnSceneInit(int16_t sceneNum) {
     ExternalModHookEventContext context;
     context.scene = sceneNum;
     DispatchExtendedHook(ExternalModHookType::OnSceneInit, context, "OnSceneInit");
+    DispatchExtendedHook(ExternalModHookType::OnWorldSceneLoaded, context, "OnWorldSceneLoaded");
     PruneAimCameraStateForUnavailableProfiles();
 
     SyncExtraInventoryGrid();
@@ -21368,8 +22654,34 @@ void ExternalModManager::OnGameFrameUpdate() {
                 continue;
             }
 
+            for (size_t lightIndex = 0; lightIndex < package.runtime.activeDynamicLights.size();) {
+                auto& light = package.runtime.activeDynamicLights[lightIndex];
+                if (light.remainingMs > 0) {
+                    light.remainingMs = std::max(0, light.remainingMs - 16);
+                }
+                if (light.remainingMs == 0) {
+                    package.runtime.activeDynamicLights.erase(
+                        package.runtime.activeDynamicLights.begin() + static_cast<std::ptrdiff_t>(lightIndex));
+                    continue;
+                }
+                ++lightIndex;
+            }
+            for (size_t overrideIndex = 0; overrideIndex < package.runtime.materialOverrides.size();) {
+                auto& overrideState = package.runtime.materialOverrides[overrideIndex];
+                if (overrideState.framesRemaining > 0) {
+                    overrideState.framesRemaining--;
+                }
+                if (overrideState.framesRemaining == 0) {
+                    package.runtime.materialOverrides.erase(
+                        package.runtime.materialOverrides.begin() + static_cast<std::ptrdiff_t>(overrideIndex));
+                    continue;
+                }
+                ++overrideIndex;
+            }
+
             const int16_t currentRoomNum = static_cast<int16_t>(gPlayState->roomCtx.curRoom.num);
             const bool roomChanged = package.runtime.lastSceneSeen != sceneNum || package.runtime.lastRoomSeen != currentRoomNum;
+            const int16_t previousRoomNum = package.runtime.lastRoomSeen;
             package.runtime.lastSceneSeen = sceneNum;
             package.runtime.lastRoomSeen = currentRoomNum;
 
@@ -21381,6 +22693,45 @@ void ExternalModManager::OnGameFrameUpdate() {
             } else if (package.runtime.lastIsNight != isNight) {
                 package.runtime.lastIsNight = isNight;
                 timeOfDayChanged = true;
+            }
+
+            int16_t skyboxId = -1;
+            if (gPlayState->skyboxId >= std::numeric_limits<int16_t>::min() &&
+                gPlayState->skyboxId <= std::numeric_limits<int16_t>::max()) {
+                skyboxId = static_cast<int16_t>(gPlayState->skyboxId);
+            }
+            const bool skyboxChanged =
+                package.runtime.lastSkyboxSeen == -1 ? false : (package.runtime.lastSkyboxSeen != skyboxId);
+            package.runtime.lastSkyboxSeen = skyboxId;
+
+            ExternalModHookEventContext overworldTickContext;
+            overworldTickContext.scene = sceneNum;
+            overworldTickContext.value = isNight ? "night" : "day";
+            DispatchExtendedHook(ExternalModHookType::OnWorldOverworldTick, overworldTickContext, "OnWorldOverworldTick");
+            if (roomChanged) {
+                if (previousRoomNum >= 0) {
+                    ExternalModHookEventContext roomExitContext;
+                    roomExitContext.scene = sceneNum;
+                    roomExitContext.value = std::to_string(previousRoomNum);
+                    DispatchExtendedHook(ExternalModHookType::OnWorldRoomExited, roomExitContext, "OnWorldRoomExited");
+                }
+                ExternalModHookEventContext roomEnterContext;
+                roomEnterContext.scene = sceneNum;
+                roomEnterContext.value = std::to_string(currentRoomNum);
+                DispatchExtendedHook(ExternalModHookType::OnWorldRoomEntered, roomEnterContext, "OnWorldRoomEntered");
+            }
+            if (timeOfDayChanged) {
+                ExternalModHookEventContext todContext;
+                todContext.scene = sceneNum;
+                todContext.value = isNight ? "night" : "day";
+                DispatchExtendedHook(ExternalModHookType::OnWorldTimeOfDayChanged, todContext,
+                                     "OnWorldTimeOfDayChanged");
+            }
+            if (skyboxChanged) {
+                ExternalModHookEventContext skyboxContext;
+                skyboxContext.scene = sceneNum;
+                skyboxContext.value = std::to_string(skyboxId);
+                DispatchExtendedHook(ExternalModHookType::OnWorldSkyboxChanged, skyboxContext, "OnWorldSkyboxChanged");
             }
 
             bool switchFlagChanged = false;
@@ -21824,9 +23175,16 @@ void ExternalModManager::OnPlayDestroy() {
         package.runtime.inventoryExtPages.clear();
         package.runtime.activeContainerProcesses.clear();
         package.runtime.activeNavPaths.clear();
+        package.runtime.activeDynamicLights.clear();
+        package.runtime.materialOverrides.clear();
         package.runtime.openUiScreens.clear();
         package.runtime.debugOverlayVisibility.clear();
+        package.runtime.activeSceneProfileId.clear();
+        package.runtime.activeRoomProfileId.clear();
+        package.runtime.activePostFxPresetId.clear();
+        package.runtime.activeSkylightProfileId.clear();
         package.runtime.nextNavPathHandle = 1;
+        package.runtime.nextDynamicLightHandle = 1;
         package.runtime.hasEffectImpactPosition = false;
         package.runtime.effectImpactPosX = 0.0f;
         package.runtime.effectImpactPosY = 0.0f;
@@ -21839,6 +23197,7 @@ void ExternalModManager::OnPlayDestroy() {
         package.runtime.wasmNextTargetHandle = 1;
         package.runtime.lastSceneSeen = -1;
         package.runtime.lastRoomSeen = -1;
+        package.runtime.lastSkyboxSeen = -1;
         package.runtime.hasLastDayNight = false;
         package.runtime.lastIsNight = false;
         package.runtime.switchSnapshotInitialized = false;

@@ -212,6 +212,14 @@ struct ExternalModManifest {
     std::string fxPresetDefinitions;
     std::string stateDefinitions;
     std::string spellDefinitions;
+    std::string materialDefinitions;
+    std::string pbrDefinitions;
+    std::string lightingDefinitions;
+    std::string postFxDefinitions;
+    std::string sceneProfileDefinitions;
+    std::string roomProfileDefinitions;
+    std::string assetPackDefinitions;
+    std::string renderInspectorDefinitions;
     std::vector<std::string> capabilities;
 };
 
@@ -303,6 +311,12 @@ enum class ExternalModActionType {
     NavReleasePath,
     DebugShowOverlay,
     DebugHideOverlay,
+    WorldSetSceneProfile,
+    WorldSetRoomProfile,
+    RenderSetPostFxPreset,
+    RenderSpawnLight,
+    RenderSetSkylight,
+    RenderOverrideMaterial,
 };
 
 enum class ExternalModStatusType {
@@ -418,6 +432,13 @@ struct ExternalModAction {
     std::string routeId;
     std::string navHandleKey;
     std::string overlayId;
+    std::string renderProfileId;
+    std::string renderMatch;
+    std::string renderScope;
+    int32_t sceneId = -1;
+    int32_t roomId = -1;
+    int32_t durationMs = 0;
+    float blendValue = 1.0f;
     bool boolValue = false;
     bool hasBoolValue = false;
     float floatValue = 0.0f;
@@ -882,6 +903,75 @@ struct ExternalModDebugOverlayDefinition {
     std::string overlayType;
 };
 
+struct ExternalModMaterialDefinition {
+    std::string id;
+    std::string bindOtrPath;
+    std::string shadingModel = "lit_legacy";
+    float normalScale = 1.0f;
+    float emissiveIntensity = 1.0f;
+    float parallaxScale = 0.0f;
+    std::string alphaMode = "opaque";
+};
+
+struct ExternalModPbrDefinition {
+    std::string id;
+    bool enabled = true;
+    bool enablePom = false;
+    int32_t pomSteps = 8;
+    float pomMaxDistance = 1200.0f;
+};
+
+struct ExternalModLightProfileDefinition {
+    std::string id;
+    std::string lightType = "point";
+    std::array<float, 3> colorLinear = { { 1.0f, 1.0f, 1.0f } };
+    float intensity = 1.0f;
+    float radius = 250.0f;
+    bool flicker = false;
+    float flickerAmount = 0.0f;
+    int32_t defaultLifetimeMs = 0;
+    bool castShadows = false;
+};
+
+struct ExternalModPostFxPresetDefinition {
+    std::string id;
+    std::string tonemap = "filmic";
+    float exposure = 1.0f;
+    float bloom = 0.0f;
+    std::array<float, 4> fogColor = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+    float fogDensity = 0.0f;
+};
+
+struct ExternalModSceneProfileDefinition {
+    std::string id;
+    int16_t sceneId = -1;
+    std::string postFxPresetId;
+    std::string skylightProfileId;
+    std::array<float, 3> ambientColor = { { 0.0f, 0.0f, 0.0f } };
+};
+
+struct ExternalModRoomProfileDefinition {
+    std::string id;
+    int16_t sceneId = -1;
+    int16_t roomId = -1;
+    std::string postFxPresetId;
+    std::string skylightProfileId;
+};
+
+struct ExternalModAssetPackDefinition {
+    std::string id;
+    int32_t priority = 0;
+    std::string materialSetPath;
+};
+
+struct ExternalModRenderInspectorDefinition {
+    std::string id;
+    bool enabledByDefault = false;
+    bool showMaterialUnderCursor = true;
+    bool showLightBudget = true;
+    bool showPostFxState = true;
+};
+
 struct ExternalModBehaviorCondition {
     std::string type;
     std::string scope;
@@ -1015,6 +1105,12 @@ enum class ExternalModHookType {
     OnBehaviorNodeChanged,
     OnPathRequested,
     OnPathFailed,
+    OnWorldSceneLoaded,
+    OnWorldRoomEntered,
+    OnWorldRoomExited,
+    OnWorldOverworldTick,
+    OnWorldTimeOfDayChanged,
+    OnWorldSkyboxChanged,
     OnPlayDestroy,
     OnGameFrameUpdate,
 };
@@ -1084,6 +1180,14 @@ struct ExternalModRuntime {
     std::vector<ExternalModRouteDefinition> routeDefinitions;
     std::vector<ExternalModNavBridgeDefinition> navBridgeDefinitions;
     std::vector<ExternalModDebugOverlayDefinition> debugOverlayDefinitions;
+    std::vector<ExternalModMaterialDefinition> materialDefinitions;
+    std::vector<ExternalModPbrDefinition> pbrDefinitions;
+    std::vector<ExternalModLightProfileDefinition> lightProfiles;
+    std::vector<ExternalModPostFxPresetDefinition> postFxPresets;
+    std::vector<ExternalModSceneProfileDefinition> sceneProfiles;
+    std::vector<ExternalModRoomProfileDefinition> roomProfiles;
+    std::vector<ExternalModAssetPackDefinition> assetPackDefinitions;
+    std::vector<ExternalModRenderInspectorDefinition> renderInspectorDefinitions;
     std::vector<ExternalModFxPresetDefinition> fxPresets;
     std::vector<ExternalModStateDefinition> stateDefinitions;
     std::vector<ExternalModSpellDefinition> spellDefinitions;
@@ -1169,6 +1273,22 @@ struct ExternalModRuntime {
         std::string routeId;
         std::vector<ExternalModRouteWaypoint> points;
     };
+    struct DynamicLightState {
+        int32_t handle = 0;
+        std::string profileId;
+        uintptr_t actorAddress = 0;
+        int16_t actorId = -1;
+        float posX = 0.0f;
+        float posY = 0.0f;
+        float posZ = 0.0f;
+        int32_t remainingMs = 0;
+    };
+    struct MaterialOverrideState {
+        std::string match;
+        std::string materialId;
+        std::string scope;
+        int32_t framesRemaining = 0;
+    };
     struct SurfState {
         bool active = false;
         std::string sourceModId;
@@ -1194,11 +1314,18 @@ struct ExternalModRuntime {
     std::vector<InventoryExtPageState> inventoryExtPages;
     std::vector<ContainerProcessState> activeContainerProcesses;
     std::unordered_map<int32_t, NavPathState> activeNavPaths;
+    std::vector<DynamicLightState> activeDynamicLights;
+    std::vector<MaterialOverrideState> materialOverrides;
     std::unordered_set<std::string> openUiScreens;
     std::unordered_map<std::string, bool> debugOverlayVisibility;
+    std::string activeSceneProfileId;
+    std::string activeRoomProfileId;
+    std::string activePostFxPresetId;
+    std::string activeSkylightProfileId;
     SurfState surfState;
     int32_t nextFxHandle = 1;
     int32_t nextNavPathHandle = 1;
+    int32_t nextDynamicLightHandle = 1;
     std::unordered_map<std::string, int32_t> fxHandleByKey;
     std::unordered_map<std::string, int32_t> spellCooldownsById;
     std::unordered_map<std::string, std::string> globalBlackboard;
@@ -1206,6 +1333,7 @@ struct ExternalModRuntime {
     std::vector<std::pair<uint32_t, std::string>> pendingSignals;
     int16_t lastSceneSeen = -1;
     int16_t lastRoomSeen = -1;
+    int16_t lastSkyboxSeen = -1;
     bool hasLastDayNight = false;
     bool lastIsNight = false;
     bool switchSnapshotInitialized = false;

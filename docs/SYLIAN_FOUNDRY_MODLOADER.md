@@ -72,6 +72,17 @@ Use `docs/catalogs.json` as machine-readable source of truth. Common capabilitie
 - `nav.navmesh_bridge.v1` -> `navBridgeDefinitions` (`nav/nav_bridge.json`)
 - `debug.overlay.v1` -> `debugOverlayDefinitions` (`debug/overlays.json`)
 
+### v7 world graphics extension capabilities
+
+- `render.materials.v1` -> `materialDefinitions` (`materials/materials.json`)
+- `render.pbr.v1` -> `pbrDefinitions` (`render/pbr_profiles.json`)
+- `render.lighting.v1` -> `lightingDefinitions` (`lighting/light_profiles.json`)
+- `render.postfx.v1` -> `postFxDefinitions` (`render/postfx_presets.json`)
+- `world.scenes.v1` -> `sceneProfileDefinitions` (`world/scene_profiles.json`)
+- `world.rooms.v1` -> `roomProfileDefinitions` (`world/room_profiles.json`)
+- `assets.packs.v2` -> `assetPackDefinitions` (`assets/packs.json`)
+- `debug.render_inspector.v1` -> `renderInspectorDefinitions` (`debug/render_inspector.json`)
+
 ## Runtime lifecycle
 
 1. **Discover** packages in mods folders
@@ -111,6 +122,23 @@ Content layer:
 - `demo_vanilla_adapters`
 
 These demonstrate a library-style mod (`com.sylian.sss`) plus a dependent content pack (`dependencies[]` enforced by loader).
+
+### v7 world graphics reference suite (frameworks + demos)
+
+Framework layer:
+- `docs/examples/external_mods/lighting_kit`
+- `docs/examples/external_mods/world_profiles`
+- `docs/examples/external_mods/material_helpers`
+
+Content layer:
+- `docs/examples/external_mods/demo_room_profiles`
+- `docs/examples/external_mods/demo_actor_lights`
+- `docs/examples/external_mods/demo_green_fire_magic`
+
+Authoring guides:
+- `docs/examples/external_mods/v7_reference_suite_docs/PACK_AUTHOR_GUIDE.md`
+- `docs/examples/external_mods/v7_reference_suite_docs/FRAMEWORK_AUTHOR_GUIDE.md`
+- `docs/examples/external_mods/v7_reference_suite_docs/DEMO_PLAYBOOK.md`
 
 ## Safety and failure model
 

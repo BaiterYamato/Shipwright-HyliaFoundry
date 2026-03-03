@@ -1,0 +1,44 @@
+{
+  "id": "com.sylian.world_profiles",
+  "name": "world profiles",
+  "version": "0.1.0",
+  "apiVersion": 4,
+  "loadPriority": 332,
+  "entryScript": "scripts/init.json",
+  "assets": [],
+  "dependencies": [],
+  "capabilities": [
+    "render.postfx.v1",
+    "render.lighting.v1",
+    "world.scenes.v1",
+    "world.rooms.v1"
+  ],
+  "runtime": {
+    "type": "wasm3-v1",
+    "module": "scripts/noop.wat",
+    "maxMemoryKb": 1024,
+    "maxCallMs": 2,
+    "maxFrameBudgetMs": 2,
+    "maxHookCallsPerFrame": 256,
+    "maxActorInstances": 64,
+    "maxActiveStatuses": 256
+  },
+  "itemDefinitions": "items/items.json",
+  "inputDefinitions": "config/input.json",
+  "engineVersionRange": ">=9.1.2 <10.0.0",
+  "permissions": [],
+  "entrypoints": {
+    "items": "items/items.json",
+    "combat": "combat",
+    "movement": "movement",
+    "camera": "camera/camera_profiles.json",
+    "ui": "ui",
+    "actors": "actors",
+    "quests": "quests",
+    "wasm": "scripts/noop.wat"
+  },
+  "postFxDefinitions": "render/postfx_presets.json",
+  "lightingDefinitions": "lighting/light_profiles.json",
+  "sceneProfileDefinitions": "world/scene_profiles.json",
+  "roomProfileDefinitions": "world/room_profiles.json"
+}

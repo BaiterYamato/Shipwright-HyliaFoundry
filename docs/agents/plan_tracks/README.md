@@ -1,4 +1,4 @@
-﻿# Plan Tracks (v5/v6)
+# Plan Tracks (v5/v6/v7)
 
 This directory stores future-version planning tracks and long-form roadmap artifacts.
 
@@ -8,7 +8,7 @@ This directory stores future-version planning tracks and long-form roadmap artif
 - Files under `plan_tracks/` are planning companions (roadmaps, breakdowns, decisions, notes).
 
 ## Structure
-- `v5/` and `v6/` track version-level planning.
+- `v5/`, `v6/`, and `v7/` track version-level planning.
 - `index.md` defines scope and objectives.
 - `roadmap.md` lists milestones.
 - `milestones/` stores one file per milestone package.

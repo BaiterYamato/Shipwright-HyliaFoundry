@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "com.sylian.material_helpers:pbr_default",
+      "enabled": true,
+      "enablePom": true,
+      "pomSteps": 12,
+      "pomMaxDistance": 1400.0
+    }
+  ]
+}
