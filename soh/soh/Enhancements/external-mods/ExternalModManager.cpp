@@ -4845,16 +4845,30 @@ bool ParseAction(const nlohmann::json& json, int32_t apiVersion, ExternalModActi
 
     if (actionType == "fx.spawnActorFx" || actionType == "spawnActorFx") {
         outAction.type = ExternalModActionType::FxSpawnActorFx;
-        if (!json.contains("actorId") || !json["actorId"].is_number_integer()) {
-            outError = "fx.spawnActorFx.actorId must be integer";
-            return false;
+        const bool hasActorId = json.contains("actorId");
+        const bool hasOverlay = json.contains("overlay");
+
+        if (hasActorId) {
+            if (!json["actorId"].is_number_integer()) {
+                outError = "fx.spawnActorFx.actorId must be integer";
+                return false;
+            }
+            outAction.fxActorId = json["actorId"].get<int32_t>();
+        } else {
+            outAction.fxActorId = -1;
         }
-        outAction.fxActorId = json["actorId"].get<int32_t>();
-        if (json.contains("overlay")) {
+
+        if (hasOverlay) {
             if (!ValidateRequiredString(json, "overlay", outAction.fxOverlayName, outError)) {
                 return false;
             }
         }
+
+        if (!hasActorId && outAction.fxOverlayName.empty()) {
+            outError = "fx.spawnActorFx requires actorId or overlay";
+            return false;
+        }
+
         if (json.contains("scale")) {
             if (!json["scale"].is_number()) {
                 outError = "fx.spawnActorFx.scale must be numeric";
@@ -7590,6 +7604,88 @@ void EnsureFreezeShell(PlayState* play, Actor* actor, ExternalModRuntime::Status
     }
 }
 
+int32_t ResolveFxOverlayActorId(const std::string& overlayName);
+
+void SpawnStatusVisualPreset(ExternalModRuntime& runtime, PlayState* play, Actor* anchorActor, const std::string& sourceModId,
+                             const std::string& presetId, int32_t depth = 0) {
+    if (play == nullptr || anchorActor == nullptr || presetId.empty() || depth > 3) {
+        return;
+    }
+
+    const std::string resolvedPresetId = ResolveProfileIdForMod(sourceModId, presetId);
+    const auto* preset = ExternalModContentRegistry::FindFxPresetById(runtime, resolvedPresetId);
+    if (preset == nullptr) {
+        SPDLOG_WARN("[ExternalMods] status visuals preset not found: {}", resolvedPresetId);
+        return;
+    }
+
+    for (const auto& fxAction : preset->actions) {
+        switch (fxAction.type) {
+            case ExternalModActionType::FxSpawnEffectSs: {
+                Vec3f fxPos = anchorActor->world.pos;
+                fxPos.y += 20.0f;
+                const std::string effectName = ToLower(fxAction.fxEffectName);
+                const bool isFireLike = effectName == "fire" || effectName == "gfire" || effectName == "enfire" ||
+                                        fxAction.fxEffectId == EFFECT_SS_G_FIRE ||
+                                        fxAction.fxEffectId == EFFECT_SS_EN_FIRE ||
+                                        fxAction.fxEffectId == EFFECT_SS_FIRE_TAIL;
+                if (isFireLike) {
+                    EffectSsGFire_Spawn(play, &fxPos);
+                } else {
+                    Vec3f smokeVel = { 0.0f, std::max(0.05f, fxAction.fxScale * 0.1f), 0.0f };
+                    Vec3f smokeAccel = { 0.0f, 0.03f, 0.0f };
+                    EffectSsIceSmoke_Spawn(play, &fxPos, &smokeVel, &smokeAccel,
+                                           std::clamp(fxAction.fxLifeFrames, 1, 36000));
+                }
+                const std::string fxKey = fxAction.fxStoreKey.empty()
+                                              ? "__status_fx_effect_" + std::to_string(runtime.nextFxHandle)
+                                              : fxAction.fxStoreKey;
+                const int32_t handle = RegisterFxHandle(runtime, fxKey, reinterpret_cast<uintptr_t>(anchorActor),
+                                                        std::max(1, fxAction.fxLifeFrames), "statusVisualEffect");
+                runtime.globalBlackboard[fxKey] = std::to_string(handle);
+                break;
+            }
+            case ExternalModActionType::FxSpawnActorFx: {
+                int32_t actorId = fxAction.fxActorId;
+                if (actorId < 0 && !fxAction.fxOverlayName.empty()) {
+                    actorId = ResolveFxOverlayActorId(fxAction.fxOverlayName);
+                }
+                if (actorId < 0) {
+                    actorId = ACTOR_EN_CLEAR_TAG;
+                }
+
+                Vec3f spawnPos = anchorActor->world.pos;
+                spawnPos.y += 10.0f;
+                Actor* spawnedFx = Actor_Spawn(&play->actorCtx, play, actorId, spawnPos.x, spawnPos.y, spawnPos.z, 0,
+                                               anchorActor->shape.rot.y, 0, 0, true);
+                const std::string fxKey = fxAction.fxStoreKey.empty()
+                                              ? "__status_fx_actor_" + std::to_string(runtime.nextFxHandle)
+                                              : fxAction.fxStoreKey;
+                const int32_t handle =
+                    RegisterFxHandle(runtime, fxKey, reinterpret_cast<uintptr_t>(spawnedFx),
+                                     std::max(1, fxAction.fxLifeFrames), "statusVisualActor");
+                runtime.globalBlackboard[fxKey] = std::to_string(handle);
+                break;
+            }
+            case ExternalModActionType::FxSpawnPreset:
+                SpawnStatusVisualPreset(runtime, play, anchorActor, sourceModId, fxAction.fxPresetId, depth + 1);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+void SpawnStatusVisualPresetList(ExternalModRuntime& runtime, PlayState* play, Actor* anchorActor,
+                                 const std::string& sourceModId, const std::vector<std::string>& presetIds) {
+    if (play == nullptr || anchorActor == nullptr || presetIds.empty()) {
+        return;
+    }
+    for (const auto& presetId : presetIds) {
+        SpawnStatusVisualPreset(runtime, play, anchorActor, sourceModId, presetId, 0);
+    }
+}
+
 void BeginStatusOnActor(ExternalModRuntime& runtime, PlayState* play, Actor* actor, const ExternalModAction& action,
                         ExternalModStatusType statusType, bool isPlayerTarget, const std::string& statusId,
                         const std::string& sourceModId) {
@@ -7682,6 +7778,15 @@ void BeginStatusOnActor(ExternalModRuntime& runtime, PlayState* play, Actor* act
     if (statusType == ExternalModStatusType::Freeze && state->freezeProfile.mode == ExternalModFreezeMode::IceTrapNoDamage) {
         state->damagePerTick = 0;
     }
+    state->loopFxHandleKeys.clear();
+    if (statusDefinition != nullptr && !statusDefinition->visualsLoopFx.empty()) {
+        for (const auto& loopPresetId : statusDefinition->visualsLoopFx) {
+            if (loopPresetId.empty()) {
+                continue;
+            }
+            state->loopFxHandleKeys.push_back(ResolveProfileIdForMod(sourceModId, loopPresetId));
+        }
+    }
 
     if (statusType == ExternalModStatusType::Freeze) {
         actor->freezeTimer = static_cast<uint16_t>(std::clamp(durationFrames, 1, 0xFFFF));
@@ -7699,6 +7804,12 @@ void BeginStatusOnActor(ExternalModRuntime& runtime, PlayState* play, Actor* act
     }
 
     ApplyStatusColorFilter(actor, statusType, intensity);
+    if (statusDefinition != nullptr) {
+        SpawnStatusVisualPresetList(runtime, play, actor, sourceModId, statusDefinition->visualsStartFx);
+        if (!state->loopFxHandleKeys.empty()) {
+            SpawnStatusVisualPresetList(runtime, play, actor, sourceModId, state->loopFxHandleKeys);
+        }
+    }
 
     ExternalModHookEventContext hookContext;
     hookContext.scene = static_cast<int16_t>(play->sceneNum);
@@ -7889,6 +8000,8 @@ int32_t GetStatusRemainingOnTarget(const ExternalModRuntime& runtime, uintptr_t 
 struct DeferredStatusCallback {
     std::vector<ExternalModAction> actions;
     std::string triggerName;
+    uintptr_t actorAddress = 0;
+    int16_t actorId = -1;
 };
 
 void TickStatusEffects(ExternalModPackage& package, PlayState* play,
@@ -7913,14 +8026,19 @@ void TickStatusEffects(ExternalModPackage& package, PlayState* play,
         if (statusState.justApplied) {
             statusState.justApplied = false;
             if (statusDefinition != nullptr && !statusDefinition->onApply.empty()) {
-                outDeferredCallbacks.push_back({ statusDefinition->onApply, "statusOnApply" });
+                outDeferredCallbacks.push_back(
+                    { statusDefinition->onApply, "statusOnApply", statusState.actorAddress, statusState.actorId });
             }
         }
 
         statusState.framesRemaining = std::max(statusState.framesRemaining - 1, 0);
         if (statusState.framesRemaining <= 0) {
             if (statusDefinition != nullptr && !statusDefinition->onExpire.empty()) {
-                outDeferredCallbacks.push_back({ statusDefinition->onExpire, "statusOnExpire" });
+                outDeferredCallbacks.push_back(
+                    { statusDefinition->onExpire, "statusOnExpire", statusState.actorAddress, statusState.actorId });
+            }
+            if (statusDefinition != nullptr && !statusDefinition->visualsEndFx.empty()) {
+                SpawnStatusVisualPresetList(runtime, play, actor, statusState.sourceModId, statusDefinition->visualsEndFx);
             }
             ExternalModHookEventContext hookContext;
             hookContext.scene = static_cast<int16_t>(play->sceneNum);
@@ -7940,7 +8058,11 @@ void TickStatusEffects(ExternalModPackage& package, PlayState* play,
         if (tickTriggered) {
             statusState.tickCountdown = std::max(1, statusState.tickFrames);
             if (statusDefinition != nullptr && !statusDefinition->onTick.empty()) {
-                outDeferredCallbacks.push_back({ statusDefinition->onTick, "statusOnTick" });
+                outDeferredCallbacks.push_back(
+                    { statusDefinition->onTick, "statusOnTick", statusState.actorAddress, statusState.actorId });
+            }
+            if (!statusState.loopFxHandleKeys.empty()) {
+                SpawnStatusVisualPresetList(runtime, play, actor, statusState.sourceModId, statusState.loopFxHandleKeys);
             }
             ExternalModHookEventContext hookContext;
             hookContext.scene = static_cast<int16_t>(play->sceneNum);
@@ -9404,6 +9526,95 @@ bool TryParseFloatString(const std::string& value, float& outNumber) {
         return std::isfinite(outNumber);
     } catch (...) {
         return false;
+    }
+}
+
+bool TryParseUIntPtrString(const std::string& value, uintptr_t& outNumber) {
+    try {
+        size_t parsed = 0;
+        const auto parsedValue = std::stoull(value, &parsed, 10);
+        if (parsed != value.size()) {
+            return false;
+        }
+        outNumber = static_cast<uintptr_t>(parsedValue);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+int32_t ResolveFxOverlayActorId(const std::string& overlayName) {
+    const auto normalized = ToLower(overlayName);
+    if (normalized.empty()) {
+        return -1;
+    }
+
+    if (normalized == "ovl_magic_fire" || normalized == "magic_fire" || normalized == "magicfire") {
+        return ACTOR_MAGIC_FIRE;
+    }
+    if (normalized == "ovl_bg_hidan_firewall" || normalized == "bg_hidan_firewall" || normalized == "firewall") {
+        return ACTOR_BG_HIDAN_FIREWALL;
+    }
+    if (normalized == "ovl_en_clear_tag" || normalized == "en_clear_tag" || normalized == "clear_tag") {
+        return ACTOR_EN_CLEAR_TAG;
+    }
+    return -1;
+}
+
+bool TryResolvePlayerDamageResponseMode(const std::string& rawMode, PlayerDamageResponseType& outResponse) {
+    const auto mode = ToLower(rawMode);
+    if (mode == "none" || mode == "off" || mode == "disable") {
+        outResponse = PLAYER_HIT_RESPONSE_NONE;
+        return true;
+    }
+    if (mode == "knockback_large" || mode == "large") {
+        outResponse = PLAYER_HIT_RESPONSE_KNOCKBACK_LARGE;
+        return true;
+    }
+    if (mode == "knockback_small" || mode == "small") {
+        outResponse = PLAYER_HIT_RESPONSE_KNOCKBACK_SMALL;
+        return true;
+    }
+    if (mode == "ice" || mode == "ice_trap" || mode == "frozen") {
+        outResponse = PLAYER_HIT_RESPONSE_ICE_TRAP;
+        return true;
+    }
+    if (mode == "electric" || mode == "shock" || mode == "electric_shock") {
+        outResponse = PLAYER_HIT_RESPONSE_ELECTRIC_SHOCK;
+        return true;
+    }
+    return false;
+}
+
+void ApplyPlayerBoostMode(Player* player, const std::string& rawMode) {
+    if (player == nullptr) {
+        return;
+    }
+
+    const auto mode = ToLower(rawMode);
+    if (mode == "none" || mode == "off" || mode == "disable") {
+        return;
+    }
+
+    if (mode == "forward_small" || mode == "small") {
+        player->actor.speedXZ = std::max(player->actor.speedXZ, 3.0f);
+        return;
+    }
+    if (mode == "forward_large" || mode == "large") {
+        player->actor.speedXZ = std::max(player->actor.speedXZ, 6.0f);
+        return;
+    }
+    if (mode == "backward_small") {
+        player->actor.speedXZ = std::min(player->actor.speedXZ, -3.0f);
+        return;
+    }
+    if (mode == "backward_large") {
+        player->actor.speedXZ = std::min(player->actor.speedXZ, -6.0f);
+        return;
+    }
+    if (mode == "upward" || mode == "vertical") {
+        player->actor.velocity.y = std::max(player->actor.velocity.y, 5.5f);
+        return;
     }
 }
 
@@ -19684,10 +19895,32 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
                 if (fxPlayer == nullptr) {
                     break;
                 }
+                Actor* fxAnchorActor = &fxPlayer->actor;
+                const auto targetAddressIt = package.runtime.globalBlackboard.find("__fxTargetActorAddress");
+                if (targetAddressIt != package.runtime.globalBlackboard.end()) {
+                    uintptr_t targetAddress = 0;
+                    if (TryParseUIntPtrString(targetAddressIt->second, targetAddress)) {
+                        int16_t expectedActorId = -1;
+                        const auto targetActorIdIt = package.runtime.globalBlackboard.find("__fxTargetActorId");
+                        if (targetActorIdIt != package.runtime.globalBlackboard.end()) {
+                            try {
+                                expectedActorId = static_cast<int16_t>(std::stoi(targetActorIdIt->second));
+                            } catch (...) {
+                                expectedActorId = -1;
+                            }
+                        }
+                        if (auto* resolvedActor = FindActorByAddress(gPlayState, targetAddress, expectedActorId);
+                            resolvedActor != nullptr && resolvedActor->update != nullptr) {
+                            fxAnchorActor = resolvedActor;
+                        }
+                    }
+                }
                 const std::string effectName = ToLower(action.fxEffectName);
-                Vec3f fxPos = fxPlayer->actor.world.pos;
+                Vec3f fxPos = fxAnchorActor->world.pos;
                 fxPos.y += 20.0f;
-                if (effectName == "fire" || effectName == "gfire" || effectName == "enfire") {
+                if (effectName == "fire" || effectName == "gfire" || effectName == "enfire" ||
+                    action.fxEffectId == EFFECT_SS_G_FIRE || action.fxEffectId == EFFECT_SS_EN_FIRE ||
+                    action.fxEffectId == EFFECT_SS_FIRE_TAIL) {
                     EffectSsGFire_Spawn(gPlayState, &fxPos);
                 } else {
                     Vec3f smokeVel = { 0.0f, std::max(0.05f, action.fxScale * 0.1f), 0.0f };
@@ -19698,7 +19931,8 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
                 const std::string fxKey = action.fxStoreKey.empty()
                                               ? "__fx_effect_" + std::to_string(package.runtime.nextFxHandle)
                                               : action.fxStoreKey;
-                const int32_t handle = RegisterFxHandle(package.runtime, fxKey, reinterpret_cast<uintptr_t>(&fxPlayer->actor),
+                const int32_t handle = RegisterFxHandle(package.runtime, fxKey,
+                                                        reinterpret_cast<uintptr_t>(fxAnchorActor),
                                                         std::max(1, action.fxLifeFrames), "effectss");
                 package.runtime.globalBlackboard[fxKey] = std::to_string(handle);
                 break;
@@ -19711,11 +19945,39 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
                 if (fxPlayer == nullptr) {
                     break;
                 }
-                const int32_t actorId = action.fxActorId >= 0 ? action.fxActorId : ACTOR_EN_CLEAR_TAG;
-                Vec3f spawnPos = fxPlayer->actor.world.pos;
+                Actor* fxAnchorActor = &fxPlayer->actor;
+                const auto targetAddressIt = package.runtime.globalBlackboard.find("__fxTargetActorAddress");
+                if (targetAddressIt != package.runtime.globalBlackboard.end()) {
+                    uintptr_t targetAddress = 0;
+                    if (TryParseUIntPtrString(targetAddressIt->second, targetAddress)) {
+                        int16_t expectedActorId = -1;
+                        const auto targetActorIdIt = package.runtime.globalBlackboard.find("__fxTargetActorId");
+                        if (targetActorIdIt != package.runtime.globalBlackboard.end()) {
+                            try {
+                                expectedActorId = static_cast<int16_t>(std::stoi(targetActorIdIt->second));
+                            } catch (...) {
+                                expectedActorId = -1;
+                            }
+                        }
+                        if (auto* resolvedActor = FindActorByAddress(gPlayState, targetAddress, expectedActorId);
+                            resolvedActor != nullptr && resolvedActor->update != nullptr) {
+                            fxAnchorActor = resolvedActor;
+                        }
+                    }
+                }
+
+                int32_t actorId = action.fxActorId;
+                if (actorId < 0 && !action.fxOverlayName.empty()) {
+                    actorId = ResolveFxOverlayActorId(action.fxOverlayName);
+                }
+                if (actorId < 0) {
+                    actorId = ACTOR_EN_CLEAR_TAG;
+                }
+
+                Vec3f spawnPos = fxAnchorActor->world.pos;
                 spawnPos.y += 10.0f;
                 Actor* spawnedFx = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorId, spawnPos.x, spawnPos.y,
-                                               spawnPos.z, 0, fxPlayer->actor.shape.rot.y, 0, 0, true);
+                                               spawnPos.z, 0, fxAnchorActor->shape.rot.y, 0, 0, true);
                 const std::string fxKey = action.fxStoreKey.empty()
                                               ? "__fx_actor_" + std::to_string(package.runtime.nextFxHandle)
                                               : action.fxStoreKey;
@@ -19872,9 +20134,26 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
                 }
                 break;
             case ExternalModActionType::PlayerSetBoostType:
+                if (gPlayState != nullptr) {
+                    auto* statePlayer = GET_PLAYER(gPlayState);
+                    if (statePlayer != nullptr) {
+                        ApplyPlayerBoostMode(statePlayer, action.stateControlMode);
+                    }
+                }
                 package.runtime.globalBlackboard["__playerBoostType"] = action.stateControlMode;
                 break;
             case ExternalModActionType::PlayerSetDamageResponse:
+                if (gPlayState != nullptr) {
+                    auto* statePlayer = GET_PLAYER(gPlayState);
+                    if (statePlayer != nullptr) {
+                        PlayerDamageResponseType response = PLAYER_HIT_RESPONSE_NONE;
+                        if (TryResolvePlayerDamageResponseMode(action.stateControlMode, response) &&
+                            response != PLAYER_HIT_RESPONSE_NONE) {
+                            func_80837C0C(gPlayState, statePlayer, response, 0.0f, 0.0f, statePlayer->actor.shape.rot.y,
+                                          20);
+                        }
+                    }
+                }
                 package.runtime.globalBlackboard["__playerDamageResponse"] = action.stateControlMode;
                 break;
             case ExternalModActionType::SpellsCastSpell: {
@@ -20987,7 +21266,33 @@ void ExternalModManager::OnGameFrameUpdate() {
                     break;
                 }
                 if (!callback.actions.empty()) {
+                    const auto addrIt = package.runtime.globalBlackboard.find("__fxTargetActorAddress");
+                    const bool hadOldAddress = addrIt != package.runtime.globalBlackboard.end();
+                    const std::string oldAddress = hadOldAddress ? addrIt->second : "";
+                    const auto idIt = package.runtime.globalBlackboard.find("__fxTargetActorId");
+                    const bool hadOldId = idIt != package.runtime.globalBlackboard.end();
+                    const std::string oldId = hadOldId ? idIt->second : "";
+
+                    if (callback.actorAddress != 0) {
+                        package.runtime.globalBlackboard["__fxTargetActorAddress"] =
+                            std::to_string(static_cast<uint64_t>(callback.actorAddress));
+                        package.runtime.globalBlackboard["__fxTargetActorId"] =
+                            std::to_string(static_cast<int32_t>(callback.actorId));
+                    }
                     ExecuteActions(package, callback.actions, callback.triggerName.c_str());
+
+                    if (callback.actorAddress != 0) {
+                        if (hadOldAddress) {
+                            package.runtime.globalBlackboard["__fxTargetActorAddress"] = oldAddress;
+                        } else {
+                            package.runtime.globalBlackboard.erase("__fxTargetActorAddress");
+                        }
+                        if (hadOldId) {
+                            package.runtime.globalBlackboard["__fxTargetActorId"] = oldId;
+                        } else {
+                            package.runtime.globalBlackboard.erase("__fxTargetActorId");
+                        }
+                    }
                 }
             }
             if (!package.runtime.enabled) {

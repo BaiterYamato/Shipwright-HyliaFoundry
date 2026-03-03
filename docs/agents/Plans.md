@@ -645,3 +645,20 @@ This file is the fixed, append-only plan ledger for this repository.
 - note: finalize-plan-merge attempted after clean build/validation and blocked because source and target are both develop; no merge action required.
 - refs:
   - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1,branch:develop
+
+## [PLN-20260303-0005] Patch v5.1 closure for SSS status visuals and player/fx runtime
+- createdUtc: 2026-03-03T09:30:24Z
+- status: in_progress
+- scope: engine
+- summary: Close remaining v5 implementation gaps: execute status visuals lifecycle (start/loop/end), apply player boost/damage response controls, and honor fx.spawnActorFx overlayName mapping.
+- milestones:
+  1. Implement status visuals runtime hooks and deferred actor-context execution,Apply player.setBoostType/player.setDamageResponse in OnPlayerUpdate,Support overlay-name actor resolution in fx.spawnActorFx runtime,Validate build + validate_mod + drift and append plan update
+- tags: external-mods,api-v4,sss,v5.1
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp,soh/soh/Enhancements/external-mods/ExternalModTypes.h,docs/agents/Plans.md
+
+## [PLN-20260303-0005][UPDATE] 2026-03-03T09:39:06Z
+- status: done
+- note: Closed v5.1 gaps by executing status visuals lifecycle presets (start/loop/end), binding deferred status callbacks to target actor FX context, applying player boost/damage response actions at runtime, and allowing fx.spawnActorFx overlay-only resolution.
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp,docs/agents/Plans.md,build:x64/Release/soh.exe
