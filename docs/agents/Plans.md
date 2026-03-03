@@ -662,3 +662,9 @@ This file is the fixed, append-only plan ledger for this repository.
 - note: Closed v5.1 gaps by executing status visuals lifecycle presets (start/loop/end), binding deferred status callbacks to target actor FX context, applying player boost/damage response actions at runtime, and allowing fx.spawnActorFx overlay-only resolution.
 - refs:
   - soh/soh/Enhancements/external-mods/ExternalModManager.cpp,docs/agents/Plans.md,build:x64/Release/soh.exe
+
+## [PLN-20260303-0005][UPDATE] 2026-03-03T09:41:15Z
+- status: done
+- note: finalize-plan-merge executed and stopped with source==target on develop; checkpoints already committed directly on target branch.
+- refs:
+  - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1,branch:develop
