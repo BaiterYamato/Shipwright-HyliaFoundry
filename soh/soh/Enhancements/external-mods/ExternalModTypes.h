@@ -220,6 +220,17 @@ struct ExternalModManifest {
     std::string roomProfileDefinitions;
     std::string assetPackDefinitions;
     std::string renderInspectorDefinitions;
+    std::string editorRuntimeDefinitions;
+    std::string editorUiDefinitions;
+    std::string editorSelectionDefinitions;
+    std::string editorGizmoDefinitions;
+    std::string editorLibraryDefinitions;
+    std::string editorProjectDefinitions;
+    std::string editorPlacementDefinitions;
+    std::string assetImporterDefinitions;
+    std::string worldAuthoringDefinitions;
+    std::string collisionAuthoringDefinitions;
+    std::string editorInspectorDefinitions;
     std::vector<std::string> capabilities;
 };
 
@@ -299,6 +310,7 @@ enum class ExternalModActionType {
     ContainerGetProgress,
     ActorsSpawnArchetype,
     ActorsDespawnArchetype,
+    ActorsToggleArchetype,
     InteractionsInvoke,
     AiRunBehavior,
     AiSetBlackboard,
@@ -429,6 +441,9 @@ struct ExternalModAction {
     std::string recipeId;
     std::string interactionId;
     std::string archetypeId;
+    std::string spawnOrigin;
+    float forwardDistance = 0.0f;
+    float upOffset = 0.0f;
     std::string behaviorTreeId;
     std::string blackboardKey;
     std::string blackboardValue;
@@ -484,6 +499,13 @@ struct ExternalModInputBinding {
 };
 
 struct ExternalModCameraHotkeyDefinition {
+    std::string id;
+    bool allowUserRemap = true;
+    std::vector<int32_t> defaultKeyboardScancodes;
+    ExternalModAction action;
+};
+
+struct ExternalModHotkeyDefinition {
     std::string id;
     bool allowUserRemap = true;
     std::vector<int32_t> defaultKeyboardScancodes;
@@ -1013,6 +1035,50 @@ struct ExternalModRenderInspectorDefinition {
     bool showPostFxState = true;
 };
 
+struct ExternalModEditorRuntimeDefinition {
+    std::string id;
+};
+
+struct ExternalModEditorUiDefinition {
+    std::string id;
+};
+
+struct ExternalModEditorSelectionDefinition {
+    std::string id;
+};
+
+struct ExternalModEditorGizmoDefinition {
+    std::string id;
+};
+
+struct ExternalModEditorLibraryDefinition {
+    std::string id;
+};
+
+struct ExternalModEditorProjectDefinition {
+    std::string id;
+};
+
+struct ExternalModEditorPlacementDefinition {
+    std::string id;
+};
+
+struct ExternalModAssetImporterDefinition {
+    std::string id;
+};
+
+struct ExternalModWorldAuthoringDefinition {
+    std::string id;
+};
+
+struct ExternalModCollisionAuthoringDefinition {
+    std::string id;
+};
+
+struct ExternalModEditorInspectorDefinition {
+    std::string id;
+};
+
 struct ExternalModBehaviorCondition {
     std::string type;
     std::string scope;
@@ -1197,6 +1263,7 @@ struct ExternalModRuntime {
     std::vector<ExternalModTriggerVolume> frameTriggers;
     std::vector<ExternalModInputBinding> inputBindings;
     std::vector<ExternalModCameraHotkeyDefinition> cameraHotkeys;
+    std::vector<ExternalModHotkeyDefinition> hotkeys;
     std::vector<ExternalModInputActionTrigger> inputTriggers;
     std::vector<ExternalModItemDefinition> itemDefinitions;
     std::vector<ExternalModHookSubscription> hookSubscriptions;
@@ -1233,6 +1300,17 @@ struct ExternalModRuntime {
     std::vector<ExternalModRoomProfileDefinition> roomProfiles;
     std::vector<ExternalModAssetPackDefinition> assetPackDefinitions;
     std::vector<ExternalModRenderInspectorDefinition> renderInspectorDefinitions;
+    std::vector<ExternalModEditorRuntimeDefinition> editorRuntimeDefinitions;
+    std::vector<ExternalModEditorUiDefinition> editorUiDefinitions;
+    std::vector<ExternalModEditorSelectionDefinition> editorSelectionDefinitions;
+    std::vector<ExternalModEditorGizmoDefinition> editorGizmoDefinitions;
+    std::vector<ExternalModEditorLibraryDefinition> editorLibraryDefinitions;
+    std::vector<ExternalModEditorProjectDefinition> editorProjectDefinitions;
+    std::vector<ExternalModEditorPlacementDefinition> editorPlacementDefinitions;
+    std::vector<ExternalModAssetImporterDefinition> assetImporterDefinitions;
+    std::vector<ExternalModWorldAuthoringDefinition> worldAuthoringDefinitions;
+    std::vector<ExternalModCollisionAuthoringDefinition> collisionAuthoringDefinitions;
+    std::vector<ExternalModEditorInspectorDefinition> editorInspectorDefinitions;
     std::vector<ExternalModFxPresetDefinition> fxPresets;
     std::vector<ExternalModStateDefinition> stateDefinitions;
     std::vector<ExternalModSpellDefinition> spellDefinitions;

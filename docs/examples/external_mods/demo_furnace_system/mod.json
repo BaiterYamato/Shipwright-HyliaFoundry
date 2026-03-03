@@ -19,6 +19,8 @@
                          }
                      ],
     "capabilities":  [
+                         "actors.generic.v1",
+                         "actors.archetypes.v1",
                          "containers.v1",
                          "recipes.processing.v1",
                          "interactions.v1"
@@ -45,11 +47,13 @@
                         "movement":  "movement",
                         "camera":  "camera/camera_profiles.json",
                         "ui":  "ui",
-                        "actors":  "actors",
+                        "actors":  "actors/actors.json",
                         "quests":  "quests",
                         "wasm":  "scripts/noop.wat"
                     },
     "containerDefinitions":  "containers/containers.json",
     "recipeDefinitions":  "recipes/processing_recipes.json",
-    "interactionDefinitions":  "interactions/interactions.json"
+    "interactionDefinitions":  "interactions/interactions.json",
+    "actorDefinitions":  "actors/actors.json",
+    "actorArchetypeDefinitions":  "actors/archetypes.json"
 }

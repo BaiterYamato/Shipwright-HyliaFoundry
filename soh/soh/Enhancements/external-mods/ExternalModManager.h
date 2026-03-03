@@ -43,6 +43,7 @@ class ExternalModManager {
     bool DrawAimReticleIfActive(::PlayState* play, ::Player* player, ExternalModAimCameraContext context) const;
     int16_t ResolveAimCameraMode(::PlayState* play, ::Player* player, int16_t defaultMode,
                                  ExternalModAimCameraContext context) const;
+    bool HandleGlobalHotkeyScancode(int32_t scancode);
     bool HandleCameraHotkeyScancode(int32_t scancode);
     bool IsAimMouseFireHeld(::PlayState* play, ::Player* player, int32_t heldItemAction) const;
     int32_t HandleAimSelectSlotPress(::PlayState* play, ::Player* player, int32_t buttonIndex, int32_t itemId);
@@ -54,6 +55,7 @@ class ExternalModManager {
     static std::string BuildEnabledCVarName(const std::string& modId);
     static std::string BuildBindingCVarName(const std::string& modId, const std::string& bindingId);
     static std::string BuildCameraHotkeyScancodeCVarName(const std::string& modId, const std::string& hotkeyId);
+    static std::string BuildHotkeyScancodeCVarName(const std::string& modId, const std::string& hotkeyId);
     static void ExecuteActionsPublic(ExternalModPackage& package, const std::vector<ExternalModAction>& actions,
                                      const char* triggerName);
     void EmitExtendedHook(ExternalModHookType hookType, const ExternalModHookEventContext& context,
@@ -139,6 +141,7 @@ class ExternalModManager {
                                         std::string& outError);
     static bool TryParseInputDefinitions(const std::string& content, std::vector<ExternalModInputBinding>& outBindings,
                                          std::vector<ExternalModCameraHotkeyDefinition>& outCameraHotkeys,
+                                         std::vector<ExternalModHotkeyDefinition>& outHotkeys,
                                          std::string& outError);
     static bool TryParseHookDefinitions(const std::string& content, int32_t apiVersion,
                                         std::vector<ExternalModHookSubscription>& outSubscriptions,

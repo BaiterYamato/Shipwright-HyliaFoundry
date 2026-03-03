@@ -24,7 +24,9 @@ bool ExternalModParser::TryParseInputDefinitions(const std::string& content,
                                                  std::vector<ExternalModInputBinding>& outBindings,
                                                  std::vector<ExternalModCameraHotkeyDefinition>& outCameraHotkeys,
                                                  std::string& outError) {
-    return ExternalModManager::TryParseInputDefinitions(content, outBindings, outCameraHotkeys, outError);
+    std::vector<ExternalModHotkeyDefinition> ignoredHotkeys;
+    return ExternalModManager::TryParseInputDefinitions(content, outBindings, outCameraHotkeys, ignoredHotkeys,
+                                                        outError);
 }
 
 bool ExternalModParser::TryParseHookDefinitions(const std::string& content, int32_t apiVersion,

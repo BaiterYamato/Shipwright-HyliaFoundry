@@ -125,6 +125,17 @@ constexpr uint64_t kMaxSceneProfileDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxRoomProfileDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxAssetPackDefinitionBytes = 256 * 1024;
 constexpr uint64_t kMaxRenderInspectorDefinitionBytes = 256 * 1024;
+constexpr uint64_t kMaxEditorRuntimeDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxEditorUiDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxEditorSelectionDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxEditorGizmoDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxEditorLibraryDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxEditorProjectDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxEditorPlacementDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxAssetImporterDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxWorldAuthoringDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxCollisionAuthoringDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxEditorInspectorDefinitionBytes = 1024 * 1024;
 constexpr uint64_t kMaxItemIconBytes = 4ull * 1024ull * 1024ull;
 constexpr uint64_t kMaxItemModelBytes = 8ull * 1024ull * 1024ull;
 constexpr uint64_t kMaxItemModelTextureBytes = 16ull * 1024ull * 1024ull;
@@ -280,6 +291,9 @@ const std::unordered_map<std::string, Ship::KbScancode> kKeyboardKeyAliases = {
     { "Q", Ship::LUS_KB_Q },   { "R", Ship::LUS_KB_R },   { "S", Ship::LUS_KB_S },   { "T", Ship::LUS_KB_T },
     { "U", Ship::LUS_KB_U },   { "V", Ship::LUS_KB_V },   { "W", Ship::LUS_KB_W },   { "X", Ship::LUS_KB_X },
     { "Y", Ship::LUS_KB_Y },   { "Z", Ship::LUS_KB_Z },   { "TAB", Ship::LUS_KB_TAB },
+    { "0", Ship::LUS_KB_0 },   { "1", Ship::LUS_KB_1 },   { "2", Ship::LUS_KB_2 },   { "3", Ship::LUS_KB_3 },
+    { "4", Ship::LUS_KB_4 },   { "5", Ship::LUS_KB_5 },   { "6", Ship::LUS_KB_6 },   { "7", Ship::LUS_KB_7 },
+    { "8", Ship::LUS_KB_8 },   { "9", Ship::LUS_KB_9 },
     { "F1", Ship::LUS_KB_F1 }, { "F2", Ship::LUS_KB_F2 }, { "F3", Ship::LUS_KB_F3 }, { "F4", Ship::LUS_KB_F4 },
     { "F5", Ship::LUS_KB_F5 }, { "F6", Ship::LUS_KB_F6 }, { "F7", Ship::LUS_KB_F7 }, { "F8", Ship::LUS_KB_F8 },
     { "F9", Ship::LUS_KB_F9 }, { "F10", Ship::LUS_KB_F10 }, { "F11", Ship::LUS_KB_F11 }, { "F12", Ship::LUS_KB_F12 },
@@ -316,6 +330,13 @@ const std::unordered_set<ExternalModActionType> kSupportedCameraHotkeyActions = 
     ExternalModActionType::ToggleAimCameraMode,
     ExternalModActionType::SetAimCameraMode,
     ExternalModActionType::SetAimCameraProfile,
+};
+
+const std::unordered_set<ExternalModActionType> kSupportedHotkeyActions = {
+    ExternalModActionType::ToggleAimCameraMode,
+    ExternalModActionType::SetAimCameraMode,
+    ExternalModActionType::SetAimCameraProfile,
+    ExternalModActionType::ActorsToggleArchetype,
 };
 constexpr const char* kAimCameraOverShoulderCVar = "gExternalMods.AimCamera.OverShoulderEnabled";
 constexpr const char* kCoreDefaultAimCameraProfileId = "core:ots_default";
@@ -891,6 +912,17 @@ const std::unordered_set<std::string> kSupportedCapabilities = {
     "world.rooms.v1",
     "assets.packs.v2",
     "debug.render_inspector.v1",
+    "editor.runtime.v1",
+    "editor.ui.v1",
+    "editor.selection.v1",
+    "editor.gizmos.v1",
+    "editor.library.v1",
+    "editor.projects.v1",
+    "editor.placement.v1",
+    "assets.importer.v1",
+    "world.authoring.v1",
+    "world.collision_authoring.v1",
+    "debug.editor_inspector.v1",
 };
 
 const std::unordered_set<std::string> kSupportedRuntimePermissions = {
@@ -5302,6 +5334,75 @@ bool ParseAction(const nlohmann::json& json, int32_t apiVersion, ExternalModActi
             outError = "actors.spawnArchetype requires archetypeId/archetype";
             return false;
         }
+        return true;
+    }
+
+    if (actionType == "actors.toggleArchetype") {
+        outAction.type = ExternalModActionType::ActorsToggleArchetype;
+        if (!ValidateRequiredString(json, "archetypeId", outAction.archetypeId, outError) &&
+            !ValidateRequiredString(json, "archetype", outAction.archetypeId, outError)) {
+            outError = "actors.toggleArchetype requires archetypeId/archetype";
+            return false;
+        }
+
+        outAction.variableKey = "__last_toggle_archetype_handle";
+        if (json.contains("storeKey")) {
+            if (!ValidateRequiredString(json, "storeKey", outAction.variableKey, outError)) {
+                outError = "actors.toggleArchetype.storeKey must be string";
+                return false;
+            }
+        }
+
+        outAction.spawnOrigin = "definition";
+        if (json.contains("spawnOrigin")) {
+            if (!ValidateRequiredString(json, "spawnOrigin", outAction.spawnOrigin, outError)) {
+                outError = "actors.toggleArchetype.spawnOrigin must be string";
+                return false;
+            }
+            outAction.spawnOrigin = ToLower(outAction.spawnOrigin);
+            if (outAction.spawnOrigin != "definition" && outAction.spawnOrigin != "player_forward" &&
+                outAction.spawnOrigin != "world") {
+                outError = "actors.toggleArchetype.spawnOrigin must be definition|player_forward|world";
+                return false;
+            }
+        }
+
+        outAction.forwardDistance = 120.0f;
+        if (json.contains("forwardDistance")) {
+            if (!json["forwardDistance"].is_number()) {
+                outError = "actors.toggleArchetype.forwardDistance must be number";
+                return false;
+            }
+            outAction.forwardDistance = json["forwardDistance"].get<float>();
+        }
+
+        outAction.upOffset = 0.0f;
+        if (json.contains("upOffset")) {
+            if (!json["upOffset"].is_number()) {
+                outError = "actors.toggleArchetype.upOffset must be number";
+                return false;
+            }
+            outAction.upOffset = json["upOffset"].get<float>();
+        }
+
+        if (json.contains("worldPos")) {
+            const auto& worldPos = json["worldPos"];
+            if (!worldPos.is_array() || worldPos.size() != 3 || !worldPos[0].is_number() || !worldPos[1].is_number() ||
+                !worldPos[2].is_number()) {
+                outError = "actors.toggleArchetype.worldPos must be [x,y,z]";
+                return false;
+            }
+            outAction.hasWorldPos = true;
+            outAction.worldPosX = worldPos[0].get<float>();
+            outAction.worldPosY = worldPos[1].get<float>();
+            outAction.worldPosZ = worldPos[2].get<float>();
+        }
+
+        if (outAction.spawnOrigin == "world" && !outAction.hasWorldPos) {
+            outError = "actors.toggleArchetype.spawnOrigin=world requires worldPos";
+            return false;
+        }
+
         return true;
     }
 
@@ -9738,6 +9839,29 @@ bool SpawnActorInstance(ExternalModPackage& package, const ExternalModActorDefin
     return true;
 }
 
+bool SpawnActorInstanceWithOverrides(ExternalModPackage& package, const ExternalModActorDefinition& definition,
+                                     uint32_t& outHandle, std::string& outError, bool useOverridePosition,
+                                     float overridePosX, float overridePosY, float overridePosZ,
+                                     bool useOverrideRotation = false, float overrideRotX = 0.0f,
+                                     float overrideRotY = 0.0f, float overrideRotZ = 0.0f,
+                                     bool useOverrideScene = false, int16_t overrideSceneId = 0) {
+    ExternalModActorDefinition resolvedDefinition = definition;
+    if (useOverridePosition) {
+        resolvedDefinition.posX = overridePosX;
+        resolvedDefinition.posY = overridePosY;
+        resolvedDefinition.posZ = overridePosZ;
+    }
+    if (useOverrideRotation) {
+        resolvedDefinition.rotX = overrideRotX;
+        resolvedDefinition.rotY = overrideRotY;
+        resolvedDefinition.rotZ = overrideRotZ;
+    }
+    if (useOverrideScene) {
+        resolvedDefinition.sceneId = overrideSceneId;
+    }
+    return SpawnActorInstance(package, resolvedDefinition, outHandle, outError);
+}
+
 bool DespawnActorInstance(ExternalModPackage& package, uint32_t handle, std::string& outError) {
     auto& runtime = package.runtime;
     const auto it = std::find_if(runtime.actorInstances.begin(), runtime.actorInstances.end(),
@@ -10360,6 +10484,10 @@ std::string ExternalModManager::BuildCameraHotkeyScancodeCVarName(const std::str
     return "gExternalMods.Hotkeys." + SanitizeCVarSegment(modId) + "." + SanitizeCVarSegment(hotkeyId) + ".Scancode";
 }
 
+std::string ExternalModManager::BuildHotkeyScancodeCVarName(const std::string& modId, const std::string& hotkeyId) {
+    return "gExternalMods.Hotkeys." + SanitizeCVarSegment(modId) + "." + SanitizeCVarSegment(hotkeyId) + ".Scancode";
+}
+
 void ExternalModManager::ApplyDefaultKeyboardMappingsForPackage(const ExternalModPackage& package) const {
     if (!package.runtime.enabled) {
         return;
@@ -10597,57 +10725,76 @@ int16_t ExternalModManager::ResolveAimCameraMode(::PlayState* play, ::Player* pl
     return GetCameraModeForContext(*profile, context, true);
 }
 
-bool ExternalModManager::HandleCameraHotkeyScancode(int32_t scancode) {
+bool ExternalModManager::HandleGlobalHotkeyScancode(int32_t scancode) {
     if (scancode <= static_cast<int32_t>(Ship::LUS_KB_UNKNOWN)) {
         return false;
     }
 
     ExternalModPackage* selectedPackage = nullptr;
-    const ExternalModCameraHotkeyDefinition* selectedHotkey = nullptr;
+    const ExternalModAction* selectedAction = nullptr;
+    std::string selectedHotkeyId;
+
+    auto evaluateHotkey = [&](ExternalModPackage& package, const std::string& hotkeyId, bool allowUserRemap,
+                              const std::vector<int32_t>& defaultKeyboardScancodes,
+                              const ExternalModAction& action) {
+        if (defaultKeyboardScancodes.empty()) {
+            return;
+        }
+        if (!kSupportedHotkeyActions.contains(action.type)) {
+            return;
+        }
+
+        const int32_t defaultScancode = defaultKeyboardScancodes.front();
+        int32_t effectiveScancode = defaultScancode;
+        if (allowUserRemap) {
+            const auto cvarName = BuildHotkeyScancodeCVarName(package.manifest.id, hotkeyId);
+            effectiveScancode = CVarGetInteger(cvarName.c_str(), defaultScancode);
+            if (effectiveScancode <= static_cast<int32_t>(Ship::LUS_KB_UNKNOWN)) {
+                effectiveScancode = defaultScancode;
+            }
+        }
+
+        if (effectiveScancode != scancode) {
+            return;
+        }
+
+        const bool shouldReplace = selectedPackage == nullptr ||
+                                   package.manifest.loadPriority > selectedPackage->manifest.loadPriority ||
+                                   (package.manifest.loadPriority == selectedPackage->manifest.loadPriority &&
+                                    (package.manifest.id < selectedPackage->manifest.id ||
+                                     (package.manifest.id == selectedPackage->manifest.id &&
+                                      hotkeyId < selectedHotkeyId)));
+        if (shouldReplace) {
+            selectedPackage = &package;
+            selectedAction = &action;
+            selectedHotkeyId = hotkeyId;
+        }
+    };
 
     for (auto& package : mPackages) {
         if (!package.runtime.enabled) {
             continue;
         }
 
+        for (const auto& hotkey : package.runtime.hotkeys) {
+            evaluateHotkey(package, hotkey.id, hotkey.allowUserRemap, hotkey.defaultKeyboardScancodes, hotkey.action);
+        }
+
         for (const auto& hotkey : package.runtime.cameraHotkeys) {
-            if (hotkey.defaultKeyboardScancodes.empty()) {
-                continue;
-            }
-
-            const int32_t defaultScancode = hotkey.defaultKeyboardScancodes.front();
-            int32_t effectiveScancode = defaultScancode;
-            if (hotkey.allowUserRemap) {
-                const auto cvarName = BuildCameraHotkeyScancodeCVarName(package.manifest.id, hotkey.id);
-                effectiveScancode = CVarGetInteger(cvarName.c_str(), defaultScancode);
-                if (effectiveScancode <= static_cast<int32_t>(Ship::LUS_KB_UNKNOWN)) {
-                    effectiveScancode = defaultScancode;
-                }
-            }
-
-            if (effectiveScancode != scancode) {
-                continue;
-            }
-
-            const bool shouldReplace = selectedPackage == nullptr ||
-                                       package.manifest.loadPriority > selectedPackage->manifest.loadPriority ||
-                                       (package.manifest.loadPriority == selectedPackage->manifest.loadPriority &&
-                                        (package.manifest.id < selectedPackage->manifest.id ||
-                                         (package.manifest.id == selectedPackage->manifest.id &&
-                                          hotkey.id < selectedHotkey->id)));
-            if (shouldReplace) {
-                selectedPackage = &package;
-                selectedHotkey = &hotkey;
-            }
+            evaluateHotkey(package, hotkey.id, hotkey.allowUserRemap, hotkey.defaultKeyboardScancodes, hotkey.action);
         }
     }
 
-    if (selectedPackage == nullptr || selectedHotkey == nullptr) {
+    if (selectedPackage == nullptr || selectedAction == nullptr) {
         return false;
     }
 
-    ExecuteActions(*selectedPackage, { selectedHotkey->action }, selectedHotkey->id.c_str());
+    ExecuteActions(*selectedPackage, { *selectedAction }, selectedHotkeyId.c_str());
     return true;
+}
+
+bool ExternalModManager::HandleCameraHotkeyScancode(int32_t scancode) {
+    return HandleGlobalHotkeyScancode(scancode);
 }
 
 bool ExternalModManager::IsAimMouseFireHeld(::PlayState* play, ::Player* player, int32_t heldItemAction) const {
@@ -12583,6 +12730,19 @@ void ExternalModManager::Initialize() {
             CVarSetInteger(cvarName.c_str(), effectiveScancode);
         }
 
+        for (const auto& hotkey : package.runtime.hotkeys) {
+            if (hotkey.defaultKeyboardScancodes.empty()) {
+                continue;
+            }
+            const auto cvarName = BuildHotkeyScancodeCVarName(package.manifest.id, hotkey.id);
+            const int32_t defaultScancode = hotkey.defaultKeyboardScancodes.front();
+            int32_t effectiveScancode = CVarGetInteger(cvarName.c_str(), defaultScancode);
+            if (effectiveScancode <= static_cast<int32_t>(Ship::LUS_KB_UNKNOWN)) {
+                effectiveScancode = defaultScancode;
+            }
+            CVarSetInteger(cvarName.c_str(), effectiveScancode);
+        }
+
         const auto enabledCVarName = BuildEnabledCVarName(package.manifest.id);
         int32_t enabledValue = CVarGetInteger(enabledCVarName.c_str(), 1);
         enabledValue = enabledValue != 0 ? 1 : 0;
@@ -13009,6 +13169,18 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
         const bool hasWorldRoomsCapability = ManifestHasCapability(outManifest, "world.rooms.v1");
         const bool hasAssetPacksCapability = ManifestHasCapability(outManifest, "assets.packs.v2");
         const bool hasRenderInspectorCapability = ManifestHasCapability(outManifest, "debug.render_inspector.v1");
+        const bool hasEditorRuntimeCapability = ManifestHasCapability(outManifest, "editor.runtime.v1");
+        const bool hasEditorUiCapability = ManifestHasCapability(outManifest, "editor.ui.v1");
+        const bool hasEditorSelectionCapability = ManifestHasCapability(outManifest, "editor.selection.v1");
+        const bool hasEditorGizmosCapability = ManifestHasCapability(outManifest, "editor.gizmos.v1");
+        const bool hasEditorLibraryCapability = ManifestHasCapability(outManifest, "editor.library.v1");
+        const bool hasEditorProjectsCapability = ManifestHasCapability(outManifest, "editor.projects.v1");
+        const bool hasEditorPlacementCapability = ManifestHasCapability(outManifest, "editor.placement.v1");
+        const bool hasAssetImporterCapability = ManifestHasCapability(outManifest, "assets.importer.v1");
+        const bool hasWorldAuthoringCapability = ManifestHasCapability(outManifest, "world.authoring.v1");
+        const bool hasCollisionAuthoringCapability =
+            ManifestHasCapability(outManifest, "world.collision_authoring.v1");
+        const bool hasEditorInspectorCapability = ManifestHasCapability(outManifest, "debug.editor_inspector.v1");
 
         if (outManifest.apiVersion >= 4 && hasAimCameraCatalogCapability) {
             outError = "camera.aim_profiles.v1 is legacy; use camera.aim_profiles.v2";
@@ -13209,7 +13381,29 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
             !parseCapabilityPath("assetPackDefinitions", "assets.packs.v2", hasAssetPacksCapability,
                                  outManifest.assetPackDefinitions) ||
             !parseCapabilityPath("renderInspectorDefinitions", "debug.render_inspector.v1", hasRenderInspectorCapability,
-                                 outManifest.renderInspectorDefinitions)) {
+                                 outManifest.renderInspectorDefinitions) ||
+            !parseCapabilityPath("editorRuntimeDefinitions", "editor.runtime.v1", hasEditorRuntimeCapability,
+                                 outManifest.editorRuntimeDefinitions) ||
+            !parseCapabilityPath("editorUiDefinitions", "editor.ui.v1", hasEditorUiCapability,
+                                 outManifest.editorUiDefinitions) ||
+            !parseCapabilityPath("editorSelectionDefinitions", "editor.selection.v1", hasEditorSelectionCapability,
+                                 outManifest.editorSelectionDefinitions) ||
+            !parseCapabilityPath("editorGizmoDefinitions", "editor.gizmos.v1", hasEditorGizmosCapability,
+                                 outManifest.editorGizmoDefinitions) ||
+            !parseCapabilityPath("editorLibraryDefinitions", "editor.library.v1", hasEditorLibraryCapability,
+                                 outManifest.editorLibraryDefinitions) ||
+            !parseCapabilityPath("editorProjectDefinitions", "editor.projects.v1", hasEditorProjectsCapability,
+                                 outManifest.editorProjectDefinitions) ||
+            !parseCapabilityPath("editorPlacementDefinitions", "editor.placement.v1", hasEditorPlacementCapability,
+                                 outManifest.editorPlacementDefinitions) ||
+            !parseCapabilityPath("assetImporterDefinitions", "assets.importer.v1", hasAssetImporterCapability,
+                                 outManifest.assetImporterDefinitions) ||
+            !parseCapabilityPath("worldAuthoringDefinitions", "world.authoring.v1", hasWorldAuthoringCapability,
+                                 outManifest.worldAuthoringDefinitions) ||
+            !parseCapabilityPath("collisionAuthoringDefinitions", "world.collision_authoring.v1",
+                                 hasCollisionAuthoringCapability, outManifest.collisionAuthoringDefinitions) ||
+            !parseCapabilityPath("editorInspectorDefinitions", "debug.editor_inspector.v1", hasEditorInspectorCapability,
+                                 outManifest.editorInspectorDefinitions)) {
             return false;
         }
     }
@@ -14043,9 +14237,11 @@ bool ExternalModManager::TryParseItemDefinitions(const std::string& content,
 bool ExternalModManager::TryParseInputDefinitions(const std::string& content,
                                                   std::vector<ExternalModInputBinding>& outBindings,
                                                   std::vector<ExternalModCameraHotkeyDefinition>& outCameraHotkeys,
+                                                  std::vector<ExternalModHotkeyDefinition>& outHotkeys,
                                                   std::string& outError) {
     outBindings.clear();
     outCameraHotkeys.clear();
+    outHotkeys.clear();
 
     nlohmann::json json;
     try {
@@ -14189,8 +14385,13 @@ bool ExternalModManager::TryParseInputDefinitions(const std::string& content,
                 return false;
             }
 
+            const nlohmann::json* actionObject = &hotkey;
+            if (hotkey["action"].is_object()) {
+                actionObject = &hotkey["action"];
+            }
+
             std::string actionError;
-            if (!ParseAction(hotkey, kExternalModApiVersionV4, definition.action, actionError)) {
+            if (!ParseAction(*actionObject, kExternalModApiVersionV4, definition.action, actionError)) {
                 outError = "cameraHotkeys[" + std::to_string(i) + "]: " + actionError;
                 return false;
             }
@@ -14201,6 +14402,72 @@ bool ExternalModManager::TryParseInputDefinitions(const std::string& content,
             }
 
             outCameraHotkeys.push_back(std::move(definition));
+        }
+    }
+
+    if (json.is_object() && json.contains("hotkeys")) {
+        if (!json["hotkeys"].is_array()) {
+            outError = "hotkeys must be array";
+            return false;
+        }
+
+        std::unordered_set<std::string> seenHotkeyIds;
+        for (size_t i = 0; i < json["hotkeys"].size(); ++i) {
+            const auto& hotkey = json["hotkeys"][i];
+            if (!hotkey.is_object()) {
+                outError = "hotkeys[" + std::to_string(i) + "] must be object";
+                return false;
+            }
+
+            ExternalModHotkeyDefinition definition;
+            if (!ValidateRequiredString(hotkey, "id", definition.id, outError)) {
+                outError = "hotkeys[" + std::to_string(i) + "]: " + outError;
+                return false;
+            }
+            if (!seenHotkeyIds.insert(definition.id).second) {
+                outError = "Duplicate hotkeys id: " + definition.id;
+                return false;
+            }
+
+            if (hotkey.contains("allowUserRemap")) {
+                if (!hotkey["allowUserRemap"].is_boolean()) {
+                    outError = "hotkeys[" + std::to_string(i) + "].allowUserRemap must be boolean";
+                    return false;
+                }
+                definition.allowUserRemap = hotkey["allowUserRemap"].get<bool>();
+            }
+
+            if (!parseDefaultKeyboardKeys(hotkey, "hotkeys[" + std::to_string(i) + "]",
+                                          definition.defaultKeyboardScancodes)) {
+                return false;
+            }
+            if (definition.defaultKeyboardScancodes.empty()) {
+                outError = "hotkeys[" + std::to_string(i) + "].defaultKeyboardKeys must contain at least one key";
+                return false;
+            }
+
+            if (!hotkey.contains("action")) {
+                outError = "hotkeys[" + std::to_string(i) + "] requires action";
+                return false;
+            }
+
+            const nlohmann::json* actionObject = &hotkey;
+            if (hotkey["action"].is_object()) {
+                actionObject = &hotkey["action"];
+            }
+
+            std::string actionError;
+            if (!ParseAction(*actionObject, kExternalModApiVersionV4, definition.action, actionError)) {
+                outError = "hotkeys[" + std::to_string(i) + "]: " + actionError;
+                return false;
+            }
+            if (!kSupportedHotkeyActions.contains(definition.action.type)) {
+                outError = "hotkeys[" + std::to_string(i) +
+                           "].action is not allowed for direct hotkeys";
+                return false;
+            }
+
+            outHotkeys.push_back(std::move(definition));
         }
     }
 
@@ -19420,7 +19687,8 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
         if (!ReadFileFromPackage(package, inputPath, kMaxInputDefinitionBytes, inputContent, outError)) {
             return false;
         }
-        if (!TryParseInputDefinitions(inputContent, runtime.inputBindings, runtime.cameraHotkeys, outError)) {
+        if (!TryParseInputDefinitions(inputContent, runtime.inputBindings, runtime.cameraHotkeys, runtime.hotkeys,
+                                      outError)) {
             return false;
         }
 
@@ -20190,6 +20458,38 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
                                           package.manifest.assetPackDefinitions, kMaxAssetPackDefinitionBytes, true) ||
             !validateV4CapabilityJsonFile("renderInspectorDefinitions", "debug.render_inspector.v1",
                                           package.manifest.renderInspectorDefinitions, kMaxRenderInspectorDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("editorRuntimeDefinitions", "editor.runtime.v1",
+                                          package.manifest.editorRuntimeDefinitions, kMaxEditorRuntimeDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("editorUiDefinitions", "editor.ui.v1", package.manifest.editorUiDefinitions,
+                                          kMaxEditorUiDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("editorSelectionDefinitions", "editor.selection.v1",
+                                          package.manifest.editorSelectionDefinitions, kMaxEditorSelectionDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("editorGizmoDefinitions", "editor.gizmos.v1",
+                                          package.manifest.editorGizmoDefinitions, kMaxEditorGizmoDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("editorLibraryDefinitions", "editor.library.v1",
+                                          package.manifest.editorLibraryDefinitions, kMaxEditorLibraryDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("editorProjectDefinitions", "editor.projects.v1",
+                                          package.manifest.editorProjectDefinitions, kMaxEditorProjectDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("editorPlacementDefinitions", "editor.placement.v1",
+                                          package.manifest.editorPlacementDefinitions, kMaxEditorPlacementDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("assetImporterDefinitions", "assets.importer.v1",
+                                          package.manifest.assetImporterDefinitions, kMaxAssetImporterDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("worldAuthoringDefinitions", "world.authoring.v1",
+                                          package.manifest.worldAuthoringDefinitions, kMaxWorldAuthoringDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("collisionAuthoringDefinitions", "world.collision_authoring.v1",
+                                          package.manifest.collisionAuthoringDefinitions,
+                                          kMaxCollisionAuthoringDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("editorInspectorDefinitions", "debug.editor_inspector.v1",
+                                          package.manifest.editorInspectorDefinitions, kMaxEditorInspectorDefinitionBytes,
                                           true)) {
             return false;
         }
@@ -21893,6 +22193,128 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
                 context.actorHandle = action.actorHandle;
                 ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnArchetypeDespawn, context,
                                                                     "OnArchetypeDespawn");
+                break;
+            }
+            case ExternalModActionType::ActorsToggleArchetype: {
+                const std::string handleStoreKey =
+                    action.variableKey.empty() ? "__last_toggle_archetype_handle" : action.variableKey;
+                uint32_t existingHandle = 0;
+                const auto existingHandleIt = package.runtime.globalBlackboard.find(handleStoreKey);
+                if (existingHandleIt != package.runtime.globalBlackboard.end()) {
+                    try {
+                        existingHandle = static_cast<uint32_t>(std::stoul(existingHandleIt->second));
+                    } catch (...) {
+                        existingHandle = 0;
+                    }
+                }
+
+                if (existingHandle != 0) {
+                    if (FindActorInstance(package.runtime, existingHandle) != nullptr) {
+                        std::string actorError;
+                        if (!DespawnActorInstance(package, existingHandle, actorError)) {
+                            DisableRuntime(package, "actors.toggleArchetype despawn failed: " + actorError);
+                            return;
+                        }
+
+                        package.runtime.globalBlackboard.erase(handleStoreKey);
+                        package.runtime.globalBlackboard["__last_archetype_despawn_handle"] =
+                            std::to_string(existingHandle);
+
+                        ExternalModHookEventContext context;
+                        context.scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+                        context.actorHandle = static_cast<int32_t>(existingHandle);
+                        context.value = action.archetypeId;
+                        ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnArchetypeDespawn,
+                                                                            context, "OnArchetypeDespawn");
+                        break;
+                    }
+
+                    package.runtime.globalBlackboard.erase(handleStoreKey);
+                }
+
+                if (gPlayState == nullptr) {
+                    break;
+                }
+
+                const std::string resolvedArchetypeId = ResolveProfileIdForMod(package.manifest.id, action.archetypeId);
+                const auto archetype = std::find_if(
+                    package.runtime.actorArchetypeDefinitions.begin(), package.runtime.actorArchetypeDefinitions.end(),
+                    [&](const ExternalModActorArchetypeDefinition& definition) { return definition.id == resolvedArchetypeId; });
+                if (archetype == package.runtime.actorArchetypeDefinitions.end()) {
+                    DisableRuntime(package, "actors.toggleArchetype references unknown archetypeId: " + resolvedArchetypeId);
+                    return;
+                }
+
+                const auto* actorDefinition = FindActorDefinition(package.runtime, archetype->actorDefinitionId);
+                if (actorDefinition == nullptr) {
+                    DisableRuntime(package, "actors.toggleArchetype references unknown actor definition: " +
+                                                archetype->actorDefinitionId);
+                    return;
+                }
+
+                bool useOverridePosition = false;
+                bool useOverrideRotation = false;
+                bool useOverrideScene = false;
+                int16_t overrideSceneId = actorDefinition->sceneId;
+                float overridePosX = actorDefinition->posX;
+                float overridePosY = actorDefinition->posY;
+                float overridePosZ = actorDefinition->posZ;
+                float overrideRotX = actorDefinition->rotX;
+                float overrideRotY = actorDefinition->rotY;
+                float overrideRotZ = actorDefinition->rotZ;
+
+                if (action.spawnOrigin == "player_forward") {
+                    auto* player = GET_PLAYER(gPlayState);
+                    if (player == nullptr) {
+                        break;
+                    }
+
+                    overridePosX = player->actor.world.pos.x +
+                                   Math_SinS(player->actor.shape.rot.y) * std::max(0.0f, action.forwardDistance);
+                    overridePosY = player->actor.world.pos.y + action.upOffset;
+                    overridePosZ = player->actor.world.pos.z +
+                                   Math_CosS(player->actor.shape.rot.y) * std::max(0.0f, action.forwardDistance);
+                    overrideRotY = static_cast<float>(player->actor.shape.rot.y);
+                    useOverridePosition = true;
+                    useOverrideRotation = true;
+                    useOverrideScene = true;
+                    overrideSceneId = gPlayState->sceneNum;
+                } else if (action.spawnOrigin == "world") {
+                    if (!action.hasWorldPos) {
+                        DisableRuntime(package, "actors.toggleArchetype spawnOrigin=world requires worldPos");
+                        return;
+                    }
+                    overridePosX = action.worldPosX;
+                    overridePosY = action.worldPosY + action.upOffset;
+                    overridePosZ = action.worldPosZ;
+                    useOverridePosition = true;
+                    useOverrideScene = true;
+                    overrideSceneId = gPlayState->sceneNum;
+                } else if (std::abs(action.upOffset) > 0.001f) {
+                    overridePosY += action.upOffset;
+                    useOverridePosition = true;
+                }
+
+                std::string actorError;
+                uint32_t spawnedHandle = 0;
+                if (!SpawnActorInstanceWithOverrides(package, *actorDefinition, spawnedHandle, actorError, useOverridePosition,
+                                                     overridePosX, overridePosY, overridePosZ, useOverrideRotation,
+                                                     overrideRotX, overrideRotY, overrideRotZ, useOverrideScene,
+                                                     overrideSceneId)) {
+                    DisableRuntime(package, "actors.toggleArchetype spawn failed: " + actorError);
+                    return;
+                }
+
+                package.runtime.globalBlackboard[handleStoreKey] = std::to_string(spawnedHandle);
+                package.runtime.globalBlackboard["__last_archetype_spawn_handle"] = std::to_string(spawnedHandle);
+                package.runtime.globalBlackboard["__last_archetype_spawn"] = resolvedArchetypeId;
+
+                ExternalModHookEventContext context;
+                context.scene = gPlayState->sceneNum;
+                context.actorHandle = static_cast<int32_t>(spawnedHandle);
+                context.value = resolvedArchetypeId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnArchetypeSpawn, context,
+                                                                    "OnArchetypeSpawn");
                 break;
             }
             case ExternalModActionType::InteractionsInvoke: {

@@ -1,13 +1,13 @@
 ﻿{
     "version":  2,
     "schemaVersion":  2,
-    "lastUpdatedUtc":  "2026-03-03T13:00:00Z",
+    "lastUpdatedUtc":  "2026-03-03T15:02:05Z",
     "stats":  {
-                  "entryCount":  105,
-                  "openCount":  33,
+                  "entryCount":  107,
+                  "openCount":  35,
                   "doneCount":  71,
                   "deprecatedCount":  1,
-                  "topicCount":  54,
+                  "topicCount":  55,
                   "tagCount":  57
               },
     "consistency":  {
@@ -466,6 +466,12 @@
                                              "line":  49,
                                              "source":  "memory.log"
                                          },
+                 "mem-20260303-000042":  {
+                                             "topic":  "plan:PLN-20260303-0008",
+                                             "status":  "open",
+                                             "line":  107,
+                                             "source":  "memory.log"
+                                         },
                  "mem-20260225-000029":  {
                                              "topic":  "external-mods:reticle-selected-in-hand-gate",
                                              "status":  "done",
@@ -476,6 +482,12 @@
                                              "topic":  "git-finalize-blocked",
                                              "status":  "open",
                                              "line":  47,
+                                             "source":  "memory.log"
+                                         },
+                 "mem-20260303-000041":  {
+                                             "topic":  "plan:PLN-20260303-0008",
+                                             "status":  "open",
+                                             "line":  106,
                                              "source":  "memory.log"
                                          },
                  "mem-20260303-000005":  {
@@ -717,7 +729,9 @@
                                  "mem-20260303-000035",
                                  "mem-20260303-000037",
                                  "mem-20260303-000038",
-                                 "mem-20260303-000039"
+                                 "mem-20260303-000039",
+                                 "mem-20260303-000041",
+                                 "mem-20260303-000042"
                              ],
                   "external-mods,aim-ots,camera,reticle,input":  [
                                                                      "mem-20260225-000026"
@@ -848,7 +862,9 @@
                                  "mem-20260303-000035",
                                  "mem-20260303-000037",
                                  "mem-20260303-000038",
-                                 "mem-20260303-000039"
+                                 "mem-20260303-000039",
+                                 "mem-20260303-000041",
+                                 "mem-20260303-000042"
                              ],
                   "external-mods,api-v4,v6,reference-suite":  [
                                                                   "mem-20260303-000030"
@@ -985,7 +1001,9 @@
                                 "mem-20260303-000035",
                                 "mem-20260303-000037",
                                 "mem-20260303-000038",
-                                "mem-20260303-000039"
+                                "mem-20260303-000039",
+                                "mem-20260303-000041",
+                                "mem-20260303-000042"
                             ],
                   "external-mods,api-v4,sss,tooling,docs":  [
                                                                 "mem-20260303-000002"
@@ -1201,6 +1219,10 @@
                                                  "mem-20260225-000041",
                                                  "mem-20260225-000047"
                                              ],
+                    "plan:PLN-20260303-0008":  [
+                                                   "mem-20260303-000041",
+                                                   "mem-20260303-000042"
+                                               ],
                     "docs-runtime-drift-backlog":  [
                                                        "mem-20260225-000023",
                                                        "mem-20260225-000039"
@@ -1362,7 +1384,9 @@
                                   "mem-20260303-000028",
                                   "mem-20260303-000034",
                                   "mem-20260303-000038",
-                                  "mem-20260303-000039"
+                                  "mem-20260303-000039",
+                                  "mem-20260303-000041",
+                                  "mem-20260303-000042"
                               ]
                  },
     "ranges":  [

@@ -1617,7 +1617,7 @@ extern "C" void Graph_StartFrame() {
     int32_t dwScancode = OTRGlobals::Instance->context->GetWindow()->GetLastScancode();
     OTRGlobals::Instance->context->GetWindow()->SetLastScancode(-1);
 
-    if (SOH::ExternalModManager::Instance().HandleCameraHotkeyScancode(dwScancode)) {
+    if (SOH::ExternalModManager::Instance().HandleGlobalHotkeyScancode(dwScancode)) {
         return;
     }
 

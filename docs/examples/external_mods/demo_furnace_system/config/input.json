@@ -1,6 +1,18 @@
-﻿{
-    "schemaVersion":  1,
-    "bindings":  [
-
-                 ]
+{
+  "schemaVersion": 1,
+  "bindings": [],
+  "hotkeys": [
+    {
+      "id": "spawn_furnace_debug",
+      "defaultKeyboardKeys": ["7"],
+      "allowUserRemap": true,
+      "action": {
+        "action": "actors.toggleArchetype",
+        "archetypeId": "com.sylian.demo_furnace_system:furnace_debug",
+        "spawnOrigin": "player_forward",
+        "forwardDistance": 120.0,
+        "upOffset": 0.0
+      }
+    }
+  ]
 }

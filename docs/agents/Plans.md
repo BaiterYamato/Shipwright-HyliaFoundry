@@ -728,3 +728,26 @@ This file is the fixed, append-only plan ledger for this repository.
   - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
   - docs/agents/plan_tracks/v7/milestones/patch_v7_runtime_graphics_real.md
   - tools/external_mods/export_runtime_reference.ps1
+
+## [PLN-20260303-0008] Patch v8 core+suite + external mods tabs + furnace hotkey
+- createdUtc: 2026-03-03T14:23:32Z
+- status: in_progress
+- scope: mixed
+- summary: Deliver v8 contracts/runtime foundations and builder reference suite, plus 3-tab External Mods UI separation and direct-key furnace debug spawn toggle on key 7.
+- milestones:
+  1. Add v8 capabilities/manifest fields + direct hotkeys parser/runtime + actors.toggleArchetype
+  2. Deliver furnace demo hotkey 7 toggle spawn/despawn and sync docs/runtime
+  3. Implement External Mods 3-tab UI with resourcepacks/mods/core-api classification + pack controls
+  4. Add v8 plan_tracks docs/milestones + update tooling/docs references + validate build
+- tags: external-mods, api-v4, v8, ui, hotkeys
+- refs:
+  - docs/agents/plan_tracks/v8
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+  - soh/soh/Enhancements/external-mods/ExternalModUi.cpp
+  - docs/examples/external_mods/demo_furnace_system
+
+## [PLN-20260303-0008][UPDATE] 2026-03-03T15:02:05Z
+- status: in_progress
+- note: Implemented v8 foundation slice: direct hotkeys runtime + actors.toggleArchetype with player_forward/world spawn override, External Mods 3-tab UI (Resourcepacks/Mods/Core+API) with classification badges, and demo_furnace_system key 7 toggle archetype spawn/despawn. Also added v8 plan track files, synced demos, regenerated runtime references, and passed Release build + mod validation.
+- refs:
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp,soh/soh/Enhancements/external-mods/ExternalModUi.cpp,docs/examples/external_mods/demo_furnace_system/config/input.json,docs/agents/plan_tracks/v8/index.md,docs/actions.json

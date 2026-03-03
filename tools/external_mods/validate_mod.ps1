@@ -67,6 +67,17 @@ function Resolve-CapabilityPathMap {
         "world.rooms.v1" = "roomProfileDefinitions"
         "assets.packs.v2" = "assetPackDefinitions"
         "debug.render_inspector.v1" = "renderInspectorDefinitions"
+        "editor.runtime.v1" = "editorRuntimeDefinitions"
+        "editor.ui.v1" = "editorUiDefinitions"
+        "editor.selection.v1" = "editorSelectionDefinitions"
+        "editor.gizmos.v1" = "editorGizmoDefinitions"
+        "editor.library.v1" = "editorLibraryDefinitions"
+        "editor.projects.v1" = "editorProjectDefinitions"
+        "editor.placement.v1" = "editorPlacementDefinitions"
+        "assets.importer.v1" = "assetImporterDefinitions"
+        "world.authoring.v1" = "worldAuthoringDefinitions"
+        "world.collision_authoring.v1" = "collisionAuthoringDefinitions"
+        "debug.editor_inspector.v1" = "editorInspectorDefinitions"
     }
 }
 
