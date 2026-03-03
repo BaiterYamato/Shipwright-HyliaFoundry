@@ -562,3 +562,9 @@ This file is the fixed, append-only plan ledger for this repository.
 - note: Completed M1-M10 for SSS rollout: v4 parser/runtime features compiled, tooling/export updated for fx/states/spells, added sss + sss_content_pack examples, synced runtime mirrors, validated mods, and rebuilt Release.
 - refs:
   - soh/soh/Enhancements/external-mods/ExternalModManager.cpp,soh/soh/Enhancements/external-mods/ExternalModTypes.h,tools/external_mods/validate_mod.ps1,tools/external_mods/export_runtime_reference.ps1,tools/external_mods/sync_examples_to_runtime.ps1,docs/examples/external_mods/sss/mod.json,docs/examples/external_mods/sss_content_pack/mod.json,docs/catalogs.json,docs/actions.json,docs/events.json
+
+## [PLN-20260303-0001][UPDATE] 2026-03-03T02:24:44Z
+- status: done
+- note: Post-completion finalize-plan-merge attempted and blocked: working tree not clean due dirty libultraship submodule marker.
+- refs:
+  - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1,libultraship,docs/agents/Plans.md
