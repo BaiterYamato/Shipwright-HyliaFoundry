@@ -639,3 +639,9 @@ This file is the fixed, append-only plan ledger for this repository.
 - note: Completed patch-v5 gate + v6 core contract/runtime scaffolding, exported references, added v6 framework/content reference suite, synced demos, and validated build/validate_mod/doc-drift.
 - refs:
   - soh/soh/Enhancements/external-mods/ExternalModManager.cpp,soh/soh/Enhancements/external-mods/ExternalModTypes.h,tools/external_mods/export_runtime_reference.ps1,tools/external_mods/validate_mod.ps1,tools/external_mods/sync_examples_to_runtime.ps1,docs/examples/external_mods/ui_kit/mod.json,docs/examples/external_mods/container_kit/mod.json,docs/examples/external_mods/ai_templates/mod.json,docs/agents/plan_tracks/v5/milestones/patch_v5_gate_report.md,docs/agents/plan_tracks/v6/milestones/patch_v6_core_api.md,docs/agents/plan_tracks/v6/milestones/patch_v6_reference_suite.md
+
+## [PLN-20260303-0004][UPDATE] 2026-03-03T09:03:40Z
+- status: done
+- note: finalize-plan-merge attempted after clean build/validation and blocked because source and target are both develop; no merge action required.
+- refs:
+  - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1,branch:develop
