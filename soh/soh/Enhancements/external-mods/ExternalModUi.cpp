@@ -1556,6 +1556,28 @@ void DrawExternalModControlsSection() {
         });
     }
 
+    // Mirrors kAutoGrantNativePermissionsCVar in ExternalModManager.cpp.
+    constexpr const char* autoGrantNativeCVar = "gExternalMods.AutoGrantNativePermissions";
+    ImGui::SameLine();
+    bool autoGrantNative = CVarGetInteger(autoGrantNativeCVar, 0) != 0;
+    if (ImGui::Checkbox("Auto-conceder permissoes native (mods locais)", &autoGrantNative)) {
+        CVarSetInteger(autoGrantNativeCVar, autoGrantNative ? 1 : 0);
+        SaveUiCVarChangesSoon();
+        std::string reloadMessage;
+        ExternalModManager::Instance().ReloadPackages(reloadMessage);
+        Notification::Emit({
+            .message = std::string("[ExternalMods] Auto-grant de permissoes native ") +
+                       (autoGrantNative ? "ATIVADO" : "desativado") +
+                       (reloadMessage.empty() ? ". Mods recarregados." : (". Reload com avisos: " + reloadMessage)),
+            .remainingTime = 8.0f,
+        });
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("AVISO: reduz o sandbox de seguranca. Concede por padrao permissoes de risco\n"
+                          "(network, process, nativeinterop, nativeinterop.raw, engine.memory) a mods locais.\n"
+                          "Negacoes explicitas por mod continuam valendo. Use apenas com mods confiaveis.");
+    }
+
     if (ImGui::BeginTabBar("ExternalContentTabs")) {
         if (ImGui::BeginTabItem("Resourcepacks")) {
             DrawResourcePacksTab();

@@ -396,6 +396,10 @@ const std::unordered_set<ExternalModActionType> kSupportedHotkeyActions = {
     ExternalModActionType::ConsumeConsumableStack,
 };
 constexpr const char* kAimCameraOverShoulderCVar = "gExternalMods.AimCamera.OverShoulderEnabled";
+// Developer convenience: when enabled (1), risky runtime permissions (network, process, nativeinterop, etc.)
+// are granted by DEFAULT for local mods. Explicit per-mod grants/denials persisted in the permission store
+// still override this. Default 0 (off). Mirrored as a literal in ExternalModUi.cpp.
+constexpr const char* kAutoGrantNativePermissionsCVar = "gExternalMods.AutoGrantNativePermissions";
 constexpr const char* kCoreDefaultAimCameraProfileId = "core:ots_default";
 
 const ExternalModAimCameraProfile& GetCoreDefaultAimCameraProfile() {
@@ -1501,8 +1505,12 @@ void ResolvePermissionGrantsForManifest(const ExternalModManifest& manifest,
     }
 
     const std::string profileId = BuildWorldSlotId();
+    // Developer convenience: auto-grant risky permissions by default for local mods when enabled.
+    // Only affects the DEFAULT below; explicit grants/denials from the persisted store still win.
+    const bool autoGrantNative = CVarGetInteger(kAutoGrantNativePermissionsCVar, 0) != 0;
     for (const auto& permission : manifest.permissions) {
-        outGrants[permission] = DefaultGrantForRuntimePermission(permission);
+        outGrants[permission] = DefaultGrantForRuntimePermission(permission) ||
+                                (autoGrantNative && IsRiskyRuntimePermission(permission));
     }
     if (manifest.permissions.empty()) {
         return;
@@ -3887,6 +3895,17 @@ bool IsSupportedAssetSourceKind(const std::string& kind) {
         "archive",
     };
     return kKinds.contains(kind);
+}
+
+std::string NormalizeAssetSourceKind(const std::string& kind) {
+    const auto lowered = ToLower(kind);
+    if (lowered == "mesh") {
+        return "model";
+    }
+    if (lowered == "texture") {
+        return "image";
+    }
+    return lowered;
 }
 
 bool ValidateRequiredString(const nlohmann::json& json, const char* key, std::string& value, std::string& outError) {
@@ -25550,7 +25569,7 @@ bool ExternalModManager::TryParseAssetSourceDefinitions(const std::string& conte
                 outError = "sources[" + std::to_string(i) + "].kind must be string";
                 return false;
             }
-            definition.kind = ToLower(source["kind"].get<std::string>());
+            definition.kind = NormalizeAssetSourceKind(source["kind"].get<std::string>());
         } else {
             definition.kind = inferredKind;
         }
