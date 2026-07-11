@@ -13715,6 +13715,11 @@ bool ExternalModManager::SetRuntimePermissionGrant(const std::string& modId, con
         return false;
     }
 
+    // Runtime enable/disable decisions (e.g. native runtimes gated on "nativeinterop") are only made
+    // during Initialize(), so request a deferred reload to apply the new grant. The flag is consumed
+    // outside GameInteractor hook execution (see ExternalModInventoryWindow::UpdateElement).
+    mRuntimeReloadPending = true;
+
     SPDLOG_INFO("[ExternalMods] Permission {} for {} is now {}", normalizedPermission, package->manifest.id,
                 granted ? "granted" : "denied");
     return true;
@@ -17321,6 +17326,22 @@ void ExternalModManager::Shutdown() {
 
 bool ExternalModManager::ReloadPackages(std::string& outError) {
     outError.clear();
+
+    // Guard so the OnLoadGame replay below does not re-request another deferred reload,
+    // which would otherwise loop forever. RAII so every exit path clears the flag.
+    struct ReloadingScopeGuard {
+        bool& flag;
+        explicit ReloadingScopeGuard(bool& inFlag) : flag(inFlag) {
+            flag = true;
+        }
+        ~ReloadingScopeGuard() {
+            flag = false;
+        }
+    } reloadingGuard(mReloadingPackages);
+
+    // This reload satisfies any deferred request that is currently pending.
+    mRuntimeReloadPending = false;
+
     Initialize();
 
     // During in-game reload, replay onLoadGame actions so granted-state-dependent overrides
@@ -17340,6 +17361,15 @@ bool ExternalModManager::ReloadPackages(std::string& outError) {
         outError = std::to_string(invalidCount) + " external mod(s) failed to load; check package details for errors.";
     }
 
+    return true;
+}
+
+bool ExternalModManager::TakePendingRuntimeReload() {
+    if (!mRuntimeReloadPending || mReloadingPackages) {
+        return false;
+    }
+
+    mRuntimeReloadPending = false;
     return true;
 }
 
@@ -34067,6 +34097,16 @@ void ExternalModManager::UnregisterHooks() {
 }
 
 void ExternalModManager::OnLoadGame(int32_t fileNum) {
+    if (!mReloadingPackages) {
+        // Permission grants are persisted per world slot, and runtime enable/disable decisions made
+        // at boot used slot 0 (no save loaded yet). Now that the real slot is known, request a
+        // deferred reload so slot-specific grants take effect. Guarded so the OnLoadGame replay
+        // inside ReloadPackages does not re-trigger it. The flag is consumed outside
+        // GameInteractor hook execution (see ExternalModInventoryWindow::UpdateElement), because
+        // calling ReloadPackages from inside this hook would invalidate the hook iteration.
+        mRuntimeReloadPending = true;
+    }
+
     if (mWorldGraphicsRuntime) {
         mWorldGraphicsRuntime->Reset(gPlayState);
     }

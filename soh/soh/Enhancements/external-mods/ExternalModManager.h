@@ -29,6 +29,11 @@ class ExternalModManager {
     void Initialize();
     void Shutdown();
     bool ReloadPackages(std::string& outError);
+    // Returns true (and clears the flag) when a deferred runtime reload was requested, e.g. after a
+    // permission grant changed or a save was loaded. Must only be consumed from a point outside
+    // GameInteractor::ExecuteHooks (see ExternalModInventoryWindow::UpdateElement), because
+    // ReloadPackages re-registers hooks and would invalidate the hook iteration otherwise.
+    bool TakePendingRuntimeReload();
     void DiscoverPackages();
     std::vector<ExternalModPackage>& GetPackages();
     const std::vector<ExternalModPackage>& GetPackages() const;
@@ -155,6 +160,8 @@ class ExternalModManager {
     int32_t mExtraInventoryCursor = 0;
     bool mPersistentInventoryDirty = false;
     bool mSaveSectionRegistered = false;
+    bool mRuntimeReloadPending = false;
+    bool mReloadingPackages = false;
     int32_t mPersistentInventorySectionId = -1;
     ExternalModAimCameraState mAimCameraState{};
     AimSelectState mAimSelectState{};

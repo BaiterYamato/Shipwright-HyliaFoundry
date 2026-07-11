@@ -102,6 +102,18 @@ const char* GetSlotName(ExternalModItemSlot slot) {
 }
 } // namespace
 
+void ExternalModInventoryWindow::UpdateElement() {
+    // Runs every frame from Ship::Gui::DrawMenu even while this window is hidden, on the ImGui
+    // render path and therefore outside GameInteractor::ExecuteHooks. That makes it a safe place
+    // to process deferred runtime reloads (ReloadPackages re-registers GameInteractor hooks, which
+    // must never happen while hooks are being iterated).
+    auto& manager = ExternalModManager::Instance();
+    if (manager.TakePendingRuntimeReload()) {
+        std::string reloadError;
+        manager.ReloadPackages(reloadError);
+    }
+}
+
 void ExternalModInventoryWindow::DrawElement() {
     auto& manager = ExternalModManager::Instance();
     const auto allCells = manager.GetExtraInventoryGrid();
