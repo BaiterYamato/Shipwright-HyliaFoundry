@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-03-03T18:57:41Z",
+    "generatedUtc":  "2026-04-07T21:26:19Z",
     "apiVersion":  4,
     "hooks":  [
                   "onLoadGame",
@@ -46,6 +46,26 @@
                   "onWorldOverworldTick",
                   "onWorldTimeOfDayChanged",
                   "onWorldSkyboxChanged",
+                  "onPersistentEntityLoaded",
+                  "onPersistentEntitySaved",
+                  "onPersistentDomainMigrated",
+                  "onWorldSpawnProfileTick",
+                  "world.time.segmentChanged",
+                  "world.weather.changed",
+                  "onDialogueStarted",
+                  "onDialogueChoiceCommitted",
+                  "onQuestStateChanged",
+                  "onTimelineStarted",
+                  "onTimelineCompleted",
+                  "onTimelineSkipped",
+                  "onHotReloadApplied",
+                  "onHotReloadFailed",
+                  "onSandboxBudgetExceeded",
+                  "onSandboxPermissionDenied",
+                  "onResourceChanged",
+                  "onResourceDepleted",
+                  "onResourceRecovered",
+                  "onResourceCapacityChanged",
                   "onPlayDestroy",
                   "onGameFrameUpdate"
               ],
@@ -69,7 +89,8 @@
                            "onItemUsed",
                            "onItemGranted",
                            "onItemEquipped",
-                           "onCooldownReady"
+                           "onCooldownReady",
+                           "settings.changed"
                        ],
     "aliases":  [
                     {

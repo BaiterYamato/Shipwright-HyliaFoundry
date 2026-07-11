@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "aoe": [
+    {
+      "id": "com.sylian.sss_content_pack:firewall_volume",
+      "shape": "capsule",
+      "orientation": "ownerYaw",
+      "radius": 95,
+      "capsuleHalfHeight": 240,
+      "durationFrames": 90,
+      "tickFrames": 8,
+      "targetScope": "enemies_bosses",
+      "effects": {
+        "onEnter": [
+          {
+            "action": "applyStatus",
+            "status": "com.sylian.sss_content_pack:burning_wall",
+            "durationFrames": 120,
+            "tickFrames": 15,
+            "intensity": 220
+          }
+        ],
+        "onStayTick": [
+          {
+            "action": "applyStatus",
+            "status": "com.sylian.sss_content_pack:burning_wall",
+            "durationFrames": 60,
+            "tickFrames": 20,
+            "intensity": 190
+          }
+        ]
+      }
+    },
+    {
+      "id": "com.sylian.sss_content_pack:levitation_dome",
+      "shape": "sphere",
+      "radius": 250,
+      "durationFrames": 50,
+      "tickFrames": 10,
+      "targetScope": "enemies_bosses",
+      "effects": {
+        "onEnter": [
+          {
+            "action": "applyStatus",
+            "status": "com.sylian.sss_content_pack:levitation_field",
+            "durationFrames": 100,
+            "tickFrames": 20,
+            "intensity": 175
+          }
+        ]
+      }
+    }
+  ]
+}

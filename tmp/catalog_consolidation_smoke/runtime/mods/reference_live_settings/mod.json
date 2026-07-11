@@ -1,0 +1,48 @@
+﻿{
+    "id":  "com.sylian.reference.live_settings",
+    "name":  "Reference Live Settings",
+    "version":  "0.1.0",
+    "type":  "content",
+    "apiVersion":  4,
+    "uiCategory":  "mod",
+    "loadPriority":  210,
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "hookDefinitions":  "hooks/hooks.json",
+    "settings":  {
+                     "schemaVersion":  1,
+                     "schemaFile":  "settings/settings.schema.json",
+                     "defaultDomain":  "global"
+                 },
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "releaseChannels":  [
+                            "stable"
+                        ],
+    "capabilities":  [
+                         "hooks.extended.v1"
+                     ],
+    "capabilityRationales":  {
+                                 "hooks.extended.v1":  "Declares hooks.extended.v1 as part of Reference Live Settings in the framework-first API v4 catalog."
+                             },
+    "dependencies":  [
+                         {
+                             "id":  "com.sylian.framework.devtools_native",
+                             "versionRange":  "\u003e=0.1.0 \u003c0.2.0"
+                         }
+                     ],
+    "uses":  [
+                 "framework.devtools_native"
+             ],
+    "exports":  {
+
+                }
+}

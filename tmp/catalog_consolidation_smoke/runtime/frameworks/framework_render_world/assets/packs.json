@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "packs": [
+    {
+      "id": "com.sylian.material_helpers:pbr_test_pack",
+      "priority": 100,
+      "materialSetPath": "materials/materials.json"
+    }
+  ]
+}

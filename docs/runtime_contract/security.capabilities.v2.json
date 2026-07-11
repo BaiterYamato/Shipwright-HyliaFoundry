@@ -1,0 +1,105 @@
+{
+    "schemaVersion": "security.capabilities.v2",
+    "description": "Capability tiering for trust and permission prompts.",
+    "tiers": {
+        "tier0_safe": "UI/read-only/cosmetic capabilities",
+        "tier1_moderate": "spawn props, room/profile edits, persistence writes",
+        "tier2_high": "save-affecting, wasm write actions, world authoring",
+        "tier3_reserved": "internal/dev-only special permissions"
+    },
+    "capabilities": {
+        "assets.raw.v1": {
+            "tier": "tier0_safe",
+            "description": "Declares raw loose assets via assetSourceDefinitions and exposes prepared host paths for the owning mod only."
+        },
+        "render.meshes.v1": {
+            "tier": "tier0_safe",
+            "description": "Registers reusable render meshes backed by modelAsset/modelDisplayList so mods can draw external visuals in-world."
+        },
+        "render.skeletons.v1": {
+            "tier": "tier0_safe",
+            "description": "Reserved contract for external skeleton definitions bound by convention-first v3 packages."
+        },
+        "render.animations.v1": {
+            "tier": "tier0_safe",
+            "description": "Reserved contract for external animation clip definitions bound by convention-first v3 packages."
+        },
+        "render.animation_graphs.v1": {
+            "tier": "tier1_moderate",
+            "description": "Reserved contract for animation graph/state machine definitions under the v3 graph DSL."
+        },
+        "actors.prefabs.v1": {
+            "tier": "tier1_moderate",
+            "description": "Registers visual prefabs that bind transforms and LOD behavior to render meshes for actor/world placement."
+        },
+        "world.instances.v1": {
+            "tier": "tier1_moderate",
+            "description": "Places prefab-backed world instances by scene and optional room filters from JSON."
+        },
+        "world.triggers.v1": {
+            "tier": "tier1_moderate",
+            "description": "Reserved contract for trigger volumes loaded from the world DSL."
+        },
+        "world.encounters.v1": {
+            "tier": "tier2_high",
+            "description": "Reserved contract for encounter/spawn orchestration loaded from the world DSL."
+        },
+        "audio.events.v1": {
+            "tier": "tier1_moderate",
+            "description": "Reserved contract for audio event definitions authored from JSON."
+        },
+        "cutscenes.tracks.v1": {
+            "tier": "tier2_high",
+            "description": "Reserved contract for cutscene track definitions authored from JSON."
+        },
+        "editor.placement.v1": {
+            "tier": "tier1_moderate",
+            "description": "Registers reusable placeable entries that point at prefab visuals and provide default scene/room/transform hints."
+        },
+        "world.authoring.v1": {
+            "tier": "tier2_high",
+            "description": "Places authored world visuals using direct prefab references or editor placement library entries."
+        },
+        "dsl.components.v1": {
+            "tier": "tier0_safe",
+            "description": "Loads generic component DSL documents from the components/ convention root."
+        },
+        "dsl.entities.v1": {
+            "tier": "tier0_safe",
+            "description": "Loads generic entity DSL documents from the entities/ convention root."
+        },
+        "dsl.graphs.v1": {
+            "tier": "tier1_moderate",
+            "description": "Loads generic graph/state machine DSL documents from the graphs/ convention root."
+        },
+        "services.endpoints.v1": {
+            "tier": "tier1_moderate",
+            "description": "Declares service endpoint metadata for cross-mod read/query surfaces consumed through the shared WASM/native host service bus."
+        },
+        "native.sdk.v1": {
+            "tier": "tier2_high",
+            "description": "Stable native C ABI plugin surface loaded from runtime.entryLibrary."
+        },
+        "native.raw_cpp.v1": {
+            "tier": "tier3_reserved",
+            "description": "Build-coupled raw engine interop for native plugins; requires explicit raw grant."
+        }
+    },
+    "rules": [
+        "Capabilities must be declared before use.",
+        "Denied capability calls must produce no side-effects.",
+        "Tier2+ defaults to deny until explicit user grant.",
+        "assets.raw.v1 requires assetSourceDefinitions and is limited to files owned by the declaring mod package.",
+        "render.meshes.v1 requires meshDefinitions and supports .obj, .otr/.o2r, or Fast64 source folders through the existing model loader.",
+        "render.skeletons.v1, render.animations.v1 and render.animation_graphs.v1 are contract entries for the convention-first v3 pipeline and currently load as metadata/DSL surfaces.",
+        "actors.prefabs.v1 requires prefabDefinitions and references render.meshes.v1 entries.",
+        "world.instances.v1 requires worldInstanceDefinitions and references actors.prefabs.v1 entries.",
+        "world.triggers.v1, world.encounters.v1, audio.events.v1 and cutscenes.tracks.v1 are convention-first world DSL surfaces.",
+        "editor.placement.v1 requires editorPlacementDefinitions and references actors.prefabs.v1 entries.",
+        "world.authoring.v1 requires worldAuthoringDefinitions and can reference editor.placement.v1 or actors.prefabs.v1 entries.",
+        "dsl.components.v1, dsl.entities.v1 and dsl.graphs.v1 load generic JSON DSL documents from their convention roots.",
+        "services.endpoints.v1 declares public service metadata and uses sharePolicy for access rules across the shared WASM/native host service bus.",
+        "native.sdk.v1 requires runtime.type=native-cpp-v1|hybrid-v1 and permission nativeinterop.",
+        "native.raw_cpp.v1 requires runtime.nativeMode=raw and permissions nativeinterop + nativeinterop.raw."
+    ]
+}

@@ -11,6 +11,7 @@
 #include "objects/object_kusa/object_kusa.h"
 #include "vt.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
+#include "soh/Enhancements/external-mods/ExternalModInterop.h"
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_THROW_ONLY)
 
@@ -128,6 +129,11 @@ void EnKusa_DropCollectible(EnKusa* this, PlayState* play) {
     s16 dropParams;
 
     if (!GameInteractor_Should(VB_GRASS_DROP_ITEM, true, this)) {
+        return;
+    }
+
+    if (ExternalMods_TryHandleGrassDrop(play, this->actor.world.pos.x, this->actor.world.pos.y, this->actor.world.pos.z,
+                                        this->actor.params & 3, (this->actor.params >> 8) & 0xF) != 0) {
         return;
     }
 

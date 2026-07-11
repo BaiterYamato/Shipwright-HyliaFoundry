@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-03-03T18:57:41Z",
+    "generatedUtc":  "2026-04-07T21:26:19Z",
     "apiVersion":  4,
     "actions":  [
                     {
@@ -231,6 +231,54 @@
                         "name":  "player.setDamageResponse"
                     },
                     {
+                        "category":  "player_resource",
+                        "name":  "setResourceValue"
+                    },
+                    {
+                        "category":  "player_resource",
+                        "name":  "addResourceValue"
+                    },
+                    {
+                        "category":  "player_resource",
+                        "name":  "consumeResource"
+                    },
+                    {
+                        "category":  "player_resource",
+                        "name":  "refillResource"
+                    },
+                    {
+                        "category":  "player_resource",
+                        "name":  "setResourceCapacity"
+                    },
+                    {
+                        "category":  "player_consumable",
+                        "name":  "grantConsumableStack"
+                    },
+                    {
+                        "category":  "player_consumable",
+                        "name":  "consumeConsumableStack"
+                    },
+                    {
+                        "category":  "player_consumable",
+                        "name":  "fillActiveBottleContent"
+                    },
+                    {
+                        "category":  "settings",
+                        "name":  "settings.get"
+                    },
+                    {
+                        "category":  "settings",
+                        "name":  "settings.set"
+                    },
+                    {
+                        "category":  "settings",
+                        "name":  "settings.reset"
+                    },
+                    {
+                        "category":  "settings",
+                        "name":  "settings.list"
+                    },
+                    {
                         "category":  "spells",
                         "name":  "spells.castSpell"
                     },
@@ -369,6 +417,94 @@
                     {
                         "category":  "render",
                         "name":  "render.overrideMaterial"
+                    },
+                    {
+                        "category":  "persistence",
+                        "name":  "persist.ensureEntityGuid"
+                    },
+                    {
+                        "category":  "persistence",
+                        "name":  "persist.saveEntityState"
+                    },
+                    {
+                        "category":  "persistence",
+                        "name":  "persist.loadEntityState"
+                    },
+                    {
+                        "category":  "persistence",
+                        "name":  "persist.deleteEntityState"
+                    },
+                    {
+                        "category":  "persistence",
+                        "name":  "persist.setDomainValue"
+                    },
+                    {
+                        "category":  "persistence",
+                        "name":  "persist.getDomainValue"
+                    },
+                    {
+                        "category":  "persistence",
+                        "name":  "persist.runMigrations"
+                    },
+                    {
+                        "category":  "world",
+                        "name":  "world.spawnFromProfile"
+                    },
+                    {
+                        "category":  "world",
+                        "name":  "world.time.setOverride"
+                    },
+                    {
+                        "category":  "world",
+                        "name":  "world.weather.setOverride"
+                    },
+                    {
+                        "category":  "narrative",
+                        "name":  "narrative.startDialogue"
+                    },
+                    {
+                        "category":  "narrative",
+                        "name":  "narrative.chooseOption"
+                    },
+                    {
+                        "category":  "narrative",
+                        "name":  "narrative.advanceDialogue"
+                    },
+                    {
+                        "category":  "narrative",
+                        "name":  "narrative.setFlag"
+                    },
+                    {
+                        "category":  "narrative",
+                        "name":  "narrative.clearFlag"
+                    },
+                    {
+                        "category":  "narrative",
+                        "name":  "narrative.startQuest"
+                    },
+                    {
+                        "category":  "narrative",
+                        "name":  "narrative.updateObjective"
+                    },
+                    {
+                        "category":  "narrative",
+                        "name":  "narrative.startTimeline"
+                    },
+                    {
+                        "category":  "narrative",
+                        "name":  "narrative.skipTimeline"
+                    },
+                    {
+                        "category":  "dev",
+                        "name":  "dev.reloadAll"
+                    },
+                    {
+                        "category":  "dev",
+                        "name":  "dev.reloadTarget"
+                    },
+                    {
+                        "category":  "dev",
+                        "name":  "dev.console.exec"
                     },
                     {
                         "category":  "wasm",

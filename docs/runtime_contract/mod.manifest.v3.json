@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "mod.manifest.v3",
+  "description": "Split-root, convention-first external mod manifest for API v4. Data files live under mods_data/<modId>; scripts/assets/native files live under mods_runtime/<modId>.",
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "version",
+    "type",
+    "apiVersion",
+    "runtime"
+  ],
+  "fields": {
+    "schemaVersion": "Must be mod.manifest.v3.",
+    "id": "Stable mod id.",
+    "name": "Display name.",
+    "version": "Semver string.",
+    "type": "framework | content | tools.",
+    "uiCategory": "core_api | mod.",
+    "apiVersion": "Must remain 4.",
+    "runtime": {
+      "type": "data-only | wasm | native | hybrid. Explicit v1 tokens remain accepted for compatibility.",
+      "module": "Optional for v3 when scripts/module.wasm|.wat exists by convention.",
+      "entryLibrary": "Optional for v3 when native/win64/plugin.dll exists by convention.",
+      "abiVersion": "Native ABI version.",
+      "nativeMode": "sdk | raw.",
+      "reloadPolicy": "manual | safe | dev_only.",
+      "buildIdPolicy": "ignore | match.",
+      "threadModel": "main_thread."
+    },
+    "sharePolicy": {
+      "read": "public | friends | owner | private.",
+      "write": "public | friends | owner.",
+      "override": "public | friends | owner.",
+      "nativeService": "public | friends | owner | private.",
+      "friends": "Allowlist of mod ids.",
+      "denyMods": "Explicit denylist of mod ids."
+    },
+    "imports": "Optional array of cross-mod read dependencies.",
+    "exports": "Optional array or object form of public exported namespaces/resources.",
+    "serviceEndpoints": "Optional array of cross-mod service metadata. The initial shared runtime surface exposes these entries through host query/service APIs for WASM and native SDK plugins.",
+    "capabilities": "Coverage/documentation surface. v3 discovery can bind conventional files even when fields are omitted from the manifest."
+  },
+  "composition": {
+    "components/*.json": "Visual component documents may expose prefabId/prefab directly or synthesize a prefab binding from meshId/mesh plus transform, lodDistance, and billboard.",
+    "entities/*.json": "Entity documents may reference component ids and become placeable through entityId consumers without repeating prefab ids.",
+    "world.instances.v1": "Each instance may use prefabId/prefab or entityId/entity.",
+    "editor.placement.v1": "Each placement may use prefabId/prefab or entityId/entity.",
+    "world.authoring.v1": "Each authored placement may use placementId/placement, prefabId/prefab, or entityId/entity."
+  },
+  "conventions": {
+    "entryScript": "scripts/init.json",
+    "runtime.module": [
+      "scripts/module.wasm",
+      "scripts/module.wat",
+      "scripts/noop.wat"
+    ],
+    "runtime.entryLibrary": "native/win64/plugin.dll",
+    "items.data.v2": "items/items.json",
+    "input.bindings.v2": "config/input.json",
+    "assets.raw.v1": "assets/sources.json",
+    "render.meshes.v1": "render/meshes.json",
+    "actors.prefabs.v1": "prefabs/prefabs.json",
+    "world.instances.v1": "world/instances.json",
+    "editor.placement.v1": "world/placement.json",
+    "world.authoring.v1": "world/authoring.json",
+    "narrative.flags.v1": "narrative/flags.json",
+    "narrative.dialogue.v1": "narrative/dialogue.json",
+    "narrative.quests.v1": "narrative/quests.json"
+  },
+  "dslRoots": [
+    "components/",
+    "entities/",
+    "prefabs/",
+    "graphs/",
+    "world/",
+    "narrative/",
+    "ui/",
+    "services/"
+  ]
+}

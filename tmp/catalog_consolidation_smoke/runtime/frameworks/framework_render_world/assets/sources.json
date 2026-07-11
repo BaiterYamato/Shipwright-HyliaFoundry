@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "com.example.lanterna_test:lanterna_quad_obj",
+      "path": "assets/lanterna_square.obj",
+      "kind": "mesh",
+      "format": "obj",
+      "hostAccess": true
+    },
+    {
+      "id": "com.example.lanterna_test:lanterna_quad_texture",
+      "path": "assets/lanterna_placeholder.png",
+      "kind": "texture",
+      "format": "png",
+      "hostAccess": true
+    }
+  ]
+}

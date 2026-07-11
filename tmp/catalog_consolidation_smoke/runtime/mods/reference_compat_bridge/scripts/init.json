@@ -1,0 +1,9 @@
+﻿{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "showNotification",
+      "text": "Compat Wrapper Demo loaded through container_kit dependency compatibility path."
+    }
+  ]
+}

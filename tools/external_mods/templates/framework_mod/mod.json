@@ -1,0 +1,58 @@
+{
+    "id": "__MOD_ID__",
+    "name": "__MOD_NAME__",
+    "version": "__VERSION__",
+    "type": "framework",
+    "apiVersion": 4,
+    "uiCategory": "core_api",
+    "loadPriority": 400,
+    "entryScript": "scripts/init.json",
+    "runtime": {
+        "type": "hybrid-v1",
+        "module": "scripts/noop.wat",
+        "entryLibrary": "native/win64/plugin.dll",
+        "abiVersion": 1,
+        "nativeMode": "sdk",
+        "reloadPolicy": "manual",
+        "buildIdPolicy": "ignore",
+        "threadModel": "main_thread",
+        "maxMemoryKb": 1024,
+        "maxCallMs": 2,
+        "maxFrameBudgetMs": 2,
+        "maxHookCallsPerFrame": 256,
+        "maxActorInstances": 64,
+        "maxActiveStatuses": 256
+    },
+    "itemDefinitions": "items/items.json",
+    "inputDefinitions": "config/input.json",
+    "engineVersionRange": ">=9.1.2 <10.0.0",
+    "releaseChannels": [
+        "stable"
+    ],
+    "capabilities": [
+        "native.sdk.v1"
+    ],
+    "capabilityRationales": {
+        "native.sdk.v1": "Declares native.sdk.v1 for the hybrid framework scaffold."
+    },
+    "permissions": [
+        "nativeinterop"
+    ],
+    "permissionRationales": {
+        "nativeinterop": "Required by the hybrid framework scaffold runtime."
+    },
+    "dependencies": [],
+    "provides": [
+        "framework.__MOD_ID__"
+    ],
+    "uses": [],
+    "exports": {
+        "framework": [
+            "framework.__MOD_ID__"
+        ],
+        "capabilities": [
+            "native.sdk.v1"
+        ]
+    },
+    "manifestNotes": "Use -Family render_world|narrative|persistence|ui_inventory|combat_ai|devtools_native to stamp a canonical preset."
+}

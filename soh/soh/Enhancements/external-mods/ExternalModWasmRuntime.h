@@ -38,6 +38,9 @@ struct ExternalModWasmHostApi {
     std::function<int32_t(ExternalModWasmGroundInfo&)> getGroundInfo;
     std::function<int32_t(const std::string&, ExternalModWasmRaycastHit&)> raycast;
     std::function<int32_t(const std::string&, int32_t, std::vector<ExternalModWasmRaycastHit>&)> raycastAll;
+    std::function<int32_t(const std::string&, std::string&)> queryPublicJson;
+    std::function<int32_t(const std::string&, const std::string&, const std::string&, std::string&)> callService;
+    std::function<int32_t(const std::string&, std::string&)> invokeActionJson;
 };
 
 struct ExternalModWasmConfig {

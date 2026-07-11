@@ -1,0 +1,11 @@
+{
+    "schemaVersion": "mod.lockfile.v1",
+    "generatedUtc": "2000-01-01T00:00:00Z",
+    "modId": "__MOD_ID__",
+    "version": "__VERSION__",
+    "releaseChannel": "stable",
+    "resolvedDependencies": [],
+    "resolvedLoadOrder": [
+        "__MOD_ID__"
+    ]
+}

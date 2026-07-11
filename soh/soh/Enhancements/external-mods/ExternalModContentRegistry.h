@@ -33,6 +33,10 @@ class ExternalModContentRegistry {
                                                                      const std::string& stateId);
     static const ExternalModSpellDefinition* FindSpellDefinitionById(const ExternalModRuntime& runtime,
                                                                      const std::string& spellId);
+    static const ExternalModPlayerResourceDefinition* FindPlayerResourceDefinitionById(const ExternalModRuntime& runtime,
+                                                                                        const std::string& resourceId);
+    static const ExternalModResourceRingDefinition* FindResourceRingDefinitionById(const ExternalModRuntime& runtime,
+                                                                                    const std::string& ringId);
 
     // Sort by loadPriority DESC and modId ASC (deterministic tie-breaker).
     static void SortPackagesByPriority(std::vector<ExternalModPackage*>& packages);

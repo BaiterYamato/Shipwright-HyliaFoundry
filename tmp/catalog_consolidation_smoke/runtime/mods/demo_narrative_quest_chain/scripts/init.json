@@ -1,0 +1,15 @@
+﻿{
+    "apiVersion":  4,
+    "onGameLoaded":  [
+                         {
+                             "questId":  "com.sylian.demo_quest_chain:main",
+                             "action":  "narrative.startQuest"
+                         },
+                         {
+                             "questId":  "com.sylian.demo_quest_chain:main",
+                             "objectiveId":  "step_1",
+                             "action":  "narrative.updateObjective",
+                             "state":  "active"
+                         }
+                     ]
+}

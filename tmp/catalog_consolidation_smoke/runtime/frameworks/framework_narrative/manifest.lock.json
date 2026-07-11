@@ -1,0 +1,13 @@
+﻿{
+    "schemaVersion":  "mod.lockfile.v1",
+    "generatedUtc":  "2000-01-01T00:00:00Z",
+    "modId":  "com.sylian.framework.narrative",
+    "version":  "0.1.0",
+    "releaseChannel":  "stable",
+    "resolvedDependencies":  [
+
+                             ],
+    "resolvedLoadOrder":  [
+                              "com.sylian.framework.narrative"
+                          ]
+}

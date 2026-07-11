@@ -1,0 +1,10 @@
+﻿{
+    "schemaVersion":  1,
+    "pages":  [
+                  {
+                      "slotCount":  24,
+                      "id":  "com.sylian.container_kit:bag_main",
+                      "persist":  true
+                  }
+              ]
+}

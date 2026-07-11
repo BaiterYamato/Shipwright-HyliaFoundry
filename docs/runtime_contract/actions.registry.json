@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-03-03T18:57:41Z",
+    "generatedUtc":  "2026-04-07T21:26:19Z",
     "apiVersion":  4,
     "description":  "Declarative registry for action validation/dispatch contracts.",
     "actions":  [
@@ -188,6 +188,91 @@
                                        "mode"
                                    ],
                         "name":  "player.setDamageResponse"
+                    },
+                    {
+                        "params":  [
+                                       "resourceId|resource",
+                                       "value"
+                                   ],
+                        "name":  "setResourceValue"
+                    },
+                    {
+                        "params":  [
+                                       "resourceId|resource",
+                                       "delta|value|amount"
+                                   ],
+                        "name":  "addResourceValue"
+                    },
+                    {
+                        "params":  [
+                                       "resourceId|resource",
+                                       "amount|value"
+                                   ],
+                        "name":  "consumeResource"
+                    },
+                    {
+                        "params":  [
+                                       "resourceId|resource",
+                                       "amount?"
+                                   ],
+                        "name":  "refillResource"
+                    },
+                    {
+                        "params":  [
+                                       "resourceId|resource",
+                                       "value|capacity"
+                                   ],
+                        "name":  "setResourceCapacity"
+                    },
+                    {
+                        "params":  [
+                                       "consumableId|consumable",
+                                       "amount|value?"
+                                   ],
+                        "name":  "grantConsumableStack"
+                    },
+                    {
+                        "params":  [
+                                       "consumableId|consumable",
+                                       "amount|value?"
+                                   ],
+                        "name":  "consumeConsumableStack"
+                    },
+                    {
+                        "params":  [
+                                       "consumableId|consumable"
+                                   ],
+                        "name":  "fillActiveBottleContent"
+                    },
+                    {
+                        "params":  [
+                                       "key",
+                                       "domain?",
+                                       "storeKey?"
+                                   ],
+                        "name":  "settings.get"
+                    },
+                    {
+                        "params":  [
+                                       "key",
+                                       "value",
+                                       "domain?"
+                                   ],
+                        "name":  "settings.set"
+                    },
+                    {
+                        "params":  [
+                                       "key?",
+                                       "domain?"
+                                   ],
+                        "name":  "settings.reset"
+                    },
+                    {
+                        "params":  [
+                                       "storeKey?",
+                                       "domain?"
+                                   ],
+                        "name":  "settings.list"
                     },
                     {
                         "params":  [
@@ -419,6 +504,148 @@
                                        "durationFrames?"
                                    ],
                         "name":  "render.overrideMaterial"
+                    },
+                    {
+                        "params":  [
+                                       "entityGuid?",
+                                       "scope?"
+                                   ],
+                        "name":  "persist.ensureEntityGuid"
+                    },
+                    {
+                        "params":  [
+                                       "entityGuid?",
+                                       "key?",
+                                       "value?"
+                                   ],
+                        "name":  "persist.saveEntityState"
+                    },
+                    {
+                        "params":  [
+                                       "entityGuid?",
+                                       "key?"
+                                   ],
+                        "name":  "persist.loadEntityState"
+                    },
+                    {
+                        "params":  [
+                                       "entityGuid?"
+                                   ],
+                        "name":  "persist.deleteEntityState"
+                    },
+                    {
+                        "params":  [
+                                       "domainId|domain",
+                                       "key",
+                                       "value"
+                                   ],
+                        "name":  "persist.setDomainValue"
+                    },
+                    {
+                        "params":  [
+                                       "domainId|domain",
+                                       "key"
+                                   ],
+                        "name":  "persist.getDomainValue"
+                    },
+                    {
+                        "params":  [
+                                       "migrationId?"
+                                   ],
+                        "name":  "persist.runMigrations"
+                    },
+                    {
+                        "params":  [
+                                       "profileId|profile"
+                                   ],
+                        "name":  "world.spawnFromProfile"
+                    },
+                    {
+                        "params":  [
+                                       "segment|value"
+                                   ],
+                        "name":  "world.time.setOverride"
+                    },
+                    {
+                        "params":  [
+                                       "weather|value"
+                                   ],
+                        "name":  "world.weather.setOverride"
+                    },
+                    {
+                        "params":  [
+                                       "dialogueId|id"
+                                   ],
+                        "name":  "narrative.startDialogue"
+                    },
+                    {
+                        "params":  [
+                                       "optionId|id"
+                                   ],
+                        "name":  "narrative.chooseOption"
+                    },
+                    {
+                        "params":  [
+                                       "nodeId?"
+                                   ],
+                        "name":  "narrative.advanceDialogue"
+                    },
+                    {
+                        "params":  [
+                                       "flagId|key",
+                                       "value?"
+                                   ],
+                        "name":  "narrative.setFlag"
+                    },
+                    {
+                        "params":  [
+                                       "flagId|key"
+                                   ],
+                        "name":  "narrative.clearFlag"
+                    },
+                    {
+                        "params":  [
+                                       "questId|id"
+                                   ],
+                        "name":  "narrative.startQuest"
+                    },
+                    {
+                        "params":  [
+                                       "questId",
+                                       "objectiveId",
+                                       "state?"
+                                   ],
+                        "name":  "narrative.updateObjective"
+                    },
+                    {
+                        "params":  [
+                                       "timelineId|id"
+                                   ],
+                        "name":  "narrative.startTimeline"
+                    },
+                    {
+                        "params":  [
+                                       "timelineId?"
+                                   ],
+                        "name":  "narrative.skipTimeline"
+                    },
+                    {
+                        "params":  [
+
+                                   ],
+                        "name":  "dev.reloadAll"
+                    },
+                    {
+                        "params":  [
+                                       "target|registry"
+                                   ],
+                        "name":  "dev.reloadTarget"
+                    },
+                    {
+                        "params":  [
+                                       "commandId|id"
+                                   ],
+                        "name":  "dev.console.exec"
                     },
                     {
                         "params":  [

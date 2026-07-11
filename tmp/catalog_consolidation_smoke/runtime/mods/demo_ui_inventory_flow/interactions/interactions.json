@@ -1,0 +1,14 @@
+﻿{
+    "interactions":  [
+                         {
+                             "id":  "com.sylian.demo_furnace_system:open",
+                             "actions":  [
+                                             {
+                                                 "containerId":  "com.sylian.demo_furnace_system:furnace",
+                                                 "action":  "container.open"
+                                             }
+                                         ]
+                         }
+                     ],
+    "schemaVersion":  1
+}

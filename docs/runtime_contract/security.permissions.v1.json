@@ -1,0 +1,18 @@
+{
+    "schemaVersion": "security.permissions.v1",
+    "description": "Per-mod user grants persisted by mod id/profile.",
+    "required": [
+        "schemaVersion",
+        "modId",
+        "profileId",
+        "grants"
+    ],
+    "properties": {
+        "schemaVersion": "security.permissions.v1",
+        "modId": "string",
+        "profileId": "string",
+        "updatedUtc": "optional UTC timestamp",
+        "grants": "object of runtime permission -> boolean (`filesystem`, `network`, `process`, `nativeinterop`, `nativeinterop.raw`, `engine.memory`, `editor.livelink`)",
+        "defaults": "optional policy baseline by tier"
+    }
+}

@@ -1,0 +1,20 @@
+﻿{
+    "schemaVersion":  "tool.modtool_report.v1",
+    "command":  "pack",
+    "generatedUtc":  "2026-04-07T16:17:13Z",
+    "success":  true,
+    "errors":  [
+
+               ],
+    "warnings":  [
+                     "[pack][com.example.native_smoke2] -IncludePdb requested but no .pdb files were found under the mod directory"
+                 ],
+    "data":  {
+                 "packageType":  "mod",
+                 "artifactPath":  "D:\\Desenvolvimento\\ship of harkinian zelda\\Shipwright\\tmp\\native_sdk_smoke_v2\\out\\com.example.native_smoke2_0.1.0.zip",
+                 "lockfilePath":  "D:\\Desenvolvimento\\ship of harkinian zelda\\Shipwright\\tmp\\native_sdk_smoke_v2\\manifest.lock.json",
+                 "releaseChannel":  "stable",
+                 "includePdb":  true,
+                 "artifactSha256":  "da1160fd35e5203a872d596e28a84b7f06c56e6601529e0d0b00b051dad17d76"
+             }
+}

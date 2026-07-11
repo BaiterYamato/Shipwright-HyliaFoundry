@@ -1,0 +1,21 @@
+{
+    "schemaVersion": "mod.lockfile.v1",
+    "description": "Deterministic dependency/load snapshot emitted by modtool pack.",
+    "required": [
+        "schemaVersion",
+        "generatedUtc",
+        "modId",
+        "version",
+        "resolvedDependencies",
+        "resolvedLoadOrder"
+    ],
+    "properties": {
+        "modId": "string",
+        "version": "semver string",
+        "generatedUtc": "UTC timestamp",
+        "resolvedDependencies": "array of id/versionRange records",
+        "resolvedLoadOrder": "ordered list of mod ids",
+        "registryOwnership": "optional diagnostic ownership map",
+        "fileHashes": "optional array of relativePath + sha256"
+    }
+}

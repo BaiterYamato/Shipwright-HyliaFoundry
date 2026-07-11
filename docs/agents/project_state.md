@@ -17,7 +17,7 @@ Last updated: 2026-03-03T13:45:00Z
 - Agent governance is repository-local under `docs/agents`.
 - Skill Pack mirror under `docs/agents/skills` currently has **17 skills**.
 - Plans ledger is append-only at `docs/agents/Plans.md`.
-- Future-version planning tracks live under `docs/agents/plan_tracks` (`v5`, `v6`, `v7`) and are linked from execution plans.
+- Future-version planning tracks live under `docs/agents/plan_tracks` (`v5`..`v10`) and are linked from execution plans.
 
 ## Active Decisions
 

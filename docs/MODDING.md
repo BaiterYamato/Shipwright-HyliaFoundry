@@ -28,12 +28,33 @@ v7 world graphics suite:
 - Content demos: `demo_room_profiles`, `demo_actor_lights`, `demo_green_fire_magic`
 - Authoring guides: `docs/examples/external_mods/v7_reference_suite_docs/*`
 
+v5.2 polish demos:
+
+- `framework_no_items_demo`
+- `unresolved_reference_demo`
+- `live_settings_realtime_demo`
+- `compat_wrapper_demo`
+
+These cover flexible contracts, severity diagnostics, settings schema UI, and wrapper compatibility.
+
+v9 persistence/narrative/dev suite:
+
+- Frameworks: `persistence_kit`, `narrative_kit`, `devtools_kit`
+- Content demos: `demo_persistent_tents`, `demo_loot_respawn`, `demo_dialogue_npc`,
+  `demo_cutscene_intro`, `demo_quest_chain`, `demo_hot_reload_playground`
+- Guides: `docs/PERSISTENCE_GUIDE.md`, `docs/NARRATIVE_GUIDE.md`, `docs/HOT_RELOAD_GUIDE.md`, `docs/COOKBOOK.md`
+
 Operational references:
 
 - Runtime exports: `docs/actions.json`, `docs/events.json`, `docs/catalogs.json`
 - Demo sync: `tools/external_mods/sync_examples_to_runtime.ps1`
 - Runtime export generation: `tools/external_mods/export_runtime_reference.ps1`
+- Contract docs generation: `tools/external_mods/generate_contract_docs.ps1`
 - Validation/lint: `tools/external_mods/validate_mod.ps1`
+- Manifest/settings contracts: `docs/runtime_contract/mod.manifest.v2.json`
+- v10 CLI tooling: `tools/external_mods/modtool.ps1`
+- Generated indexes: `docs/generated/contract_index.json`, `docs/generated/registry_index.json`
+- Framework wiki: `docs/framework_wiki/README.md`
 
 ## Path B ? Engine/C++ Modding
 

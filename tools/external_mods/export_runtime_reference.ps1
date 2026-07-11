@@ -20,7 +20,7 @@ $catalogs = [ordered]@{
     generatedUtc = $generatedUtc
     apiVersion = 4
     runtime = @{
-        type = "wasm3-v1"
+        type = "wasm3-v1|native-cpp-v1|hybrid-v1"
         budgetDefaults = @{
             maxCallMs = 2
             maxFrameBudgetMs = 2
@@ -28,6 +28,8 @@ $catalogs = [ordered]@{
             maxActorInstances = 64
             maxActiveStatuses = 256
         }
+        settingsDomains = @("global", "save", "session")
+        settingsApplyModes = @("realtime", "scene_reload", "restart")
     }
     capabilities = @(
         @{ id = "hooks.extended.v1"; fileField = "hookDefinitions"; fileDefault = "hooks/hooks.json" },
@@ -47,6 +49,9 @@ $catalogs = [ordered]@{
         @{ id = "input.bindings.v2"; fileField = "inputDefinitions"; fileDefault = "config/input.json"; schemaVersion = 1 },
         @{ id = "ui.runtime.v1"; fileField = "uiScreenDefinitions"; fileDefault = "ui/screens.json"; schemaVersion = 1 },
         @{ id = "ui.hud.v1"; fileField = "uiHudDefinitions"; fileDefault = "ui/hud_layouts.json"; schemaVersion = 1 },
+        @{ id = "player.resources.v1"; fileField = "playerResourceDefinitions"; fileDefault = "player/player_resources.json"; schemaVersion = 1 },
+        @{ id = "ui.resource_rings.v1"; fileField = "resourceRingDefinitions"; fileDefault = "ui/resource_rings.json"; schemaVersion = 1 },
+        @{ id = "player.consumables.v1"; fileField = "playerConsumableDefinitions"; fileDefault = "player/player_consumables.json"; schemaVersion = 1 },
         @{ id = "ui.inventory_ext.v1"; fileField = "inventoryExtensionDefinitions"; fileDefault = "inventory_ext/pages.json"; schemaVersion = 1 },
         @{ id = "containers.v1"; fileField = "containerDefinitions"; fileDefault = "containers/containers.json"; schemaVersion = 1 },
         @{ id = "recipes.processing.v1"; fileField = "recipeDefinitions"; fileDefault = "recipes/processing_recipes.json"; schemaVersion = 1 },
@@ -81,7 +86,33 @@ $catalogs = [ordered]@{
         @{ id = "world.scenes.v1"; fileField = "sceneProfileDefinitions"; fileDefault = "world/scene_profiles.json"; schemaVersion = 1 },
         @{ id = "world.rooms.v1"; fileField = "roomProfileDefinitions"; fileDefault = "world/room_profiles.json"; schemaVersion = 1 },
         @{ id = "assets.packs.v2"; fileField = "assetPackDefinitions"; fileDefault = "assets/packs.json"; schemaVersion = 1 },
-        @{ id = "debug.render_inspector.v1"; fileField = "renderInspectorDefinitions"; fileDefault = "debug/render_inspector.json"; schemaVersion = 1 }
+        @{ id = "assets.raw.v1"; fileField = "assetSourceDefinitions"; fileDefault = "assets/sources.json"; schemaVersion = 1; note = "Declares raw loose assets that can be prepared for native host access." },
+        @{ id = "render.meshes.v1"; fileField = "meshDefinitions"; fileDefault = "render/meshes.json"; schemaVersion = 1; note = "Registers reusable meshes using the same external model pipeline as custom item models." },
+        @{ id = "actors.prefabs.v1"; fileField = "prefabDefinitions"; fileDefault = "actors/prefabs.json"; schemaVersion = 1; note = "Declares visual prefabs that resolve render.meshes.v1 entries for actor/world placement." },
+        @{ id = "world.instances.v1"; fileField = "worldInstanceDefinitions"; fileDefault = "world/instances.json"; schemaVersion = 1; note = "Places prefab-backed world visuals by scene and optional room filters." },
+        @{ id = "editor.placement.v1"; fileField = "editorPlacementDefinitions"; fileDefault = "editor/placement.json"; schemaVersion = 1; note = "Registers reusable placeable entries that point at prefab visuals and carry default editor/world placement hints." },
+        @{ id = "world.authoring.v1"; fileField = "worldAuthoringDefinitions"; fileDefault = "world/authoring.json"; schemaVersion = 1; note = "Places authored prefab visuals using direct prefab references or editor placement library entries." },
+        @{ id = "debug.render_inspector.v1"; fileField = "renderInspectorDefinitions"; fileDefault = "debug/render_inspector.json"; schemaVersion = 1 },
+        @{ id = "world.persistence.v1"; fileField = "worldPersistenceDefinitions"; fileDefault = "world/persistence.json"; schemaVersion = 1 },
+        @{ id = "world.storage.v1"; fileField = "worldStorageDefinitions"; fileDefault = "world/storage_domains.json"; schemaVersion = 1 },
+        @{ id = "world.spawn_profiles.v1"; fileField = "worldSpawnProfileDefinitions"; fileDefault = "world/spawn_profiles.json"; schemaVersion = 1 },
+        @{ id = "world.forage.v1"; fileField = "worldForageDefinitions"; fileDefault = "world/forage.json"; schemaVersion = 1 },
+        @{ id = "world.time_weather.v1"; fileField = "worldTimeWeatherDefinitions"; fileDefault = "world/time_weather.json"; schemaVersion = 1 },
+        @{ id = "world.seeding.v1"; fileField = "worldSeedingDefinitions"; fileDefault = "world/seeding.json"; schemaVersion = 1 },
+        @{ id = "world.migrations.v1"; fileField = "worldMigrationDefinitions"; fileDefault = "world/migrations.json"; schemaVersion = 1 },
+        @{ id = "debug.persistence_inspector.v1"; fileField = "persistenceInspectorDefinitions"; fileDefault = "debug/persistence_inspector.json"; schemaVersion = 1 },
+        @{ id = "narrative.timeline.v1"; fileField = "narrativeTimelineDefinitions"; fileDefault = "narrative/timelines.json"; schemaVersion = 1 },
+        @{ id = "narrative.dialogue.v1"; fileField = "narrativeDialogueDefinitions"; fileDefault = "narrative/dialogues.json"; schemaVersion = 1 },
+        @{ id = "narrative.quests.v1"; fileField = "narrativeQuestDefinitions"; fileDefault = "narrative/quests.json"; schemaVersion = 1 },
+        @{ id = "narrative.flags.v1"; fileField = "narrativeFlagDefinitions"; fileDefault = "narrative/flags.json"; schemaVersion = 1 },
+        @{ id = "debug.narrative_inspector.v1"; fileField = "narrativeInspectorDefinitions"; fileDefault = "debug/narrative_inspector.json"; schemaVersion = 1 },
+        @{ id = "dev.hot_reload.v1"; fileField = "devHotReloadDefinitions"; fileDefault = "dev/hot_reload.json"; schemaVersion = 1 },
+        @{ id = "dev.console.v1"; fileField = "devConsoleDefinitions"; fileDefault = "dev/console_commands.json"; schemaVersion = 1 },
+        @{ id = "dev.watchers.v1"; fileField = "devWatcherDefinitions"; fileDefault = "dev/watchers.json"; schemaVersion = 1 },
+        @{ id = "native.sdk.v1"; fileField = ""; fileDefault = ""; note = "No file required; enables runtime.entryLibrary loading via the stable native SDK ABI." },
+        @{ id = "native.raw_cpp.v1"; fileField = ""; fileDefault = ""; note = "No file required; enables raw native engine interop and requires explicit raw permission grants." },
+        @{ id = "wasm.sandbox.v2"; fileField = "wasmSandboxDefinitions"; fileDefault = "runtime/wasm_sandbox.json"; schemaVersion = 1 },
+        @{ id = "debug.reload_inspector.v1"; fileField = "reloadInspectorDefinitions"; fileDefault = "debug/reload_inspector.json"; schemaVersion = 1 }
     )
     contracts = @{
         statuses = @{
@@ -95,6 +126,36 @@ $catalogs = [ordered]@{
             sceneHooks = @("onWorldSceneLoaded", "onWorldRoomEntered", "onWorldRoomExited")
             tickHooks = @("onWorldOverworldTick", "onWorldTimeOfDayChanged", "onWorldSkyboxChanged")
             renderActions = @("render.setPostFxPreset", "render.spawnLight", "render.setSkylight", "render.overrideMaterial")
+        }
+        settings = @{
+            schemaFile = "settings/settings.schema.json"
+            actions = @("settings.get", "settings.set", "settings.reset", "settings.list")
+            event = "settings.changed"
+        }
+        playerResources = @{
+            manifestFields = @("playerResourceDefinitions", "resourceRingDefinitions")
+            fileDefaults = @("player/player_resources.json", "ui/resource_rings.json")
+            actions = @("setResourceValue", "addResourceValue", "consumeResource", "refillResource", "setResourceCapacity")
+            conditions = @("resourceIsEmpty", "resourceBelowPercent", "resourceCanConsume")
+            hooks = @("onResourceChanged", "onResourceDepleted", "onResourceRecovered", "onResourceCapacityChanged")
+        }
+        playerConsumables = @{
+            manifestFields = @("playerConsumableDefinitions")
+            fileDefaults = @("player/player_consumables.json")
+            actions = @("grantConsumableStack", "consumeConsumableStack", "fillActiveBottleContent")
+            conditions = @("consumableStackAtLeast", "activeItemIsEmptyBottle", "playerInWater")
+        }
+        worldForage = @{
+            manifestFields = @("worldForageDefinitions")
+            fileDefaults = @("world/forage.json")
+            sources = @("tall_grass.cut")
+        }
+        persistence = @{
+            rootPath = "<save_root>/external_mods/persist/<worldSlotId>/<modId>/"
+            domainFiles = @("manifest.json", "entities/<scene>_<room>.json", "domains/*.json")
+        }
+        narrative = @{
+            keyActions = @("narrative.startDialogue", "narrative.chooseOption", "narrative.startQuest", "narrative.startTimeline")
         }
     }
 }
@@ -160,6 +221,18 @@ $actions = [ordered]@{
         @{ name = "player.setGravityScale"; category = "player" },
         @{ name = "player.setBoostType"; category = "player" },
         @{ name = "player.setDamageResponse"; category = "player" },
+        @{ name = "setResourceValue"; category = "player_resource" },
+        @{ name = "addResourceValue"; category = "player_resource" },
+        @{ name = "consumeResource"; category = "player_resource" },
+        @{ name = "refillResource"; category = "player_resource" },
+        @{ name = "setResourceCapacity"; category = "player_resource" },
+        @{ name = "grantConsumableStack"; category = "player_consumable" },
+        @{ name = "consumeConsumableStack"; category = "player_consumable" },
+        @{ name = "fillActiveBottleContent"; category = "player_consumable" },
+        @{ name = "settings.get"; category = "settings" },
+        @{ name = "settings.set"; category = "settings" },
+        @{ name = "settings.reset"; category = "settings" },
+        @{ name = "settings.list"; category = "settings" },
         @{ name = "spells.castSpell"; category = "spells" },
         @{ name = "ui.openScreen"; category = "ui" },
         @{ name = "ui.closeScreen"; category = "ui" },
@@ -195,6 +268,28 @@ $actions = [ordered]@{
         @{ name = "render.spawnLight"; category = "render" },
         @{ name = "render.setSkylight"; category = "render" },
         @{ name = "render.overrideMaterial"; category = "render" },
+        @{ name = "persist.ensureEntityGuid"; category = "persistence" },
+        @{ name = "persist.saveEntityState"; category = "persistence" },
+        @{ name = "persist.loadEntityState"; category = "persistence" },
+        @{ name = "persist.deleteEntityState"; category = "persistence" },
+        @{ name = "persist.setDomainValue"; category = "persistence" },
+        @{ name = "persist.getDomainValue"; category = "persistence" },
+        @{ name = "persist.runMigrations"; category = "persistence" },
+        @{ name = "world.spawnFromProfile"; category = "world" },
+        @{ name = "world.time.setOverride"; category = "world" },
+        @{ name = "world.weather.setOverride"; category = "world" },
+        @{ name = "narrative.startDialogue"; category = "narrative" },
+        @{ name = "narrative.chooseOption"; category = "narrative" },
+        @{ name = "narrative.advanceDialogue"; category = "narrative" },
+        @{ name = "narrative.setFlag"; category = "narrative" },
+        @{ name = "narrative.clearFlag"; category = "narrative" },
+        @{ name = "narrative.startQuest"; category = "narrative" },
+        @{ name = "narrative.updateObjective"; category = "narrative" },
+        @{ name = "narrative.startTimeline"; category = "narrative" },
+        @{ name = "narrative.skipTimeline"; category = "narrative" },
+        @{ name = "dev.reloadAll"; category = "dev" },
+        @{ name = "dev.reloadTarget"; category = "dev" },
+        @{ name = "dev.console.exec"; category = "dev" },
         @{ name = "invokeWasm"; category = "wasm" }
     )
     removedInApiV4 = @(
@@ -276,6 +371,26 @@ $events = [ordered]@{
         "onWorldOverworldTick",
         "onWorldTimeOfDayChanged",
         "onWorldSkyboxChanged",
+        "onPersistentEntityLoaded",
+        "onPersistentEntitySaved",
+        "onPersistentDomainMigrated",
+        "onWorldSpawnProfileTick",
+        "world.time.segmentChanged",
+        "world.weather.changed",
+        "onDialogueStarted",
+        "onDialogueChoiceCommitted",
+        "onQuestStateChanged",
+        "onTimelineStarted",
+        "onTimelineCompleted",
+        "onTimelineSkipped",
+        "onHotReloadApplied",
+        "onHotReloadFailed",
+        "onSandboxBudgetExceeded",
+        "onSandboxPermissionDenied",
+        "onResourceChanged",
+        "onResourceDepleted",
+        "onResourceRecovered",
+        "onResourceCapacityChanged",
         "onPlayDestroy",
         "onGameFrameUpdate"
     )
@@ -299,7 +414,8 @@ $events = [ordered]@{
         "onItemUsed",
         "onItemGranted",
         "onItemEquipped",
-        "onCooldownReady"
+        "onCooldownReady",
+        "settings.changed"
     )
     aliases = @(
         @{ from = "oninit"; to = "onspawn" },
@@ -340,6 +456,18 @@ $actionsRegistry = [ordered]@{
         @{ name = "player.setGravityScale"; params = @("scale") },
         @{ name = "player.setBoostType"; params = @("mode") },
         @{ name = "player.setDamageResponse"; params = @("mode") },
+        @{ name = "setResourceValue"; params = @("resourceId|resource", "value") },
+        @{ name = "addResourceValue"; params = @("resourceId|resource", "delta|value|amount") },
+        @{ name = "consumeResource"; params = @("resourceId|resource", "amount|value") },
+        @{ name = "refillResource"; params = @("resourceId|resource", "amount?") },
+        @{ name = "setResourceCapacity"; params = @("resourceId|resource", "value|capacity") },
+        @{ name = "grantConsumableStack"; params = @("consumableId|consumable", "amount|value?") },
+        @{ name = "consumeConsumableStack"; params = @("consumableId|consumable", "amount|value?") },
+        @{ name = "fillActiveBottleContent"; params = @("consumableId|consumable") },
+        @{ name = "settings.get"; params = @("key", "domain?", "storeKey?") },
+        @{ name = "settings.set"; params = @("key", "value", "domain?") },
+        @{ name = "settings.reset"; params = @("key?", "domain?") },
+        @{ name = "settings.list"; params = @("storeKey?", "domain?") },
         @{ name = "spells.castSpell"; params = @("spellId|spell") },
         @{ name = "ui.openScreen"; params = @("screen|screenId") },
         @{ name = "ui.closeScreen"; params = @("screen|screenId") },
@@ -375,6 +503,28 @@ $actionsRegistry = [ordered]@{
         @{ name = "render.spawnLight"; params = @("profileId|profile", "actorHandle?", "lifetimeMs?|durationMs?", "storeKey?") },
         @{ name = "render.setSkylight"; params = @("profileId|profile") },
         @{ name = "render.overrideMaterial"; params = @("materialId|material", "match?", "scope?", "durationFrames?") },
+        @{ name = "persist.ensureEntityGuid"; params = @("entityGuid?", "scope?") },
+        @{ name = "persist.saveEntityState"; params = @("entityGuid?", "key?", "value?") },
+        @{ name = "persist.loadEntityState"; params = @("entityGuid?", "key?") },
+        @{ name = "persist.deleteEntityState"; params = @("entityGuid?") },
+        @{ name = "persist.setDomainValue"; params = @("domainId|domain", "key", "value") },
+        @{ name = "persist.getDomainValue"; params = @("domainId|domain", "key") },
+        @{ name = "persist.runMigrations"; params = @("migrationId?") },
+        @{ name = "world.spawnFromProfile"; params = @("profileId|profile") },
+        @{ name = "world.time.setOverride"; params = @("segment|value") },
+        @{ name = "world.weather.setOverride"; params = @("weather|value") },
+        @{ name = "narrative.startDialogue"; params = @("dialogueId|id") },
+        @{ name = "narrative.chooseOption"; params = @("optionId|id") },
+        @{ name = "narrative.advanceDialogue"; params = @("nodeId?") },
+        @{ name = "narrative.setFlag"; params = @("flagId|key", "value?") },
+        @{ name = "narrative.clearFlag"; params = @("flagId|key") },
+        @{ name = "narrative.startQuest"; params = @("questId|id") },
+        @{ name = "narrative.updateObjective"; params = @("questId", "objectiveId", "state?") },
+        @{ name = "narrative.startTimeline"; params = @("timelineId|id") },
+        @{ name = "narrative.skipTimeline"; params = @("timelineId?") },
+        @{ name = "dev.reloadAll"; params = @() },
+        @{ name = "dev.reloadTarget"; params = @("target|registry") },
+        @{ name = "dev.console.exec"; params = @("commandId|id") },
         @{ name = "invokeWasm"; params = @("export", "args?") }
     )
 }
@@ -396,7 +546,13 @@ $conditionsRegistry = [ordered]@{
         @{ name = "sceneIs"; fields = @("op?", "value|numberValue") },
         @{ name = "roomIs"; fields = @("op?", "value|numberValue") },
         @{ name = "hasSwitchFlag"; fields = @("op?", "value|numberValue") },
-        @{ name = "var"; fields = @("scope", "key", "op?", "value") }
+        @{ name = "var"; fields = @("scope", "key", "op?", "value") },
+        @{ name = "resourceIsEmpty"; fields = @("resourceId|resource") },
+        @{ name = "resourceBelowPercent"; fields = @("resourceId|resource", "percent|value|numberValue") },
+        @{ name = "resourceCanConsume"; fields = @("resourceId|resource", "amount|value|numberValue") },
+        @{ name = "consumableStackAtLeast"; fields = @("consumableId|consumable", "amount|value|numberValue") },
+        @{ name = "activeItemIsEmptyBottle"; fields = @() },
+        @{ name = "playerInWater"; fields = @() }
     )
 }
 
@@ -422,4 +578,19 @@ foreach ($out in $outputs) {
     }
     Set-Content -Path $out.path -Value $json -Encoding UTF8
     Write-Host "Wrote $($out.path)"
+}
+
+$docsGeneratorScript = Join-Path $resolvedRoot "tools/external_mods/generate_contract_docs.ps1"
+if (Test-Path $docsGeneratorScript) {
+    & $docsGeneratorScript -RepoRoot $resolvedRoot -OutDir "docs/generated" -DryRun:$DryRun *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw "generate_contract_docs.ps1 failed while exporting runtime references"
+    }
+    if (-not $DryRun) {
+        Write-Host "Generated docs indexes under docs/generated"
+    } else {
+        Write-Host "[DryRun] Would generate docs indexes under docs/generated"
+    }
+} else {
+    Write-Warning "docs generator script not found: $docsGeneratorScript"
 }

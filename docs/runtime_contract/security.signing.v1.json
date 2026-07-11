@@ -1,0 +1,19 @@
+{
+    "schemaVersion": "security.signing.v1",
+    "description": "Optional signing envelope emitted by tooling.",
+    "required": [
+        "artifactPath",
+        "artifactSha256",
+        "signedUtc",
+        "method",
+        "signer"
+    ],
+    "properties": {
+        "artifactPath": "string",
+        "artifactSha256": "lowercase hex sha256",
+        "signedUtc": "UTC timestamp",
+        "method": "hash-only|detached-signature",
+        "signer": "local or trust-store identity",
+        "signature": "optional detached signature blob/armored text"
+    }
+}

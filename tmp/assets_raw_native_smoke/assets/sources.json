@@ -1,0 +1,13 @@
+﻿{
+    "schemaVersion": 1,
+    "sources": [
+        {
+            "id": "com.example.assets_raw_native_smoke:sample_payload",
+            "path": "assets/data/sample.json",
+            "kind": "data",
+            "format": "json",
+            "hostAccess": true
+        }
+    ]
+}
+

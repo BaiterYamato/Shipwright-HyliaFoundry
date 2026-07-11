@@ -1,0 +1,16 @@
+﻿{
+  "subscriptions": [
+    {
+      "id": "settings_changed_notice",
+      "hook": "settings.changed",
+      "dispatch": "actions",
+      "cooldownFrames": 0,
+      "actions": [
+        {
+          "action": "showNotification",
+          "text": "Live Settings Demo: setting updated (realtime or queued apply)."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+﻿{
+    "id":  "com.sylian.smoke.framework",
+    "name":  "Smoke Framework",
+    "version":  "0.1.0",
+    "type":  "framework",
+    "apiVersion":  4,
+    "uiCategory":  "core_api",
+    "loadPriority":  400,
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "hybrid-v1",
+                    "module":  "scripts/noop.wat",
+                    "entryLibrary":  "native/win64/plugin.dll",
+                    "abiVersion":  1,
+                    "nativeMode":  "sdk",
+                    "reloadPolicy":  "manual",
+                    "buildIdPolicy":  "ignore",
+                    "threadModel":  "main_thread",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "releaseChannels":  [
+                            "stable"
+                        ],
+    "capabilities":  [
+                         "native.sdk.v1",
+                         "assets.raw.v1",
+                         "render.meshes.v1",
+                         "actors.prefabs.v1",
+                         "world.instances.v1",
+                         "editor.placement.v1",
+                         "world.authoring.v1"
+                     ],
+    "capabilityRationales":  {
+                                 "native.sdk.v1":  "Declares native.sdk.v1 as part of Smoke Framework in the framework-first API v4 catalog.",
+                                 "assets.raw.v1":  "Declares assets.raw.v1 as part of Smoke Framework in the framework-first API v4 catalog.",
+                                 "render.meshes.v1":  "Declares render.meshes.v1 as part of Smoke Framework in the framework-first API v4 catalog.",
+                                 "actors.prefabs.v1":  "Declares actors.prefabs.v1 as part of Smoke Framework in the framework-first API v4 catalog.",
+                                 "world.instances.v1":  "Declares world.instances.v1 as part of Smoke Framework in the framework-first API v4 catalog.",
+                                 "editor.placement.v1":  "Declares editor.placement.v1 as part of Smoke Framework in the framework-first API v4 catalog.",
+                                 "world.authoring.v1":  "Declares world.authoring.v1 as part of Smoke Framework in the framework-first API v4 catalog."
+                             },
+    "permissions":  "nativeinterop",
+    "permissionRationales":  {
+                                 "nativeinterop":  "Required by Smoke Framework for the configured runtime and diagnostics surface."
+                             },
+    "dependencies":  [
+
+                     ],
+    "provides":  [
+                     "framework.render_world"
+                 ],
+    "uses":  [
+
+             ],
+    "exports":  {
+                    "framework":  [
+                                      "framework.render_world"
+                                  ],
+                    "capabilities":  [
+                                         "native.sdk.v1",
+                                         "assets.raw.v1",
+                                         "render.meshes.v1",
+                                         "actors.prefabs.v1",
+                                         "world.instances.v1",
+                                         "editor.placement.v1",
+                                         "world.authoring.v1"
+                                     ]
+                },
+    "manifestNotes":  "Use -Family render_world|narrative|persistence|ui_inventory|combat_ai|devtools_native to stamp a canonical preset."
+}

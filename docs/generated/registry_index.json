@@ -1,0 +1,38 @@
+﻿{
+    "schemaVersion":  "docs.registry_index.v1",
+    "generatedUtc":  "2026-04-10T16:42:40Z",
+    "registries":  [
+                       "docs/actions.json",
+                       "docs/events.json",
+                       "docs/catalogs.json"
+                   ],
+    "entries":  [
+                    {
+                        "path":  "docs/actions.json",
+                        "counts":  {
+                                       "actions":  127,
+                                       "removedInApiV4":  6,
+                                       "wasmHostImports":  11,
+                                       "disableReasonCodes":  6
+                                   }
+                    },
+                    {
+                        "path":  "docs/events.json",
+                        "counts":  {
+                                       "hooks":  66,
+                                       "behaviorEvents":  21,
+                                       "aliases":  3
+                                   }
+                    },
+                    {
+                        "path":  "docs/catalogs.json",
+                        "counts":  {
+                                       "capabilities":  81
+                                   }
+                    }
+                ],
+    "notes":  [
+                  "Use tools/external_mods/export_runtime_reference.ps1 to refresh runtime-derived registries.",
+                  "Use tools/external_mods/modtool.ps1 doctor to inspect conflicts and ownership resolution."
+              ]
+}

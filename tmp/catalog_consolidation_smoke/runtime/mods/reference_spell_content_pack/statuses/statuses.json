@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "statuses": [
+    {
+      "id": "com.sylian.sss_content_pack:burning_wall",
+      "displayName": "Firewall Burn",
+      "baseStatus": "core:fire",
+      "durationFrames": 120,
+      "tickFrames": 15,
+      "damagePerTick": 1,
+      "intensity": 220,
+      "visuals": {
+        "startFx": [
+          "com.sylian.sss_content_pack:firewall_flash"
+        ],
+        "loopFx": [
+          "com.sylian.sss_content_pack:burn_loop"
+        ]
+      }
+    },
+    {
+      "id": "com.sylian.sss_content_pack:levitation_field",
+      "displayName": "Levitation Field",
+      "baseStatus": "core:high_jump",
+      "durationFrames": 100,
+      "tickFrames": 20,
+      "damagePerTick": 0,
+      "intensity": 175,
+      "levitationProfile": {
+        "mode": "lift_suspend",
+        "liftSpeed": 7.5,
+        "holdHeight": 110.0,
+        "riseFrames": 12,
+        "suspendFrames": 60,
+        "lockHorizontal": true,
+        "gravityScaleWhileActive": 0.0
+      },
+      "visuals": {
+        "startFx": [
+          "com.sylian.sss_content_pack:levitation_pulse"
+        ],
+        "loopFx": [
+          "com.sylian.sss_content_pack:levitation_loop"
+        ]
+      }
+    }
+  ]
+}

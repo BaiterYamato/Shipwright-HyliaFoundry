@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "resources": [
+    {
+      "id": "com.sylian.player_survival_needs_demo:hunger",
+      "kind": "survival_hunger",
+      "displayName": "Hunger",
+      "settingsDomain": "save",
+      "storageDomainId": "survival_hunger",
+      "capacityStorageKey": "capacity",
+      "currentStorageKey": "current",
+      "baseCapacity": 100.0,
+      "wheelCapacity": 100.0,
+      "segmentCount": 10,
+      "initialValue": 100.0,
+      "persistCurrentValue": true,
+      "refillOnLoad": false,
+      "refillOnSceneEnter": false,
+      "regenRatePerSecond": 0.0,
+      "regenDelayMs": 0,
+      "depletedRegenDelayMs": 0,
+      "lowPercent": 0.25,
+      "lowThresholdPercent": 0.25,
+      "enabledSettingKey": "hungerEnabled",
+      "drainMultiplierSettingKey": "hungerDrainMultiplier",
+      "tickRules": [
+        {
+          "id": "base_hunger_drain",
+          "drainPerSecond": 0.0833333,
+          "movingMultiplier": 1.5,
+          "sprintMultiplier": 1.3333334,
+          "climbMultiplier": 1.3333334,
+          "swimMultiplier": 1.3333334,
+          "manualGameplayOnly": true
+        }
+      ],
+      "depletionEffects": {
+        "disableSprint": true,
+        "movementMultiplier": 0.85,
+        "periodicDamageHearts": 0.0,
+        "periodicDamageIntervalMs": 0
+      },
+      "resourceLinks": [
+        {
+          "targetResourceId": "com.sylian.player_resources_stamina_botw_demo:stamina",
+          "onDepletedRegenMultiplier": 0.5
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.player_survival_needs_demo:thirst",
+      "kind": "survival_thirst",
+      "displayName": "Thirst",
+      "settingsDomain": "save",
+      "storageDomainId": "survival_thirst",
+      "capacityStorageKey": "capacity",
+      "currentStorageKey": "current",
+      "baseCapacity": 100.0,
+      "wheelCapacity": 100.0,
+      "segmentCount": 10,
+      "initialValue": 100.0,
+      "persistCurrentValue": true,
+      "refillOnLoad": false,
+      "refillOnSceneEnter": false,
+      "regenRatePerSecond": 0.0,
+      "regenDelayMs": 0,
+      "depletedRegenDelayMs": 0,
+      "lowPercent": 0.25,
+      "lowThresholdPercent": 0.25,
+      "enabledSettingKey": "thirstEnabled",
+      "drainMultiplierSettingKey": "thirstDrainMultiplier",
+      "tickRules": [
+        {
+          "id": "base_thirst_drain",
+          "drainPerSecond": 0.1388889,
+          "movingMultiplier": 1.5,
+          "sprintMultiplier": 1.6666667,
+          "climbMultiplier": 1.6666667,
+          "swimMultiplier": 1.6666667,
+          "manualGameplayOnly": true
+        }
+      ],
+      "depletionEffects": {
+        "disableSprint": true,
+        "movementMultiplier": 0.8,
+        "periodicDamageHearts": 0.25,
+        "periodicDamageIntervalMs": 8000
+      },
+      "resourceLinks": [
+        {
+          "targetResourceId": "com.sylian.player_resources_stamina_botw_demo:stamina",
+          "onDepletedRegenMultiplier": 0.25
+        }
+      ]
+    }
+  ]
+}

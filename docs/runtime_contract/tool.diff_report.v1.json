@@ -1,0 +1,15 @@
+{
+    "schemaVersion": "tool.diff_report.v1",
+    "description": "Artifact-to-artifact change report from modtool diff.",
+    "required": [
+        "schemaVersion",
+        "generatedUtc",
+        "success",
+        "data"
+    ],
+    "properties": {
+        "data.artifactA": "path string",
+        "data.artifactB": "path string",
+        "data.changed": "boolean or list depending on mode"
+    }
+}

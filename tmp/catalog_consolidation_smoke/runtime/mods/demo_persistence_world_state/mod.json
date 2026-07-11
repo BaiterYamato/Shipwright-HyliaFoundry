@@ -1,0 +1,70 @@
+﻿{
+    "id":  "com.sylian.demo.persistence_world_state",
+    "name":  "Demo Persistence World State",
+    "version":  "0.1.0",
+    "type":  "content",
+    "apiVersion":  4,
+    "uiCategory":  "mod",
+    "loadPriority":  310,
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json",
+    "hookDefinitions":  "hooks/hooks.json",
+    "worldPersistenceDefinitions":  "world/persistence.json",
+    "worldStorageDefinitions":  "world/storage_domains.json",
+    "playerResourceDefinitions":  "player/player_resources.json",
+    "resourceRingDefinitions":  "ui/resource_rings.json",
+    "playerConsumableDefinitions":  "player/player_consumables.json",
+    "worldForageDefinitions":  "world/forage.json",
+    "settings":  {
+                     "schemaVersion":  1,
+                     "schemaFile":  "settings/settings.schema.json",
+                     "defaultDomain":  "save"
+                 },
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "releaseChannels":  [
+                            "stable"
+                        ],
+    "capabilities":  [
+                         "hooks.extended.v1",
+                         "input.bindings.v2",
+                         "player.resources.v1",
+                         "ui.resource_rings.v1",
+                         "player.consumables.v1",
+                         "world.forage.v1",
+                         "world.persistence.v1",
+                         "world.storage.v1"
+                     ],
+    "capabilityRationales":  {
+                                 "hooks.extended.v1":  "Declares hooks.extended.v1 as part of Demo Persistence World State in the framework-first API v4 catalog.",
+                                 "input.bindings.v2":  "Declares input.bindings.v2 as part of Demo Persistence World State in the framework-first API v4 catalog.",
+                                 "player.resources.v1":  "Declares player.resources.v1 as part of Demo Persistence World State in the framework-first API v4 catalog.",
+                                 "ui.resource_rings.v1":  "Declares ui.resource_rings.v1 as part of Demo Persistence World State in the framework-first API v4 catalog.",
+                                 "player.consumables.v1":  "Declares player.consumables.v1 as part of Demo Persistence World State in the framework-first API v4 catalog.",
+                                 "world.forage.v1":  "Declares world.forage.v1 as part of Demo Persistence World State in the framework-first API v4 catalog.",
+                                 "world.persistence.v1":  "Declares world.persistence.v1 as part of Demo Persistence World State in the framework-first API v4 catalog.",
+                                 "world.storage.v1":  "Declares world.storage.v1 as part of Demo Persistence World State in the framework-first API v4 catalog."
+                             },
+    "dependencies":  [
+                         {
+                             "id":  "com.sylian.framework.persistence",
+                             "versionRange":  "\u003e=0.1.0 \u003c0.2.0"
+                         }
+                     ],
+    "uses":  [
+                 "framework.persistence"
+             ],
+    "exports":  {
+
+                }
+}

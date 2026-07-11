@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "placements": [
+    {
+      "id": "com.example.lanterna_test:kokiri_lantern_placeable",
+      "displayName": "Lanterna Kokiri",
+      "category": "props",
+      "prefabId": "com.example.lanterna_test:lanterna_sign_prefab",
+      "scene": "SCENE_KOKIRI_FOREST",
+      "room": 0,
+      "transform": {
+        "rotation": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    }
+  ]
+}

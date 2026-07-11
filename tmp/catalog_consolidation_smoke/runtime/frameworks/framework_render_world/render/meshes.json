@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "meshes": [
+    {
+      "id": "com.example.lanterna_test:lanterna_quad_mesh",
+      "modelAsset": "assets/lanterna_square.obj",
+      "modelTextureAsset": "assets/lanterna_placeholder.png",
+      "modelUvOrigin": "auto",
+      "modelTextureFilter": "point",
+      "modelScale": 1.0
+    }
+  ]
+}

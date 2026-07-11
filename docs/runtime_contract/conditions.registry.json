@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-03-03T18:57:41Z",
+    "generatedUtc":  "2026-04-07T21:26:19Z",
     "apiVersion":  4,
     "description":  "Declarative registry for behavior condition contracts.",
     "conditions":  [
@@ -92,6 +92,45 @@
                                           "value"
                                       ],
                            "name":  "var"
+                       },
+                       {
+                           "fields":  [
+                                          "resourceId|resource"
+                                      ],
+                           "name":  "resourceIsEmpty"
+                       },
+                       {
+                           "fields":  [
+                                          "resourceId|resource",
+                                          "percent|value|numberValue"
+                                      ],
+                           "name":  "resourceBelowPercent"
+                       },
+                       {
+                           "fields":  [
+                                          "resourceId|resource",
+                                          "amount|value|numberValue"
+                                      ],
+                           "name":  "resourceCanConsume"
+                       },
+                       {
+                           "fields":  [
+                                          "consumableId|consumable",
+                                          "amount|value|numberValue"
+                                      ],
+                           "name":  "consumableStackAtLeast"
+                       },
+                       {
+                           "fields":  [
+
+                                      ],
+                           "name":  "activeItemIsEmptyBottle"
+                       },
+                       {
+                           "fields":  [
+
+                                      ],
+                           "name":  "playerInWater"
                        }
                    ]
 }

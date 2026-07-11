@@ -16,6 +16,7 @@ class Archive;
 namespace SOH {
 
 class ExternalModWasmRuntime;
+class ExternalModNativeRuntime;
 
 enum class ExternalModInputTriggerType {
     Pressed,
@@ -131,24 +132,175 @@ enum class ExternalModActorArchetype {
 enum class ExternalModRuntimeModuleFormat {
     WasmBinary,
     WatText,
+    NativeLibrary,
+};
+
+enum class ExternalModRuntimeKind {
+    DataOnly,
+    Wasm,
+    Native,
+    Hybrid,
+};
+
+enum class ExternalModNativeMode {
+    None,
+    Sdk,
+    Raw,
+};
+
+enum class ExternalModIssueSeverity {
+    Info,
+    Warn,
+    Error,
+    Fatal,
+};
+
+struct ExternalModIssue {
+    ExternalModIssueSeverity severity = ExternalModIssueSeverity::Info;
+    std::string code;
+    std::string message;
+    std::string sourcePath;
+    std::string registryId;
+    std::string referencedId;
+    std::string suggestedFix;
+};
+
+struct ExternalModSeveritySummary {
+    int32_t info = 0;
+    int32_t warn = 0;
+    int32_t error = 0;
+    int32_t fatal = 0;
+};
+
+enum class ExternalModSettingValueType {
+    Bool,
+    Int,
+    Float,
+    Enum,
+    String,
+    Color,
+    Keybind,
+};
+
+enum class ExternalModSettingDomain {
+    Global,
+    Save,
+    Session,
+};
+
+enum class ExternalModSettingApplyMode {
+    Realtime,
+    SceneReload,
+    Restart,
+};
+
+struct ExternalModSettingEntryDefinition {
+    std::string key;
+    std::string label;
+    std::string help;
+    std::string defaultValue;
+    ExternalModSettingValueType type = ExternalModSettingValueType::String;
+    float minValue = 0.0f;
+    float maxValue = 0.0f;
+    float stepValue = 0.0f;
+    bool hasMin = false;
+    bool hasMax = false;
+    bool hasStep = false;
+    std::vector<std::string> enumValues;
+    ExternalModSettingDomain domain = ExternalModSettingDomain::Global;
+    ExternalModSettingApplyMode applyMode = ExternalModSettingApplyMode::Realtime;
+    std::string requiresCapability;
+    std::string requiresRegistry;
+    bool experimental = false;
+};
+
+struct ExternalModSettingGroupDefinition {
+    std::string id;
+    std::string label;
+    int32_t order = 0;
+    std::vector<ExternalModSettingEntryDefinition> entries;
+};
+
+struct ExternalModSettingsSchemaDefinition {
+    bool valid = false;
+    int32_t version = 1;
+    std::vector<ExternalModSettingGroupDefinition> groups;
 };
 
 struct ExternalModManifest {
+    struct SharePolicy {
+        std::string read = "public";
+        std::string write = "owner";
+        std::string overrideAccess = "owner";
+        std::string nativeService = "public";
+        std::vector<std::string> denyMods;
+        std::vector<std::string> friends;
+    };
+
+    struct ImportDefinition {
+        std::string modId;
+        std::string namespaceId;
+        std::string access = "read";
+        bool optional = false;
+    };
+
+    struct ExportDefinition {
+        std::string id;
+        std::string namespaceId;
+        std::string kind;
+        std::string source;
+        std::string visibility = "public";
+        std::string mutableBy = "owner";
+        std::vector<std::string> friends;
+        std::vector<std::string> denyMods;
+    };
+
+    struct ServiceEndpointDefinition {
+        std::string id;
+        std::string kind;
+        std::string entry;
+        std::string visibility = "public";
+        std::string mutableBy = "owner";
+        std::vector<std::string> friends;
+        std::vector<std::string> denyMods;
+    };
+
     std::string id;
     std::string name;
     std::string version;
+    std::string schemaVersion = "mod.manifest.v2";
+    std::string type = "content";
     std::string uiCategory = "mod";
     int32_t apiVersion = 0;
     std::string gameVersionMin;
     std::string engineVersionRange;
     std::string entryScript;
+    std::string entryLibrary;
     std::vector<std::string> assets;
     struct Dependency {
         std::string modId;
         std::string versionRange;
     };
     std::vector<Dependency> dependencies;
+    std::vector<std::string> releaseChannels;
+    std::unordered_map<std::string, std::string> capabilityRationales;
+    std::unordered_map<std::string, std::string> permissionRationales;
     std::vector<std::string> permissions;
+    std::vector<std::string> provides;
+    std::vector<std::string> uses;
+    SharePolicy sharePolicy;
+    std::vector<ImportDefinition> imports;
+    std::vector<ExportDefinition> exports;
+    std::vector<ServiceEndpointDefinition> serviceEndpoints;
+    struct FilesPolicy {
+        std::vector<std::string> optional;
+    } files;
+    struct SettingsPolicy {
+        bool enabled = false;
+        int32_t schemaVersion = 0;
+        std::string schemaFile;
+        std::string defaultDomain = "global";
+    } settings;
     int32_t loadOrder = 0;
     int32_t loadPriority = 0;
     struct Entrypoints {
@@ -164,6 +316,11 @@ struct ExternalModManifest {
 
     std::string runtimeType;
     std::string runtimeModule;
+    int32_t runtimeAbiVersion = 1;
+    std::string runtimeNativeMode = "sdk";
+    std::string runtimeReloadPolicy = "manual";
+    std::string runtimeBuildIdPolicy = "ignore";
+    std::string runtimeThreadModel = "main_thread";
     int32_t runtimeMaxMemoryKb = 1024;
     int32_t runtimeMaxCallMs = 2;
     int32_t runtimeMaxFrameBudgetMs = 2;
@@ -191,6 +348,10 @@ struct ExternalModManifest {
     std::string hudReticleDefinitions;
     std::string uiScreenDefinitions;
     std::string uiHudDefinitions;
+    std::string playerResourceDefinitions;
+    std::string resourceRingDefinitions;
+    std::string playerConsumableDefinitions;
+    std::string worldForageDefinitions;
     std::string inventoryExtensionDefinitions;
     std::string containerDefinitions;
     std::string recipeDefinitions;
@@ -220,6 +381,10 @@ struct ExternalModManifest {
     std::string sceneProfileDefinitions;
     std::string roomProfileDefinitions;
     std::string assetPackDefinitions;
+    std::string assetSourceDefinitions;
+    std::string meshDefinitions;
+    std::string prefabDefinitions;
+    std::string worldInstanceDefinitions;
     std::string renderInspectorDefinitions;
     std::string editorRuntimeDefinitions;
     std::string editorUiDefinitions;
@@ -232,7 +397,36 @@ struct ExternalModManifest {
     std::string worldAuthoringDefinitions;
     std::string collisionAuthoringDefinitions;
     std::string editorInspectorDefinitions;
+    std::string worldPersistenceDefinitions;
+    std::string worldStorageDefinitions;
+    std::string worldSpawnProfileDefinitions;
+    std::string worldTimeWeatherDefinitions;
+    std::string worldSeedingDefinitions;
+    std::string worldMigrationDefinitions;
+    std::string persistenceInspectorDefinitions;
+    std::string narrativeTimelineDefinitions;
+    std::string narrativeDialogueDefinitions;
+    std::string narrativeQuestDefinitions;
+    std::string narrativeFlagDefinitions;
+    std::string narrativeInspectorDefinitions;
+    std::string devHotReloadDefinitions;
+    std::string devConsoleDefinitions;
+    std::string devWatcherDefinitions;
+    std::string wasmSandboxDefinitions;
+    std::string reloadInspectorDefinitions;
     std::vector<std::string> capabilities;
+};
+
+struct ExternalModDslDocument {
+    std::string id;
+    std::string category;
+    std::string subtype;
+    std::string sourcePath;
+    std::string visibility = "public";
+    std::string mutableBy = "owner";
+    std::vector<std::string> friends;
+    std::vector<std::string> denyMods;
+    std::string rawJson;
 };
 
 enum class ExternalModActionType {
@@ -334,6 +528,40 @@ enum class ExternalModActionType {
     RenderClearSkylight,
     RenderOverrideMaterial,
     RenderClearMaterialOverrides,
+    PersistEnsureEntityGuid,
+    PersistSaveEntityState,
+    PersistLoadEntityState,
+    PersistDeleteEntityState,
+    PersistSetDomainValue,
+    PersistGetDomainValue,
+    PersistRunMigrations,
+    WorldSpawnFromProfile,
+    WorldTimeSetOverride,
+    WorldWeatherSetOverride,
+    NarrativeStartDialogue,
+    NarrativeChooseOption,
+    NarrativeAdvanceDialogue,
+    NarrativeSetFlag,
+    NarrativeClearFlag,
+    NarrativeStartQuest,
+    NarrativeUpdateObjective,
+    NarrativeStartTimeline,
+    NarrativeSkipTimeline,
+    DevReloadAll,
+    DevReloadTarget,
+    DevConsoleExec,
+    SettingsGet,
+    SettingsSet,
+    SettingsReset,
+    SettingsList,
+    SetResourceValue,
+    AddResourceValue,
+    ConsumeResource,
+    RefillResource,
+    SetResourceCapacity,
+    GrantConsumableStack,
+    ConsumeConsumableStack,
+    FillActiveBottleContent,
 };
 
 enum class ExternalModStatusType {
@@ -433,6 +661,8 @@ struct ExternalModAction {
     std::string stateFlag;
     std::string stateControlMode;
     std::string uiScreenId;
+    std::string resourceId;
+    std::string consumableId;
     std::string inventoryPageId;
     int32_t inventorySlotCount = 0;
     std::string sourceBinding;
@@ -469,6 +699,28 @@ struct ExternalModAction {
     bool hasBoolValue = false;
     float floatValue = 0.0f;
     bool hasFloatValue = false;
+    std::string persistenceDomainId;
+    std::string persistenceEntityGuid;
+    std::string persistenceEntityScope;
+    std::string persistenceStateKey;
+    std::string persistenceStateValue;
+    std::string migrationId;
+    std::string spawnProfileId;
+    std::string timeSegmentId;
+    std::string weatherProfileId;
+    std::string dialogueId;
+    std::string dialogueNodeId;
+    std::string dialogueOptionId;
+    std::string questId;
+    std::string questObjectiveId;
+    std::string questState;
+    std::string timelineId;
+    std::string consoleCommandId;
+    std::string settingsKey;
+    std::string settingsValue;
+    std::string settingsDomain;
+    std::string settingsApplyMode;
+    bool settingsResetAll = false;
 };
 
 struct ExternalModSceneAction {
@@ -871,6 +1123,180 @@ struct ExternalModUiHudLayoutDefinition {
     std::string sourceModId;
 };
 
+struct ExternalModColorRgba {
+    uint8_t r = 255;
+    uint8_t g = 255;
+    uint8_t b = 255;
+    uint8_t a = 255;
+};
+
+enum class ExternalModResourceRingAnchorMode {
+    Contextual,
+    Fixed,
+    Both,
+};
+
+enum class ExternalModResourceRingFixedAnchor {
+    Left,
+    Right,
+    None,
+};
+
+struct ExternalModPlayerResourceActionRule {
+    std::string tag;
+    float startCost = 0.0f;
+    float costPerSecond = 0.0f;
+    bool blockWhenInsufficient = true;
+    bool cancelOnDepleted = true;
+    std::string depletedResponse;
+    std::string inputBindingId;
+};
+
+struct ExternalModPlayerResourceTickRule {
+    std::string id;
+    float drainPerSecond = 0.0f;
+    float movingMultiplier = 1.0f;
+    float sprintMultiplier = 1.0f;
+    float climbMultiplier = 1.0f;
+    float swimMultiplier = 1.0f;
+    bool manualGameplayOnly = true;
+};
+
+struct ExternalModPlayerResourceDepletionEffects {
+    bool disableSprint = false;
+    float movementMultiplier = 1.0f;
+    float periodicDamageHearts = 0.0f;
+    int32_t periodicDamageIntervalMs = 0;
+};
+
+struct ExternalModPlayerResourceLink {
+    std::string targetResourceId;
+    float onDepletedRegenMultiplier = 1.0f;
+};
+
+struct ExternalModPlayerResourceDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string kind = "custom";
+    std::string displayName;
+    std::string settingsDomain = "global";
+    std::string storageDomainId;
+    std::string capacityStorageKey = "capacity";
+    std::string currentStorageKey = "current";
+    float baseCapacity = 100.0f;
+    float wheelCapacity = 100.0f;
+    int32_t segmentCount = 4;
+    float initialValue = -1.0f;
+    bool persistCurrentValue = false;
+    bool refillOnLoad = true;
+    bool refillOnSceneEnter = true;
+    float regenRatePerSecond = 18.0f;
+    int32_t regenDelayMs = 900;
+    int32_t depletedRegenDelayMs = 1800;
+    float lowPercent = 0.25f;
+    float lowThresholdPercent = -1.0f;
+    std::string enabledSettingKey;
+    std::string drainMultiplierSettingKey;
+    std::string regenMultiplierSettingKey;
+    std::vector<ExternalModPlayerResourceActionRule> actionRules;
+    std::vector<ExternalModPlayerResourceTickRule> tickRules;
+    ExternalModPlayerResourceDepletionEffects depletionEffects;
+    std::vector<ExternalModPlayerResourceLink> resourceLinks;
+};
+
+enum class ExternalModPlayerConsumableStorageMode {
+    Stack,
+    BottleContent,
+};
+
+enum class ExternalModPlayerConsumableUseAnimation {
+    None,
+    DrinkDemo,
+};
+
+struct ExternalModPlayerConsumableEffect {
+    std::string resourceId;
+    float addValue = 0.0f;
+};
+
+struct ExternalModPlayerConsumableDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string displayName;
+    std::string settingsDomain = "save";
+    std::string storageDomainId;
+    std::string countStorageKey = "count";
+    ExternalModPlayerConsumableStorageMode storageMode = ExternalModPlayerConsumableStorageMode::Stack;
+    ExternalModPlayerConsumableUseAnimation useAnimation = ExternalModPlayerConsumableUseAnimation::None;
+    int32_t maxStack = 99;
+    int32_t usesPerFill = 1;
+    std::string fillSource;
+    int32_t placeholderItemId = -1;
+    int32_t placeholderPartialItemId = -1;
+    std::string placeholderIconAsset;
+    std::string placeholderPartialIconAsset;
+    std::vector<uint8_t> placeholderIconRgba32;
+    std::vector<uint8_t> placeholderPartialIconRgba32;
+    int32_t returnItemId = -1;
+    int32_t inventoryPlaceholderItemId = -1;
+    int32_t companionVanillaItemId = -1;
+    std::string companionIconAsset;
+    std::vector<uint8_t> companionIconRgba32;
+    std::vector<ExternalModPlayerConsumableEffect> effects;
+};
+
+struct ExternalModBottleContentState {
+    std::string consumableId;
+    int32_t remainingUses = 0;
+};
+
+struct ExternalModWorldForageRuleDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string source;
+    float chance = 0.0f;
+    bool replaceVanillaDrop = true;
+    std::vector<ExternalModAction> actions;
+};
+
+struct ExternalModResourceRingDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string resourceId;
+    std::string style = "botw_green";
+    std::string settingsDomain = "global";
+    ExternalModResourceRingAnchorMode anchorMode = ExternalModResourceRingAnchorMode::Both;
+    ExternalModResourceRingFixedAnchor fixedAnchor = ExternalModResourceRingFixedAnchor::Left;
+    float screenOffsetX = 48.0f;
+    float screenOffsetY = -48.0f;
+    float worldOffsetX = 0.0f;
+    float worldOffsetY = 40.0f;
+    float worldOffsetZ = 0.0f;
+    float scale = 1.0f;
+    float opacity = 1.0f;
+    float thickness = 7.0f;
+    float ringSpacing = 5.0f;
+    int32_t hideDelayMs = 900;
+    bool lowPulse = true;
+    bool showWhenFull = false;
+    std::string contextualEnabledSettingKey;
+    std::string fixedEnabledSettingKey;
+    std::string scaleSettingKey;
+    std::string opacitySettingKey;
+    std::string fixedStackGroup;
+    int32_t fixedStackOrder = 0;
+    float fixedStackSpacing = 18.0f;
+    std::string companionIconAsset;
+    std::string companionCounterSource;
+    int32_t companionVanillaItemId = -1;
+    std::vector<uint8_t> companionIconRgba32;
+    ExternalModColorRgba normalColor{ 110, 255, 110, 255 };
+    ExternalModColorRgba lowColor{ 255, 235, 90, 255 };
+    ExternalModColorRgba exhaustedColor{ 255, 110, 90, 255 };
+    ExternalModColorRgba backgroundColor{ 0, 0, 0, 150 };
+    ExternalModColorRgba segmentColor{ 255, 255, 255, 120 };
+};
+
 struct ExternalModInventoryPageDefinition {
     std::string id;
     std::string sourceModId;
@@ -1023,9 +1449,34 @@ struct ExternalModLightProfileDefinition {
     float flickerAmount = 0.0f;
     int32_t defaultLifetimeMs = 0;
     bool castShadows = false;
+    int32_t shadowResolution = 512;
+    float shadowBias = 0.01f;
+    float shadowNormalBias = 0.02f;
+    float shadowRange = 1200.0f;
+    float volumetricIntensity = 1.0f;
 };
 
 struct ExternalModPostFxPresetDefinition {
+    struct VolumetricsSettings {
+        bool enabled = false;
+        std::string quality = "medium";
+        float density = 0.03f;
+        std::array<float, 3> color = { { 1.0f, 1.0f, 1.0f } };
+        bool hasColor = false;
+        float ambientIntensity = 0.35f;
+        float anisotropy = 0.2f;
+        float startDistance = 64.0f;
+        float maxDistance = 2400.0f;
+        bool heightFogEnabled = false;
+        float baseHeight = 0.0f;
+        float heightFalloff = 0.0025f;
+        float lightShaftIntensity = 1.0f;
+        float shadowIntensity = 0.6f;
+        float temporalBlend = 0.88f;
+        float jitterScale = 1.0f;
+        bool debugView = false;
+    };
+
     std::string id;
     std::string tonemap = "filmic";
     float exposure = 1.0f;
@@ -1041,6 +1492,8 @@ struct ExternalModPostFxPresetDefinition {
     bool forceFogOverlay = false;
     float fogOverlayStrength = 0.0f;
     bool forceDepthAwareFog = false;
+    bool hasVolumetrics = false;
+    VolumetricsSettings volumetrics;
 };
 
 struct ExternalModSceneProfileDefinition {
@@ -1063,6 +1516,74 @@ struct ExternalModAssetPackDefinition {
     std::string id;
     int32_t priority = 0;
     std::string materialSetPath;
+};
+
+struct ExternalModAssetSourceDefinition {
+    std::string id;
+    std::string path;
+    std::string kind;
+    std::string format;
+    bool hostAccess = true;
+    uint64_t sizeBytes = 0;
+    bool loadedFromCache = false;
+    std::string preparedPath;
+};
+
+struct ExternalModMeshDefinition {
+    using CustomModelVertex = ExternalModItemDefinition::CustomModelVertex;
+    using CustomModelTriangle = ExternalModItemDefinition::CustomModelTriangle;
+
+    std::string id;
+    std::string sourceModId;
+    std::string modelAsset;
+    std::string modelTextureAsset;
+    std::string modelDisplayList;
+    float modelScale = 1.0f;
+    ExternalModModelUvOrigin modelUvOrigin = ExternalModModelUvOrigin::Auto;
+    ExternalModModelTextureFilter modelTextureFilter = ExternalModModelTextureFilter::Auto;
+    int32_t modelTextureTargetWidth = 0;
+    int32_t modelTextureTargetHeight = 0;
+    std::vector<CustomModelTriangle> customModelTriangles;
+    std::vector<uint8_t> modelTextureRgba32;
+    int32_t modelTextureWidth = 0;
+    int32_t modelTextureHeight = 0;
+    bool modelTextureHasTransparency = false;
+};
+
+struct ExternalModPrefabDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string meshId;
+    float offsetX = 0.0f;
+    float offsetY = 0.0f;
+    float offsetZ = 0.0f;
+    float rotOffsetX = 0.0f;
+    float rotOffsetY = 0.0f;
+    float rotOffsetZ = 0.0f;
+    float scaleX = 1.0f;
+    float scaleY = 1.0f;
+    float scaleZ = 1.0f;
+    float lodDistance = 5000.0f;
+    bool billboard = false;
+};
+
+struct ExternalModWorldInstanceDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string prefabId;
+    std::string entityId;
+    int16_t sceneId = -1;
+    int16_t roomId = -1;
+    bool hasRoomId = false;
+    float posX = 0.0f;
+    float posY = 0.0f;
+    float posZ = 0.0f;
+    float rotX = 0.0f;
+    float rotY = 0.0f;
+    float rotZ = 0.0f;
+    float scaleX = 1.0f;
+    float scaleY = 1.0f;
+    float scaleZ = 1.0f;
 };
 
 struct ExternalModRenderInspectorDefinition {
@@ -1099,6 +1620,21 @@ struct ExternalModEditorProjectDefinition {
 
 struct ExternalModEditorPlacementDefinition {
     std::string id;
+    std::string sourceModId;
+    std::string prefabId;
+    std::string entityId;
+    std::string displayName;
+    std::string category = "default";
+    int16_t sceneId = -1;
+    int16_t roomId = -1;
+    bool hasSceneId = false;
+    bool hasRoomId = false;
+    float rotX = 0.0f;
+    float rotY = 0.0f;
+    float rotZ = 0.0f;
+    float scaleX = 1.0f;
+    float scaleY = 1.0f;
+    float scaleZ = 1.0f;
 };
 
 struct ExternalModAssetImporterDefinition {
@@ -1107,6 +1643,25 @@ struct ExternalModAssetImporterDefinition {
 
 struct ExternalModWorldAuthoringDefinition {
     std::string id;
+    std::string sourceModId;
+    std::string placementId;
+    std::string prefabId;
+    std::string entityId;
+    int16_t sceneId = -1;
+    int16_t roomId = -1;
+    bool hasSceneId = false;
+    bool hasRoomId = false;
+    float posX = 0.0f;
+    float posY = 0.0f;
+    float posZ = 0.0f;
+    float rotX = 0.0f;
+    float rotY = 0.0f;
+    float rotZ = 0.0f;
+    bool hasRotation = false;
+    float scaleX = 1.0f;
+    float scaleY = 1.0f;
+    float scaleZ = 1.0f;
+    bool hasScale = false;
 };
 
 struct ExternalModCollisionAuthoringDefinition {
@@ -1115,6 +1670,165 @@ struct ExternalModCollisionAuthoringDefinition {
 
 struct ExternalModEditorInspectorDefinition {
     std::string id;
+};
+
+struct ExternalModWorldPersistenceDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string scope = "room";
+    bool autoSaveOnRoomExit = true;
+    bool autoLoadOnRoomEnter = true;
+};
+
+struct ExternalModWorldStorageDomainDefinition {
+    std::string id;
+    std::string sourceModId;
+    int32_t version = 1;
+    std::string file = "domains/worldState.json";
+};
+
+struct ExternalModWorldSpawnProfileDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string actorArchetypeId;
+    int32_t maxActive = 1;
+    int32_t cooldownFrames = 300;
+    float minDistanceFromPlayer = 120.0f;
+    float maxDistanceFromPlayer = 1200.0f;
+};
+
+struct ExternalModWorldTimeWeatherDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string defaultTimeSegment = "day";
+    std::string defaultWeather = "clear";
+};
+
+struct ExternalModWorldSeedingDefinition {
+    std::string id;
+    std::string sourceModId;
+    int32_t seedOffset = 0;
+};
+
+struct ExternalModWorldMigrationDefinition {
+    std::string id;
+    std::string sourceModId;
+    int32_t fromVersion = 1;
+    int32_t toVersion = 1;
+    std::vector<ExternalModAction> actions;
+};
+
+struct ExternalModPersistenceInspectorDefinition {
+    std::string id;
+    std::string sourceModId;
+    bool enabledByDefault = false;
+};
+
+struct ExternalModNarrativeFlagDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string valueType = "bool";
+    std::string scope = "global";
+    std::string defaultValue = "false";
+};
+
+struct ExternalModNarrativeDialogueOptionDefinition {
+    std::string id;
+    std::string text;
+    std::string nextNodeId;
+    std::vector<ExternalModAction> onChoose;
+};
+
+struct ExternalModNarrativeDialogueNodeDefinition {
+    std::string id;
+    std::string speaker;
+    std::string line;
+    std::string nextNodeId;
+    std::vector<ExternalModNarrativeDialogueOptionDefinition> options;
+    std::vector<ExternalModAction> onEnter;
+};
+
+struct ExternalModNarrativeDialogueDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string startNodeId;
+    std::vector<ExternalModNarrativeDialogueNodeDefinition> nodes;
+};
+
+struct ExternalModNarrativeQuestObjectiveDefinition {
+    std::string id;
+    std::string text;
+    std::string state = "pending";
+};
+
+struct ExternalModNarrativeQuestDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string startState = "inactive";
+    std::vector<ExternalModNarrativeQuestObjectiveDefinition> objectives;
+    std::vector<ExternalModAction> onStart;
+    std::vector<ExternalModAction> onComplete;
+};
+
+struct ExternalModNarrativeTimelineTrackDefinition {
+    std::string id;
+    std::string type;
+    int32_t atFrame = 0;
+    std::vector<ExternalModAction> actions;
+};
+
+struct ExternalModNarrativeTimelineDefinition {
+    std::string id;
+    std::string sourceModId;
+    int32_t durationFrames = 0;
+    bool skippable = true;
+    std::vector<ExternalModNarrativeTimelineTrackDefinition> tracks;
+    std::vector<ExternalModAction> onCompleted;
+    std::vector<ExternalModAction> onSkipped;
+};
+
+struct ExternalModNarrativeInspectorDefinition {
+    std::string id;
+    std::string sourceModId;
+    bool enabledByDefault = false;
+};
+
+struct ExternalModDevHotReloadDefinition {
+    std::string id;
+    std::string sourceModId;
+    bool enabled = true;
+    int32_t debounceMs = 250;
+};
+
+struct ExternalModDevConsoleCommandDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string command;
+    std::vector<ExternalModAction> actions;
+};
+
+struct ExternalModDevWatcherDefinition {
+    std::string id;
+    std::string sourceModId;
+    std::string path;
+    std::string target = "all";
+    int32_t debounceMs = 250;
+};
+
+struct ExternalModWasmSandboxDefinition {
+    std::string id;
+    std::string sourceModId;
+    int32_t maxCallMs = 2;
+    int32_t maxFrameBudgetMs = 2;
+    int32_t maxHookCallsPerFrame = 256;
+    bool deterministicMode = false;
+    std::vector<std::string> allowedSurfaces;
+};
+
+struct ExternalModReloadInspectorDefinition {
+    std::string id;
+    std::string sourceModId;
+    bool enabledByDefault = false;
 };
 
 struct ExternalModBehaviorCondition {
@@ -1181,6 +1895,7 @@ struct ExternalModActorDefinition {
     bool interactable = false;
     float interactDistance = 80.0f;
     std::string behaviorId;
+    std::string prefabId;
     std::vector<std::string> components;
     std::string exportOnInit;
     std::string exportOnUpdate;
@@ -1260,6 +1975,27 @@ enum class ExternalModHookType {
     OnRenderLightSpawned,
     OnRenderLightExpired,
     OnRenderFallbackApplied,
+    OnPersistentEntityLoaded,
+    OnPersistentEntitySaved,
+    OnPersistentDomainMigrated,
+    OnWorldSpawnProfileTick,
+    OnWorldTimeSegmentChanged,
+    OnWorldWeatherChanged,
+    OnDialogueStarted,
+    OnDialogueChoiceCommitted,
+    OnQuestStateChanged,
+    OnTimelineStarted,
+    OnTimelineCompleted,
+    OnTimelineSkipped,
+    OnHotReloadApplied,
+    OnHotReloadFailed,
+    OnSandboxBudgetExceeded,
+    OnSandboxPermissionDenied,
+    OnSettingsChanged,
+    OnResourceChanged,
+    OnResourceDepleted,
+    OnResourceRecovered,
+    OnResourceCapacityChanged,
     OnPlayDestroy,
     OnGameFrameUpdate,
 };
@@ -1319,6 +2055,10 @@ struct ExternalModRuntime {
     std::vector<ExternalModAimCameraProfile> cameraProfiles;
     std::vector<ExternalModUiScreenDefinition> uiScreenDefinitions;
     std::vector<ExternalModUiHudLayoutDefinition> uiHudDefinitions;
+    std::vector<ExternalModPlayerResourceDefinition> playerResourceDefinitions;
+    std::vector<ExternalModResourceRingDefinition> resourceRingDefinitions;
+    std::vector<ExternalModPlayerConsumableDefinition> playerConsumableDefinitions;
+    std::vector<ExternalModWorldForageRuleDefinition> worldForageDefinitions;
     std::vector<ExternalModInventoryPageDefinition> inventoryPageDefinitions;
     std::vector<ExternalModContainerDefinition> containerDefinitions;
     std::vector<ExternalModProcessingRecipeDefinition> recipeDefinitions;
@@ -1337,6 +2077,10 @@ struct ExternalModRuntime {
     std::vector<ExternalModSceneProfileDefinition> sceneProfiles;
     std::vector<ExternalModRoomProfileDefinition> roomProfiles;
     std::vector<ExternalModAssetPackDefinition> assetPackDefinitions;
+    std::vector<ExternalModAssetSourceDefinition> assetSourceDefinitions;
+    std::vector<ExternalModMeshDefinition> meshDefinitions;
+    std::vector<ExternalModPrefabDefinition> prefabDefinitions;
+    std::vector<ExternalModWorldInstanceDefinition> worldInstanceDefinitions;
     std::vector<ExternalModRenderInspectorDefinition> renderInspectorDefinitions;
     std::vector<ExternalModEditorRuntimeDefinition> editorRuntimeDefinitions;
     std::vector<ExternalModEditorUiDefinition> editorUiDefinitions;
@@ -1349,6 +2093,25 @@ struct ExternalModRuntime {
     std::vector<ExternalModWorldAuthoringDefinition> worldAuthoringDefinitions;
     std::vector<ExternalModCollisionAuthoringDefinition> collisionAuthoringDefinitions;
     std::vector<ExternalModEditorInspectorDefinition> editorInspectorDefinitions;
+    std::vector<ExternalModWorldPersistenceDefinition> worldPersistenceDefinitions;
+    std::vector<ExternalModWorldStorageDomainDefinition> worldStorageDefinitions;
+    std::vector<ExternalModWorldSpawnProfileDefinition> worldSpawnProfiles;
+    std::vector<ExternalModWorldTimeWeatherDefinition> worldTimeWeatherDefinitions;
+    std::vector<ExternalModWorldSeedingDefinition> worldSeedingDefinitions;
+    std::vector<ExternalModWorldMigrationDefinition> worldMigrationDefinitions;
+    std::vector<ExternalModPersistenceInspectorDefinition> persistenceInspectorDefinitions;
+    std::vector<ExternalModNarrativeFlagDefinition> narrativeFlagDefinitions;
+    std::vector<ExternalModNarrativeDialogueDefinition> narrativeDialogueDefinitions;
+    std::vector<ExternalModNarrativeQuestDefinition> narrativeQuestDefinitions;
+    std::vector<ExternalModNarrativeTimelineDefinition> narrativeTimelineDefinitions;
+    std::vector<ExternalModNarrativeInspectorDefinition> narrativeInspectorDefinitions;
+    std::vector<ExternalModDevHotReloadDefinition> devHotReloadDefinitions;
+    std::vector<ExternalModDevConsoleCommandDefinition> devConsoleDefinitions;
+    std::vector<ExternalModDevWatcherDefinition> devWatcherDefinitions;
+    std::vector<ExternalModWasmSandboxDefinition> wasmSandboxDefinitions;
+    std::vector<ExternalModReloadInspectorDefinition> reloadInspectorDefinitions;
+    std::vector<ExternalModDslDocument> dslDocuments;
+    ExternalModSettingsSchemaDefinition settingsSchema;
     std::vector<ExternalModFxPresetDefinition> fxPresets;
     std::vector<ExternalModStateDefinition> stateDefinitions;
     std::vector<ExternalModSpellDefinition> spellDefinitions;
@@ -1457,6 +2220,38 @@ struct ExternalModRuntime {
         std::string scope;
         int32_t framesRemaining = 0;
     };
+    struct PlayerResourceState {
+        std::string resourceId;
+        float currentValue = 0.0f;
+        float capacityValue = 0.0f;
+        bool initialized = false;
+        bool depleted = false;
+        bool recovering = false;
+        bool consumedThisFrame = false;
+        int32_t regenDelayRemainingMs = 0;
+        int32_t visibleMs = 0;
+        int32_t periodicEffectTimerMs = 0;
+        int16_t lastSceneInitialized = -1;
+        int16_t lastRoomInitialized = -1;
+    };
+    struct PersistentEntityState {
+        std::string entityGuid;
+        std::string scope = "room";
+        int16_t sceneId = -1;
+        int16_t roomId = -1;
+        std::unordered_map<std::string, std::string> values;
+    };
+    struct NarrativeQuestState {
+        std::string questId;
+        std::string state;
+        std::unordered_map<std::string, std::string> objectives;
+    };
+    struct NarrativeTimelineState {
+        std::string timelineId;
+        int32_t frame = 0;
+        int32_t durationFrames = 0;
+        bool skippable = true;
+    };
     struct SurfState {
         bool active = false;
         std::string sourceModId;
@@ -1484,6 +2279,10 @@ struct ExternalModRuntime {
     std::unordered_map<int32_t, NavPathState> activeNavPaths;
     std::vector<DynamicLightState> activeDynamicLights;
     std::vector<MaterialOverrideState> materialOverrides;
+    std::unordered_map<std::string, PlayerResourceState> playerResourceStates;
+    std::unordered_map<std::string, int32_t> consumableStackCounts;
+    std::unordered_map<int32_t, ExternalModBottleContentState> customBottleContentBySlot;
+    std::unordered_map<int32_t, std::string> customInventoryConsumableBySlot;
     std::unordered_set<std::string> openUiScreens;
     std::unordered_map<std::string, bool> debugOverlayVisibility;
     std::string activeSceneProfileId;
@@ -1500,8 +2299,36 @@ struct ExternalModRuntime {
     int32_t nextDynamicLightHandle = 1;
     std::unordered_map<std::string, int32_t> fxHandleByKey;
     std::unordered_map<std::string, int32_t> spellCooldownsById;
+    std::unordered_map<std::string, bool> permissionGrants;
     std::unordered_map<std::string, std::string> globalBlackboard;
     std::unordered_map<int16_t, std::unordered_map<std::string, std::string>> sceneBlackboard;
+    std::unordered_map<std::string, std::unordered_map<std::string, std::string>> persistentDomains;
+    std::unordered_map<std::string, std::string> settingsGlobalValues;
+    std::unordered_map<std::string, std::string> settingsSaveValues;
+    std::unordered_map<std::string, std::string> settingsSessionValues;
+    std::unordered_map<std::string, std::string> pendingSceneReloadSettings;
+    std::unordered_map<std::string, std::string> pendingRestartSettings;
+    bool settingsGlobalDirty = false;
+    bool settingsSaveDirty = false;
+    std::unordered_map<std::string, PersistentEntityState> persistentEntities;
+    std::unordered_map<uint32_t, std::string> persistentEntityGuidByActorHandle;
+    bool persistentStateDirty = false;
+    std::unordered_map<std::string, std::string> narrativeFlags;
+    std::unordered_map<std::string, NarrativeQuestState> narrativeQuests;
+    std::unordered_map<std::string, NarrativeTimelineState> activeTimelines;
+    std::string activeDialogueId;
+    std::string activeDialogueNodeId;
+    std::string worldTimeSegment = "day";
+    std::string worldWeatherState = "clear";
+    int32_t worldSeed = 0;
+    bool hotReloadEnabled = false;
+    int32_t hotReloadDebounceMs = 250;
+    int32_t hotReloadCooldownMs = 0;
+    int32_t sandboxMaxCallMs = 2;
+    int32_t sandboxMaxFrameBudgetMs = 2;
+    int32_t sandboxMaxHookCallsPerFrame = 256;
+    bool sandboxDeterministicMode = false;
+    std::unordered_set<std::string> sandboxAllowedSurfaces;
     std::vector<std::pair<uint32_t, std::string>> pendingSignals;
     int16_t lastSceneSeen = -1;
     int16_t lastRoomSeen = -1;
@@ -1523,21 +2350,44 @@ struct ExternalModRuntime {
     int32_t behaviorMaxStepsPerModPerFrame = 5000;
     int32_t maxActiveStatusEffects = 256;
     int32_t behaviorStepsThisFrame = 0;
+    ExternalModRuntimeKind kind = ExternalModRuntimeKind::Wasm;
+    ExternalModNativeMode nativeMode = ExternalModNativeMode::None;
     ExternalModRuntimeModuleFormat moduleFormat = ExternalModRuntimeModuleFormat::WasmBinary;
     std::string moduleSourcePath;
     size_t compiledModuleSizeBytes = 0;
     int32_t moduleCompileTimeMs = 0;
     std::string moduleCompileDiagnostics;
+    std::string nativeLibrarySourcePath;
+    std::string nativeLibraryLoadedPath;
+    int32_t nativeAbiVersion = 1;
+    std::string nativeReloadPolicy = "manual";
+    std::string nativeBuildIdPolicy = "ignore";
+    std::string nativeThreadModel = "main_thread";
+    std::string nativePluginName;
+    std::string nativePluginVersion;
+    std::string nativePluginAuthor;
+    std::string nativePluginBuildId;
+    bool nativeUnsafeRaw = false;
+    bool nativeLoadedFromCache = false;
     std::vector<std::filesystem::path> generatedAssetPaths;
     std::vector<std::shared_ptr<Ship::Archive>> generatedAssetArchives;
     std::unique_ptr<ExternalModWasmRuntime> wasmRuntime;
+    std::unique_ptr<ExternalModNativeRuntime> nativeRuntime;
 };
 
 struct ExternalModPackage {
     std::filesystem::path sourcePath;
+    std::filesystem::path dataRootPath;
+    std::filesystem::path runtimeRootPath;
+    std::filesystem::path manifestPath;
+    std::string zipDataPrefix;
+    std::string zipRuntimePrefix;
     bool isZip = false;
+    bool isSplitLayout = false;
     bool valid = false;
     std::string error;
+    std::vector<ExternalModIssue> issues;
+    ExternalModSeveritySummary severitySummary;
     ExternalModManifest manifest;
     std::vector<std::filesystem::path> mountedAssets;
     ExternalModRuntime runtime;
@@ -1554,7 +2404,14 @@ struct ExternalModHookEventContext {
     int16_t healthDelta = 0;
     std::string statusId;
     std::string stateId;
+    std::string settingsKey;
+    std::string settingsDomain;
+    std::string settingsApplyMode;
+    std::string resourceId;
     std::string value;
+    float resourceCurrentValue = 0.0f;
+    float resourceCapacityValue = 0.0f;
+    float resourcePercent = 0.0f;
     int32_t stackCount = 0;
 };
 

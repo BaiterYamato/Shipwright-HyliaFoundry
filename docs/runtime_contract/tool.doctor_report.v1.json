@@ -1,0 +1,16 @@
+{
+    "schemaVersion": "tool.doctor_report.v1",
+    "description": "Conflict/explainability diagnostics from modtool doctor.",
+    "required": [
+        "schemaVersion",
+        "generatedUtc",
+        "success",
+        "errors",
+        "warnings",
+        "data"
+    ],
+    "properties": {
+        "warnings": "dependency gaps, registry collisions, pack override collisions",
+        "errors": "duplicate ids, malformed manifests"
+    }
+}

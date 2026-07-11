@@ -1,0 +1,16 @@
+﻿{
+    "schemaVersion":  "mod.lockfile.v1",
+    "generatedUtc":  "2000-01-01T00:00:00Z",
+    "modId":  "com.sylian.reference.compat_bridge",
+    "version":  "0.1.0",
+    "releaseChannel":  "stable",
+    "resolvedDependencies":  [
+                                 {
+                                     "id":  "com.sylian.framework.ui_inventory",
+                                     "versionRange":  "\u003e=0.1.0 \u003c0.2.0"
+                                 }
+                             ],
+    "resolvedLoadOrder":  [
+                              "com.sylian.reference.compat_bridge"
+                          ]
+}

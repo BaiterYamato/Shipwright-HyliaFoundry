@@ -1,0 +1,25 @@
+﻿{
+    "containers":  [
+                       {
+                           "id":  "com.sylian.demo_furnace_system:furnace",
+                           "slots":  [
+                                         {
+                                             "id":  "in",
+                                             "type":  "input",
+                                             "stackLimit":  99
+                                         },
+                                         {
+                                             "id":  "fuel",
+                                             "type":  "fuel",
+                                             "stackLimit":  99
+                                         },
+                                         {
+                                             "id":  "out",
+                                             "type":  "output",
+                                             "stackLimit":  99
+                                         }
+                                     ]
+                       }
+                   ],
+    "schemaVersion":  1
+}

@@ -51,10 +51,13 @@ Current mirror baseline: **17 skills**.
   - `tools/agents/validate-skills.ps1`
 
 - Future roadmap planning work:
-  - `docs/agents/plan_tracks/README.md`
-  - `docs/agents/plan_tracks/v5/*`
-  - `docs/agents/plan_tracks/v6/*`
-  - `docs/agents/plan_tracks/v7/*`
+- `docs/agents/plan_tracks/README.md`
+- `docs/agents/plan_tracks/v5/*`
+- `docs/agents/plan_tracks/v6/*`
+- `docs/agents/plan_tracks/v7/*`
+- `docs/agents/plan_tracks/v8/*`
+- `docs/agents/plan_tracks/v9/*`
+- `docs/agents/plan_tracks/v10/*`
   - (execution plans must still be appended to `docs/agents/Plans.md`)
 
 ## 4) Execution Gates (Mandatory)

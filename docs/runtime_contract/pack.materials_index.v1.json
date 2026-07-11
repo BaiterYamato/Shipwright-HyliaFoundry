@@ -1,0 +1,10 @@
+{
+    "schemaVersion": "pack.materials_index.v1",
+    "description": "Optional PBR/material pointer table for pack assets.",
+    "required": [
+        "materials"
+    ],
+    "properties": {
+        "materials": "array of material records (id, targetPath, map pointers, params)"
+    }
+}

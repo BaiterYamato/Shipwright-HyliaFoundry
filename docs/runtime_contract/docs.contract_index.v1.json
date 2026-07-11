@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "docs.contract_index.v1",
+  "description": "Generated index of runtime contract documents.",
+  "required": [
+    "schemaVersion",
+    "generatedUtc",
+    "contracts",
+    "entries"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "docs.contract_index.v1"
+    },
+    "generatedUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "contracts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "topLevelKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1427,6 +1427,18 @@ Gfx* Gfx_TextureI8(Gfx* displayListHead, void* texture, s16 textureWidth, s16 te
     return displayListHead;
 }
 
+Gfx* Gfx_TextureRGBA32(Gfx* displayListHead, void* texture, s16 textureWidth, s16 textureHeight, s16 rectLeft, s16 rectTop,
+                       s16 rectWidth, s16 rectHeight, u16 dsdx, u16 dtdy) {
+    gDPLoadTextureBlock(displayListHead++, texture, G_IM_FMT_RGBA, G_IM_SIZ_32b, textureWidth, textureHeight, 0,
+                        G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD,
+                        G_TX_NOLOD);
+
+    gSPWideTextureRectangle(displayListHead++, rectLeft << 2, rectTop << 2, (rectLeft + rectWidth) << 2,
+                            (rectTop + rectHeight) << 2, G_TX_RENDERTILE, 0, 0, dsdx, dtdy);
+
+    return displayListHead;
+}
+
 void Rando_Inventory_SwapAgeEquipment(void) {
     s16 i;
     u16 shieldEquipValue;
@@ -3617,6 +3629,535 @@ void Interface_DrawMagicBar(PlayState* play) {
 
 static Vtx sEnemyHealthVtx[16];
 static Mtx sEnemyHealthMtx[2];
+static const f32 sExternalModRingPi = 3.14159265358979323846f;
+
+static void Interface_SetExternalModRingVertex(Vtx* vertex, f32 x, f32 y, Color_RGBA8 color) {
+    vertex->v.ob[0] = Math_FNearbyIntF(x);
+    vertex->v.ob[1] = Math_FNearbyIntF(y);
+    vertex->v.ob[2] = 0;
+    vertex->v.flag = 0;
+    vertex->v.tc[0] = 0;
+    vertex->v.tc[1] = 0;
+    vertex->v.cn[0] = color.r;
+    vertex->v.cn[1] = color.g;
+    vertex->v.cn[2] = color.b;
+    vertex->v.cn[3] = color.a;
+}
+
+static Color_RGBA8 Interface_MakeExternalModRingColor(const uint8_t rgba[4], f32 opacityScale) {
+    Color_RGBA8 color;
+    color.r = rgba[0];
+    color.g = rgba[1];
+    color.b = rgba[2];
+    color.a = CLAMP_MAX((s32)(rgba[3] * opacityScale), 255);
+    return color;
+}
+
+static s32 Interface_BuildExternalModRingArc(Vtx* vertices, f32 innerRadius, f32 outerRadius, f32 startNorm,
+                                             f32 endNorm, s32 quadCount, Color_RGBA8 color) {
+    s32 i;
+    s32 vertexCount = 0;
+    f32 arcStart = CLAMP(startNorm, 0.0f, 1.0f);
+    f32 arcEnd = CLAMP(endNorm, 0.0f, 1.0f);
+
+    if ((vertices == NULL) || (quadCount <= 0) || (arcEnd <= arcStart)) {
+        return 0;
+    }
+
+    for (i = 0; i < quadCount; i++) {
+        f32 t0 = arcStart + ((arcEnd - arcStart) * ((f32)i / quadCount));
+        f32 t1 = arcStart + ((arcEnd - arcStart) * ((f32)(i + 1) / quadCount));
+        f32 angle0 = (-sExternalModRingPi * 0.5f) + (t0 * (sExternalModRingPi * 2.0f));
+        f32 angle1 = (-sExternalModRingPi * 0.5f) + (t1 * (sExternalModRingPi * 2.0f));
+        f32 cos0 = cosf(angle0);
+        f32 sin0 = sinf(angle0);
+        f32 cos1 = cosf(angle1);
+        f32 sin1 = sinf(angle1);
+
+        Interface_SetExternalModRingVertex(&vertices[vertexCount + 0], cos0 * innerRadius, sin0 * innerRadius, color);
+        Interface_SetExternalModRingVertex(&vertices[vertexCount + 1], cos1 * innerRadius, sin1 * innerRadius, color);
+        Interface_SetExternalModRingVertex(&vertices[vertexCount + 2], cos0 * outerRadius, sin0 * outerRadius, color);
+        Interface_SetExternalModRingVertex(&vertices[vertexCount + 3], cos1 * outerRadius, sin1 * outerRadius, color);
+        vertexCount += 4;
+    }
+
+    return vertexCount;
+}
+
+static void Interface_DrawExternalModRingVertices(Gfx** overlayDisp, Vtx* vertices, s32 vertexCount) {
+    s32 base;
+
+    if ((overlayDisp == NULL) || (*overlayDisp == NULL) || (vertices == NULL) || (vertexCount <= 0)) {
+        return;
+    }
+
+    for (base = 0; base < vertexCount; base += 32) {
+        s32 batchCount = MIN(vertexCount - base, 32);
+        s32 quadBase;
+
+        gSPVertex((*overlayDisp)++, &vertices[base], batchCount, 0);
+
+        for (quadBase = 0; quadBase < batchCount; quadBase += 4) {
+            if ((quadBase + 3) >= batchCount) {
+                break;
+            }
+            gSP1Quadrangle((*overlayDisp)++, quadBase + 0, quadBase + 2, quadBase + 3, quadBase + 1, 0);
+        }
+    }
+}
+
+static void Interface_DrawExternalModRingInstance(PlayState* play, f32 centerX, f32 centerY,
+                                                  const ExternalModsResourceRingView* view) {
+    Color_RGBA8 fillColor;
+    Color_RGBA8 backgroundColor;
+    Color_RGBA8 segmentColor;
+    s32 ringCount;
+    s32 ringIndex;
+    f32 wheelCapacity;
+    f32 opacityScale;
+
+    if ((play == NULL) || (view == NULL) || !view->active || (view->capacityValue <= 0.0f)) {
+        return;
+    }
+
+    wheelCapacity = (view->wheelCapacity > 0.0f) ? view->wheelCapacity : view->capacityValue;
+    ringCount = MAX(1, (s32)ceilf(view->capacityValue / wheelCapacity));
+    opacityScale = CLAMP(view->opacity, 0.0f, 1.0f);
+
+    if (view->exhausted) {
+        fillColor = Interface_MakeExternalModRingColor(view->exhaustedColor, opacityScale);
+    } else if (view->isLow) {
+        fillColor = Interface_MakeExternalModRingColor(view->lowColor, opacityScale);
+        if (view->lowPulse) {
+            f32 pulse = 0.65f + (0.35f * ((sinf(play->gameplayFrames * 0.2f) + 1.0f) * 0.5f));
+            fillColor.a = CLAMP_MAX((s32)(fillColor.a * pulse), 255);
+        }
+    } else {
+        fillColor = Interface_MakeExternalModRingColor(view->normalColor, opacityScale);
+    }
+
+    backgroundColor = Interface_MakeExternalModRingColor(view->backgroundColor, opacityScale);
+    segmentColor = Interface_MakeExternalModRingColor(view->segmentColor, opacityScale);
+
+    OPEN_DISPS(play->state.gfxCtx);
+    Gfx_SetupDL_39Overlay(play->state.gfxCtx);
+    gSPTexture(OVERLAY_DISP++, 0, 0, 0, G_TX_RENDERTILE, G_OFF);
+    gDPSetCombineMode(OVERLAY_DISP++, G_CC_SHADE, G_CC_SHADE);
+    gDPSetRenderMode(OVERLAY_DISP++, G_RM_XLU_SURF, G_RM_XLU_SURF2);
+    Matrix_Translate(centerX, centerY, 0.0f, MTXMODE_NEW);
+    gSPMatrix(OVERLAY_DISP++, Matrix_NewMtx(play->state.gfxCtx, __FILE__, __LINE__), G_MTX_MODELVIEW | G_MTX_LOAD);
+
+    for (ringIndex = 0; ringIndex < ringCount; ringIndex++) {
+        f32 wheelStartValue = ringIndex * wheelCapacity;
+        f32 wheelValue = CLAMP(view->currentValue - wheelStartValue, 0.0f, wheelCapacity);
+        f32 outerRadius = ((18.0f * view->scale) + (ringIndex * (view->thickness + view->ringSpacing)));
+        f32 innerRadius = MAX(1.0f, outerRadius - view->thickness);
+        s32 arcSegments = 20;
+        s32 backgroundVertexCount;
+        Vtx* backgroundVertices;
+
+        backgroundVertices = Graph_Alloc(play->state.gfxCtx, sizeof(Vtx) * arcSegments * 4);
+        if (backgroundVertices != NULL) {
+            backgroundVertexCount = Interface_BuildExternalModRingArc(backgroundVertices, innerRadius, outerRadius, 0.0f,
+                                                                     1.0f, arcSegments, backgroundColor);
+            Interface_DrawExternalModRingVertices(&OVERLAY_DISP, backgroundVertices, backgroundVertexCount);
+        }
+
+        if (wheelValue > 0.0f) {
+            s32 fillVertexCount;
+            Vtx* fillVertices = Graph_Alloc(play->state.gfxCtx, sizeof(Vtx) * arcSegments * 4);
+
+            if (fillVertices != NULL) {
+                fillVertexCount = Interface_BuildExternalModRingArc(fillVertices, innerRadius, outerRadius, 0.0f,
+                                                                    wheelValue / wheelCapacity, arcSegments, fillColor);
+                Interface_DrawExternalModRingVertices(&OVERLAY_DISP, fillVertices, fillVertexCount);
+            }
+        }
+
+        if (view->segmentCount > 1) {
+            s32 markerIndex;
+
+            for (markerIndex = 1; markerIndex < view->segmentCount; markerIndex++) {
+                f32 markerCenter = markerIndex / (f32)view->segmentCount;
+                f32 markerHalfWidth = 0.0035f;
+                s32 markerVertexCount;
+                Vtx* markerVertices = Graph_Alloc(play->state.gfxCtx, sizeof(Vtx) * 4);
+
+                if (markerVertices == NULL) {
+                    continue;
+                }
+
+                markerVertexCount = Interface_BuildExternalModRingArc(markerVertices, innerRadius - 0.5f,
+                                                                      outerRadius + 0.5f, markerCenter - markerHalfWidth,
+                                                                      markerCenter + markerHalfWidth, 1, segmentColor);
+                Interface_DrawExternalModRingVertices(&OVERLAY_DISP, markerVertices, markerVertexCount);
+            }
+        }
+    }
+
+    CLOSE_DISPS(play->state.gfxCtx);
+}
+
+typedef struct ExternalModMagicStyleBarLayout {
+    s16 barStartX;
+    s16 fillStartX;
+    s16 barY;
+    s32 hidden;
+} ExternalModMagicStyleBarLayout;
+
+typedef struct ExternalModMagicStyleBarMetrics {
+    s16 fillWidth;
+    s16 barHeight;
+    s16 fillHeight;
+    s16 fillYOffset;
+    s16 endWidth;
+} ExternalModMagicStyleBarMetrics;
+
+static s32 Interface_ResolveExternalModMagicStyleBarLayout(PlayState* play, ExternalModMagicStyleBarLayout* outLayout) {
+    s16 magicDrop;
+    s16 xMargins;
+    s16 yMargins;
+    s16 magicBarYOriginalLarge;
+    s16 magicBarYOriginalSmall;
+    s16 barStartXOriginal;
+    s16 fillStartXOriginal;
+    s16 barStartX;
+    s16 fillStartX;
+    s16 magicBarY;
+    s32 lineLength;
+    s32 posType;
+
+    if ((play == NULL) || (outLayout == NULL)) {
+        return false;
+    }
+
+    magicDrop = R_MAGIC_BAR_LARGE_Y - R_MAGIC_BAR_SMALL_Y + 2;
+    if (CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.UseMargins"), 0) != 0) {
+        xMargins = Left_HUD_Margin;
+        yMargins = (Top_HUD_Margin * -1);
+    } else {
+        xMargins = 0;
+        yMargins = 0;
+    }
+
+    magicBarYOriginalLarge = R_MAGIC_BAR_LARGE_Y + yMargins;
+    magicBarYOriginalSmall = R_MAGIC_BAR_SMALL_Y + yMargins;
+    barStartXOriginal = OTRGetRectDimensionFromLeftEdge(R_MAGIC_BAR_X + xMargins);
+    fillStartXOriginal = OTRGetRectDimensionFromLeftEdge(R_MAGIC_FILL_X + xMargins);
+
+    lineLength = CVarGetInteger(CVAR_COSMETIC("HUD.Hearts.LineLength"), 10);
+    posType = CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.PosType"), 0);
+    outLayout->hidden = false;
+
+    if (posType != ORIGINAL_LOCATION) {
+        magicBarY = CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.PosY"), 0) + yMargins;
+        if (posType == ANCHOR_LEFT) {
+            if (CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.UseMargins"), 0) != 0) {
+                xMargins = Left_HUD_Margin;
+            }
+            barStartX = OTRGetDimensionFromLeftEdge(CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.PosX"), 0) + xMargins);
+            fillStartX =
+                OTRGetDimensionFromLeftEdge(CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.PosX"), 0) + xMargins + 8);
+        } else if (posType == ANCHOR_RIGHT) {
+            if (CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.UseMargins"), 0) != 0) {
+                xMargins = Right_HUD_Margin;
+            }
+            barStartX = OTRGetDimensionFromRightEdge(CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.PosX"), 0) + xMargins);
+            fillStartX =
+                OTRGetDimensionFromRightEdge(CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.PosX"), 0) + xMargins + 8);
+        } else if (posType == ANCHOR_NONE) {
+            barStartX = CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.PosX"), 0) + xMargins;
+            fillStartX = CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.PosX"), 0) + xMargins + 8;
+        } else if (posType == HIDDEN) {
+            outLayout->hidden = true;
+            barStartX = 0;
+            fillStartX = 0;
+        } else if (posType == ANCHOR_TO_LIFE_METER) {
+            magicBarY = R_MAGIC_BAR_SMALL_Y - 2 +
+                        magicDrop * (lineLength == 0 ? 0 : (gSaveContext.healthCapacity - 1) / (0x10 * lineLength)) +
+                        CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.PosY"), 0) + getHealthMeterYOffset();
+            barStartX = CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.PosX"), 0) + getHealthMeterXOffset() + R_MAGIC_BAR_X - 1;
+            fillStartX =
+                CVarGetInteger(CVAR_COSMETIC("HUD.MagicBar.PosX"), 0) + getHealthMeterXOffset() + R_MAGIC_FILL_X - 1;
+        } else {
+            barStartX = barStartXOriginal;
+            fillStartX = fillStartXOriginal;
+        }
+    } else {
+        if ((gSaveContext.healthCapacity - 1) / FULL_HEART_HEALTH >= lineLength && lineLength != 0) {
+            magicBarY = magicBarYOriginalLarge +
+                        magicDrop * (lineLength == 0 ? 0 : ((gSaveContext.healthCapacity - 1) / (0x10 * lineLength) - 1));
+        } else {
+            magicBarY = magicBarYOriginalSmall;
+        }
+        barStartX = barStartXOriginal;
+        fillStartX = fillStartXOriginal;
+    }
+
+    outLayout->barStartX = barStartX;
+    outLayout->fillStartX = fillStartX;
+    outLayout->barY = magicBarY;
+    return !outLayout->hidden;
+}
+
+static void Interface_GetExternalModMagicStyleBarMetrics(PlayState* play, ExternalModMagicStyleBarMetrics* outMetrics) {
+    s16 baseFillWidth;
+
+    if (outMetrics == NULL) {
+        return;
+    }
+
+    baseFillWidth = (gSaveContext.magicCapacity > 0) ? gSaveContext.magicCapacity : 48;
+    outMetrics->fillWidth = MAX(baseFillWidth, 48);
+    outMetrics->barHeight = 16;
+    outMetrics->fillHeight = 7;
+    outMetrics->fillYOffset = 3;
+    outMetrics->endWidth = 8;
+}
+
+static void Interface_DrawExternalModMagicStyleBar(PlayState* play, const ExternalModsResourceRingView* view) {
+    extern const char* digitTextures[];
+    ExternalModMagicStyleBarLayout layout;
+    ExternalModMagicStyleBarMetrics metrics;
+    Color_RGBA8 fillColor;
+    Color_RGBA8 backgroundColor;
+    Color_RGBA8 segmentColor;
+    Color_RGBA8 borderColor;
+    f32 opacityScale;
+    f32 ratio;
+    f32 wheelCount;
+    s32 totalSegments;
+    s32 endWidth;
+    s32 barWidth;
+    s32 barHeight;
+    s32 fillHeight;
+    s32 fillYOffset;
+    s32 fillWidth;
+    s32 barStartX;
+    s32 fillStartX;
+    s32 barY;
+    s32 stackOffsetY;
+    s32 stackSpacing;
+    s32 iconSize;
+    s32 markerIndex;
+    s32 totalOuterWidth;
+    s32 customCenteredPosition;
+    s32 customPosX;
+    s32 customPosY;
+    f32 scaleFactor;
+
+    if ((play == NULL) || (view == NULL) || !view->active || (view->capacityValue <= 0.0f)) {
+        return;
+    }
+    if (!Interface_ResolveExternalModMagicStyleBarLayout(play, &layout)) {
+        return;
+    }
+    Interface_GetExternalModMagicStyleBarMetrics(play, &metrics);
+
+    opacityScale = CLAMP(view->opacity, 0.0f, 1.0f);
+    if (view->exhausted) {
+        fillColor = Interface_MakeExternalModRingColor(view->exhaustedColor, opacityScale);
+    } else if (view->isLow) {
+        fillColor = Interface_MakeExternalModRingColor(view->lowColor, opacityScale);
+        if (view->lowPulse) {
+            f32 pulse = 0.65f + (0.35f * ((sinf(play->gameplayFrames * 0.2f) + 1.0f) * 0.5f));
+            fillColor.a = CLAMP_MAX((s32)(fillColor.a * pulse), 255);
+        }
+    } else {
+        fillColor = Interface_MakeExternalModRingColor(view->normalColor, opacityScale);
+    }
+
+    backgroundColor = Interface_MakeExternalModRingColor(view->backgroundColor, opacityScale);
+    segmentColor = Interface_MakeExternalModRingColor(view->segmentColor, opacityScale);
+    borderColor.r = sMagicBorder.r;
+    borderColor.g = sMagicBorder.g;
+    borderColor.b = sMagicBorder.b;
+    borderColor.a = CLAMP_MAX((s32)(255.0f * opacityScale), 255);
+
+    scaleFactor = MAX(view->scale, 0.1f);
+    wheelCount = view->capacityValue / MAX(view->wheelCapacity, 1.0f);
+    totalSegments = MAX(1, (s32)ceilf(MAX(wheelCount, 0.01f) * MAX(view->segmentCount, 1)));
+    endWidth = MAX(4, (s32)Math_FNearbyIntF(metrics.endWidth * scaleFactor));
+    barWidth = MAX(1, (s32)Math_FNearbyIntF(metrics.fillWidth * scaleFactor));
+    barHeight = MAX(8, (s32)Math_FNearbyIntF(metrics.barHeight * scaleFactor));
+    fillHeight = MAX(1, (s32)Math_FNearbyIntF(metrics.fillHeight * scaleFactor));
+    fillYOffset = MAX(1, (s32)Math_FNearbyIntF(metrics.fillYOffset * scaleFactor));
+    ratio = CLAMP(view->currentValue / view->capacityValue, 0.0f, 1.0f);
+    fillWidth = CLAMP_MAX((s32)Math_FNearbyIntF(barWidth * ratio), barWidth);
+
+    totalOuterWidth = barWidth + (endWidth * 2);
+    customCenteredPosition = CVarGetInteger("gEnhancements.Graphics.ExternalResourceBars.UseCenteredPosition", 0);
+    customPosX = CVarGetInteger("gEnhancements.Graphics.ExternalResourceBars.PosX", 0);
+    customPosY = CVarGetInteger("gEnhancements.Graphics.ExternalResourceBars.PosY", 0);
+    stackSpacing = Math_FNearbyIntF(CVarGetFloat("gEnhancements.Graphics.ExternalResourceBars.StackSpacing",
+                                                 view->fixedStackSpacing) *
+                                    scaleFactor);
+    stackOffsetY = 0;
+    if (view->fixedStackMagicBarGroup) {
+        stackOffsetY = stackSpacing * view->fixedStackOrder;
+    }
+
+    if (view->fixedStackMagicBarGroup && customCenteredPosition != 0) {
+        s32 centerX = (SCREEN_WIDTH / 2) + customPosX + Math_FNearbyIntF(view->screenOffsetX);
+        s32 centerY = (SCREEN_HEIGHT / 2) + customPosY + stackOffsetY + Math_FNearbyIntF(view->screenOffsetY);
+        barStartX = centerX - (totalOuterWidth / 2);
+        fillStartX = barStartX + endWidth;
+        barY = centerY - (barHeight / 2);
+    } else {
+        barStartX = layout.barStartX + Math_FNearbyIntF(view->screenOffsetX);
+        fillStartX = layout.fillStartX + Math_FNearbyIntF(view->screenOffsetX);
+        barY = layout.barY + MAX(1, barHeight + 1) + stackOffsetY + Math_FNearbyIntF(view->screenOffsetY);
+    }
+
+    iconSize = MAX(10, (s32)Math_FNearbyIntF(12.0f * scaleFactor));
+
+    OPEN_DISPS(play->state.gfxCtx);
+
+    Gfx_SetupDL_39Overlay(play->state.gfxCtx);
+    gDPSetPrimColor(OVERLAY_DISP++, 0, 0, borderColor.r, borderColor.g, borderColor.b, borderColor.a);
+    gDPSetEnvColor(OVERLAY_DISP++, 100, 50, 50, 255);
+
+    OVERLAY_DISP =
+        Gfx_TextureIA8(OVERLAY_DISP, gMagicMeterEndTex, 8, 16, barStartX, barY, endWidth, barHeight, 1 << 10, 1 << 10);
+    OVERLAY_DISP = Gfx_TextureIA8(OVERLAY_DISP, gMagicMeterMidTex, 24, 16, barStartX + endWidth, barY, barWidth,
+                                  barHeight, 1 << 10, 1 << 10);
+
+    gDPLoadTextureBlock(OVERLAY_DISP++, gMagicMeterEndTex, G_IM_FMT_IA, G_IM_SIZ_8b, 8, 16, 0,
+                        G_TX_MIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP, 3, G_TX_NOMASK, G_TX_NOLOD, G_TX_NOLOD);
+    gSPWideTextureRectangle(OVERLAY_DISP++, (barStartX + endWidth + barWidth) << 2, barY << 2,
+                            (barStartX + (endWidth * 2) + barWidth) << 2, (barY + barHeight) << 2, G_TX_RENDERTILE,
+                            256, 0, 1 << 10, 1 << 10);
+
+    gDPPipeSync(OVERLAY_DISP++);
+    gDPSetCombineLERP(OVERLAY_DISP++, PRIMITIVE, ENVIRONMENT, TEXEL0, ENVIRONMENT, 0, 0, 0, PRIMITIVE, PRIMITIVE,
+                      ENVIRONMENT, TEXEL0, ENVIRONMENT, 0, 0, 0, PRIMITIVE);
+    gDPSetEnvColor(OVERLAY_DISP++, 0, 0, 0, 255);
+    gDPLoadMultiBlock_4b(OVERLAY_DISP++, gMagicMeterFillTex, 0, G_TX_RENDERTILE, G_IM_FMT_I, 16, 16, 0,
+                         G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD,
+                         G_TX_NOLOD);
+
+    if (backgroundColor.a > 0) {
+        gDPSetPrimColor(OVERLAY_DISP++, 0, 0, backgroundColor.r, backgroundColor.g, backgroundColor.b, backgroundColor.a);
+        gSPWideTextureRectangle(OVERLAY_DISP++, fillStartX << 2, (barY + fillYOffset) << 2, (fillStartX + barWidth) << 2,
+                                (barY + fillYOffset + fillHeight) << 2, G_TX_RENDERTILE, 0, 0, 1 << 10, 1 << 10);
+    }
+
+    if (fillWidth > 0) {
+        gDPSetPrimColor(OVERLAY_DISP++, 0, 0, fillColor.r, fillColor.g, fillColor.b, fillColor.a);
+        gSPWideTextureRectangle(OVERLAY_DISP++, fillStartX << 2, (barY + fillYOffset) << 2,
+                                (fillStartX + fillWidth) << 2, (barY + fillYOffset + fillHeight) << 2, G_TX_RENDERTILE,
+                                0, 0, 1 << 10, 1 << 10);
+    }
+
+    if (totalSegments > 1 && segmentColor.a > 0) {
+        s32 markerWidth = MAX(1, (s32)Math_FNearbyIntF(MAX(view->scale, 0.1f)));
+        gDPSetPrimColor(OVERLAY_DISP++, 0, 0, segmentColor.r, segmentColor.g, segmentColor.b, segmentColor.a);
+        for (markerIndex = 1; markerIndex < totalSegments; ++markerIndex) {
+            s32 markerX = fillStartX + Math_FNearbyIntF((barWidth * markerIndex) / (f32)totalSegments);
+            gSPWideTextureRectangle(OVERLAY_DISP++, markerX << 2, (barY + fillYOffset - 1) << 2,
+                                    (markerX + markerWidth) << 2, (barY + fillYOffset + fillHeight + 1) << 2,
+                                    G_TX_RENDERTILE, 0, 0, 1 << 10, 1 << 10);
+        }
+    }
+
+    if (view->companionIconRgba32 != NULL) {
+        gDPPipeSync(OVERLAY_DISP++);
+        gDPSetCombineMode(OVERLAY_DISP++, G_CC_MODULATERGBA_PRIM, G_CC_MODULATERGBA_PRIM);
+        gDPSetPrimColor(OVERLAY_DISP++, 0, 0, 255, 255, 255, CLAMP_MAX((s32)(255.0f * opacityScale), 255));
+        OVERLAY_DISP = Gfx_TextureRGBA32(OVERLAY_DISP, (void*)view->companionIconRgba32, 32, 32, barStartX - iconSize - 6,
+                                         barY + Math_FNearbyIntF((barHeight - iconSize) * 0.5f), iconSize, iconSize, 1 << 10,
+                                         1 << 10);
+    }
+
+    if (view->companionCounterValue >= 0) {
+        s32 tens = CLAMP(view->companionCounterValue / 10, 0, 9);
+        s32 ones = CLAMP(view->companionCounterValue % 10, 0, 9);
+        s32 digitX = barStartX - 20;
+        s32 digitY = barY;
+
+        gDPPipeSync(OVERLAY_DISP++);
+        gDPSetCombineMode(OVERLAY_DISP++, G_CC_MODULATEIA_PRIM, G_CC_MODULATEIA_PRIM);
+        gDPSetPrimColor(OVERLAY_DISP++, 0, 0, 255, 255, 255, CLAMP_MAX((s32)(255.0f * opacityScale), 255));
+        if (view->companionCounterValue >= 10) {
+            OVERLAY_DISP = Gfx_TextureI8(OVERLAY_DISP, (u8*)digitTextures[tens], 8, 16, digitX, digitY, 8, 16, 1 << 10,
+                                         1 << 10);
+            digitX += 7;
+        }
+        OVERLAY_DISP = Gfx_TextureI8(OVERLAY_DISP, (u8*)digitTextures[ones], 8, 16, digitX, digitY, 8, 16, 1 << 10,
+                                     1 << 10);
+    }
+
+    CLOSE_DISPS(play->state.gfxCtx);
+}
+
+static void Interface_DrawExternalModResourceRings(PlayState* play) {
+    Player* player;
+    int32_t ringCount;
+    int32_t ringIndex;
+
+    if (play == NULL) {
+        return;
+    }
+
+    player = GET_PLAYER(play);
+    if (player == NULL) {
+        return;
+    }
+
+    ringCount = ExternalMods_GetPlayerResourceRingViewCount(play, player);
+    for (ringIndex = 0; ringIndex < ringCount; ringIndex++) {
+        ExternalModsResourceRingView view;
+
+        if (!ExternalMods_GetPlayerResourceRingView(play, player, ringIndex, &view)) {
+            continue;
+        }
+
+        if (view.styleKind == EXTERNAL_MODS_RESOURCE_RING_STYLE_MAGIC_BAR) {
+            if (view.showFixed) {
+                Interface_DrawExternalModMagicStyleBar(play, &view);
+            }
+            continue;
+        }
+
+        if (view.showContextual) {
+            Vec3f worldPos;
+            Vec3f projected;
+            f32 invW;
+            f32 centerX;
+            f32 centerY;
+            f32 clampPadding = 36.0f * MAX(view.scale, 0.5f);
+
+            worldPos = player->actor.world.pos;
+            worldPos.x += view.worldOffsetX;
+            worldPos.y += view.worldOffsetY;
+            worldPos.z += view.worldOffsetZ;
+            func_8002BE04(play, &worldPos, &projected, &invW);
+
+            if (invW > 0.0f) {
+                centerX = (SCREEN_WIDTH / 2) * (projected.x * invW);
+                centerY = (SCREEN_HEIGHT / 2) * (projected.y * invW);
+                centerX = centerX * (CVarGetInteger(CVAR_ENHANCEMENT("MirroredWorld"), 0) ? -1 : 1);
+                centerX = CLAMP(centerX, (-SCREEN_WIDTH / 2) + clampPadding, (SCREEN_WIDTH / 2) - clampPadding);
+                centerY = CLAMP(centerY, (-SCREEN_HEIGHT / 2) + clampPadding, (SCREEN_HEIGHT / 2) - clampPadding);
+                Interface_DrawExternalModRingInstance(play, centerX, centerY, &view);
+            }
+        }
+
+        if (view.showFixed) {
+            f32 margin = 26.0f * MAX(view.scale, 0.5f);
+            f32 centerX = view.screenOffsetX;
+            f32 centerY = (SCREEN_HEIGHT / 2) - margin + view.screenOffsetY;
+
+            if (view.fixedAnchor == EXTERNAL_MODS_RESOURCE_RING_ANCHOR_LEFT) {
+                centerX = (-SCREEN_WIDTH / 2) + margin + view.screenOffsetX;
+            } else if (view.fixedAnchor == EXTERNAL_MODS_RESOURCE_RING_ANCHOR_RIGHT) {
+                centerX = (SCREEN_WIDTH / 2) - margin + view.screenOffsetX;
+            }
+
+            Interface_DrawExternalModRingInstance(play, centerX, centerY, &view);
+        }
+    }
+}
 
 // Draws an enemy health bar using the magic bar textures and positions it in a similar way to Z-Targeting
 void Interface_DrawEnemyHealthBar(TargetContext* targetCtx, PlayState* play) {
@@ -5409,6 +5950,8 @@ void Interface_Draw(PlayState* play) {
         if (fullUi || gSaveContext.magicState > MAGIC_STATE_IDLE) {
             Interface_DrawMagicBar(play);
         }
+
+        Interface_DrawExternalModResourceRings(play);
 
         Minimap_Draw(play);
 

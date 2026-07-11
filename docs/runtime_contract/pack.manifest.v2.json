@@ -1,0 +1,25 @@
+{
+    "schemaVersion": "pack.manifest.v2",
+    "description": "Assets-only package manifest (.otr/.o2r).",
+    "required": [
+        "id",
+        "name",
+        "version"
+    ],
+    "properties": {
+        "id": "string",
+        "name": "string",
+        "version": "semver string",
+        "priorityHint": "optional numeric hint",
+        "styleTags": "optional string[] (pbr|toon|vanilla_plus)",
+        "assets": "asset metadata index (no logic)",
+        "materialsIndex": "optional pointer to pack.materials_index.v1",
+        "releaseChannels": "stable|beta|testers (UI exposes stable only until v1.0)"
+    },
+    "forbidden": [
+        "entryScript",
+        "runtime",
+        "dependencies",
+        "capabilities"
+    ]
+}

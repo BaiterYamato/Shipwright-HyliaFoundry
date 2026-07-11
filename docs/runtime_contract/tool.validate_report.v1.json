@@ -1,0 +1,22 @@
+{
+    "schemaVersion": "tool.validate_report.v1",
+    "description": "Machine-readable validate output from validate_mod/modtool with severity-based diagnostics.",
+    "required": [
+        "schemaVersion",
+        "success",
+        "targetPath",
+        "severitySummary",
+        "mods"
+    ],
+    "properties": {
+        "targetPath": "validated path",
+        "severitySummary.info": "number",
+        "severitySummary.warn": "number",
+        "severitySummary.error": "number",
+        "severitySummary.fatal": "number",
+        "mods[].modId": "string",
+        "mods[].path": "string",
+        "mods[].severitySummary": "per-mod severity counters",
+        "mods[].issues[]": "structured diagnostic records with severity, code, message, sourcePath, registryId, referencedId, suggestedFix"
+    }
+}

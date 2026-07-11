@@ -1,0 +1,117 @@
+﻿{
+    "id":  "com.sylian.framework.combat_ai",
+    "name":  "Framework Combat AI",
+    "version":  "0.1.0",
+    "type":  "framework",
+    "apiVersion":  4,
+    "uiCategory":  "core_api",
+    "loadPriority":  400,
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "hybrid-v1",
+                    "module":  "scripts/noop.wat",
+                    "entryLibrary":  "native/win64/plugin.dll",
+                    "abiVersion":  1,
+                    "nativeMode":  "sdk",
+                    "reloadPolicy":  "manual",
+                    "buildIdPolicy":  "ignore",
+                    "threadModel":  "main_thread",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json",
+    "actorArchetypeDefinitions":  "actors/archetypes.json",
+    "actorAdapterDefinitions":  "actors/adapters.json",
+    "behaviorTreeDefinitions":  "ai/behavior_trees.json",
+    "sensorDefinitions":  "ai/sensors.json",
+    "routeDefinitions":  "nav/routes.json",
+    "navBridgeDefinitions":  "nav/nav_bridge.json",
+    "debugOverlayDefinitions":  "debug/overlays.json",
+    "statusDefinitions":  "statuses/statuses.json",
+    "targetingDefinitions":  "combat/targeting_profiles.json",
+    "aoeDefinitions":  "combat/aoe_profiles.json",
+    "fxPresetDefinitions":  "fx/fx_presets.json",
+    "stateDefinitions":  "states/states.json",
+    "spellDefinitions":  "spells/spells.json",
+    "itemUseProfiles":  "items/use_profiles.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "releaseChannels":  [
+                            "stable"
+                        ],
+    "capabilities":  [
+                         "native.sdk.v1",
+                         "actors.archetypes.v1",
+                         "actors.adapters.v1",
+                         "ai.behavior_trees.v1",
+                         "ai.sensors.v1",
+                         "nav.routes.v1",
+                         "nav.navmesh_bridge.v1",
+                         "debug.overlay.v1",
+                         "statuses.catalog.v1",
+                         "combat.targeting.v1",
+                         "combat.aoe.v1",
+                         "fx.presets.v1",
+                         "states.catalog.v1",
+                         "spells.catalog.v1",
+                         "items.use_profiles.v1"
+                     ],
+    "capabilityRationales":  {
+                                 "native.sdk.v1":  "Declares native.sdk.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "actors.archetypes.v1":  "Declares actors.archetypes.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "actors.adapters.v1":  "Declares actors.adapters.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "ai.behavior_trees.v1":  "Declares ai.behavior_trees.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "ai.sensors.v1":  "Declares ai.sensors.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "nav.routes.v1":  "Declares nav.routes.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "nav.navmesh_bridge.v1":  "Declares nav.navmesh_bridge.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "debug.overlay.v1":  "Declares debug.overlay.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "statuses.catalog.v1":  "Declares statuses.catalog.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "combat.targeting.v1":  "Declares combat.targeting.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "combat.aoe.v1":  "Declares combat.aoe.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "fx.presets.v1":  "Declares fx.presets.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "states.catalog.v1":  "Declares states.catalog.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "spells.catalog.v1":  "Declares spells.catalog.v1 as part of Framework Combat AI in the framework-first API v4 catalog.",
+                                 "items.use_profiles.v1":  "Declares items.use_profiles.v1 as part of Framework Combat AI in the framework-first API v4 catalog."
+                             },
+    "permissions":  [
+                        "nativeinterop"
+                    ],
+    "permissionRationales":  {
+                                 "nativeinterop":  "Required by Framework Combat AI for the configured runtime and diagnostics surface."
+                             },
+    "dependencies":  [
+
+                     ],
+    "provides":  [
+                     "framework.combat_ai"
+                 ],
+    "uses":  [
+
+             ],
+    "exports":  {
+                    "framework":  [
+                                      "framework.combat_ai"
+                                  ],
+                    "capabilities":  [
+                                         "native.sdk.v1",
+                                         "actors.archetypes.v1",
+                                         "actors.adapters.v1",
+                                         "ai.behavior_trees.v1",
+                                         "ai.sensors.v1",
+                                         "nav.routes.v1",
+                                         "nav.navmesh_bridge.v1",
+                                         "debug.overlay.v1",
+                                         "statuses.catalog.v1",
+                                         "combat.targeting.v1",
+                                         "combat.aoe.v1",
+                                         "fx.presets.v1",
+                                         "states.catalog.v1",
+                                         "spells.catalog.v1",
+                                         "items.use_profiles.v1"
+                                     ]
+                }
+}

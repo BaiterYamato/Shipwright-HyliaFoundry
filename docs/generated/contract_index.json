@@ -1,0 +1,178 @@
+﻿{
+    "schemaVersion":  "docs.contract_index.v1",
+    "generatedUtc":  "2026-04-10T16:42:40Z",
+    "contracts":  [
+                      "docs/runtime_contract/actions.registry.json",
+                      "docs/runtime_contract/conditions.registry.json",
+                      "docs/runtime_contract/docs.contract_index.v1.json",
+                      "docs/runtime_contract/docs.registry_index.v1.json",
+                      "docs/runtime_contract/mod.lockfile.v1.json",
+                      "docs/runtime_contract/mod.manifest.v2.json",
+                      "docs/runtime_contract/pack.manifest.v2.json",
+                      "docs/runtime_contract/pack.materials_index.v1.json",
+                      "docs/runtime_contract/security.capabilities.v2.json",
+                      "docs/runtime_contract/security.permissions.v1.json",
+                      "docs/runtime_contract/security.signing.v1.json",
+                      "docs/runtime_contract/tool.diff_report.v1.json",
+                      "docs/runtime_contract/tool.doctor_report.v1.json",
+                      "docs/runtime_contract/tool.validate_report.v1.json"
+                  ],
+    "entries":  [
+                    {
+                        "path":  "docs/runtime_contract/actions.registry.json",
+                        "schemaVersion":  "",
+                        "description":  "Declarative registry for action validation/dispatch contracts.",
+                        "topLevelKeys":  [
+                                             "actions",
+                                             "apiVersion",
+                                             "description",
+                                             "generatedUtc"
+                                         ]
+                    },
+                    {
+                        "path":  "docs/runtime_contract/conditions.registry.json",
+                        "schemaVersion":  "",
+                        "description":  "Declarative registry for behavior condition contracts.",
+                        "topLevelKeys":  [
+                                             "apiVersion",
+                                             "conditions",
+                                             "description",
+                                             "generatedUtc"
+                                         ]
+                    },
+                    {
+                        "path":  "docs/runtime_contract/docs.contract_index.v1.json",
+                        "schemaVersion":  "docs.contract_index.v1",
+                        "description":  "Generated index of runtime contract documents.",
+                        "topLevelKeys":  [
+                                             "description",
+                                             "properties",
+                                             "required",
+                                             "schemaVersion"
+                                         ]
+                    },
+                    {
+                        "path":  "docs/runtime_contract/docs.registry_index.v1.json",
+                        "schemaVersion":  "docs.registry_index.v1",
+                        "description":  "Generated index of runtime registry exports.",
+                        "topLevelKeys":  [
+                                             "description",
+                                             "properties",
+                                             "required",
+                                             "schemaVersion"
+                                         ]
+                    },
+                    {
+                        "path":  "docs/runtime_contract/mod.lockfile.v1.json",
+                        "schemaVersion":  "mod.lockfile.v1",
+                        "description":  "Deterministic dependency/load snapshot emitted by modtool pack.",
+                        "topLevelKeys":  [
+                                             "description",
+                                             "properties",
+                                             "required",
+                                             "schemaVersion"
+                                         ]
+                    },
+                    {
+                        "path":  "docs/runtime_contract/mod.manifest.v2.json",
+                        "schemaVersion":  "mod.manifest.v2",
+                        "description":  "v10 packaging manifest profile for apiVersion 4 mods.",
+                        "topLevelKeys":  [
+                                             "description",
+                                             "properties",
+                                             "required",
+                                             "schemaVersion"
+                                         ]
+                    },
+                    {
+                        "path":  "docs/runtime_contract/pack.manifest.v2.json",
+                        "schemaVersion":  "pack.manifest.v2",
+                        "description":  "Assets-only package manifest (.otr/.o2r).",
+                        "topLevelKeys":  [
+                                             "description",
+                                             "forbidden",
+                                             "properties",
+                                             "required",
+                                             "schemaVersion"
+                                         ]
+                    },
+                    {
+                        "path":  "docs/runtime_contract/pack.materials_index.v1.json",
+                        "schemaVersion":  "pack.materials_index.v1",
+                        "description":  "Optional PBR/material pointer table for pack assets.",
+                        "topLevelKeys":  [
+                                             "description",
+                                             "properties",
+                                             "required",
+                                             "schemaVersion"
+                                         ]
+                    },
+                    {
+                        "path":  "docs/runtime_contract/security.capabilities.v2.json",
+                        "schemaVersion":  "security.capabilities.v2",
+                        "description":  "Capability tiering for trust and permission prompts.",
+                        "topLevelKeys":  [
+                                             "capabilities",
+                                             "description",
+                                             "rules",
+                                             "schemaVersion",
+                                             "tiers"
+                                         ]
+                    },
+                    {
+                        "path":  "docs/runtime_contract/security.permissions.v1.json",
+                        "schemaVersion":  "security.permissions.v1",
+                        "description":  "Per-mod user grants persisted by mod id/profile.",
+                        "topLevelKeys":  [
+                                             "description",
+                                             "properties",
+                                             "required",
+                                             "schemaVersion"
+                                         ]
+                    },
+                    {
+                        "path":  "docs/runtime_contract/security.signing.v1.json",
+                        "schemaVersion":  "security.signing.v1",
+                        "description":  "Optional signing envelope emitted by tooling.",
+                        "topLevelKeys":  [
+                                             "description",
+                                             "properties",
+                                             "required",
+                                             "schemaVersion"
+                                         ]
+                    },
+                    {
+                        "path":  "docs/runtime_contract/tool.diff_report.v1.json",
+                        "schemaVersion":  "tool.diff_report.v1",
+                        "description":  "Artifact-to-artifact change report from modtool diff.",
+                        "topLevelKeys":  [
+                                             "description",
+                                             "properties",
+                                             "required",
+                                             "schemaVersion"
+                                         ]
+                    },
+                    {
+                        "path":  "docs/runtime_contract/tool.doctor_report.v1.json",
+                        "schemaVersion":  "tool.doctor_report.v1",
+                        "description":  "Conflict/explainability diagnostics from modtool doctor.",
+                        "topLevelKeys":  [
+                                             "description",
+                                             "properties",
+                                             "required",
+                                             "schemaVersion"
+                                         ]
+                    },
+                    {
+                        "path":  "docs/runtime_contract/tool.validate_report.v1.json",
+                        "schemaVersion":  "tool.validate_report.v1",
+                        "description":  "Machine-readable validate output from validate_mod/modtool with severity-based diagnostics.",
+                        "topLevelKeys":  [
+                                             "description",
+                                             "properties",
+                                             "required",
+                                             "schemaVersion"
+                                         ]
+                    }
+                ]
+}

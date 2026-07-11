@@ -1,0 +1,37 @@
+﻿{
+    "id": "com.example.native_smoke",
+    "name": "NativeSmoke",
+    "version": "0.1.0",
+    "type": "content",
+    "apiVersion": 4,
+    "loadPriority": 200,
+    "runtime": {
+        "type": "native-cpp-v1",
+        "entryLibrary": "native/win64/plugin.dll",
+        "abiVersion": 1,
+        "nativeMode": "sdk",
+        "reloadPolicy": "manual",
+        "buildIdPolicy": "ignore",
+        "threadModel": "main_thread"
+    },
+    "engineVersionRange": ">=9.1.2 <10.0.0",
+    "releaseChannels": [
+        "stable"
+    ],
+    "capabilities": [
+        "native.sdk.v1"
+    ],
+    "capabilityRationales": {
+        "native.sdk.v1": "Allows a stable native DLL lifecycle for this mod."
+    },
+    "permissions": [
+        "nativeinterop"
+    ],
+    "permissionRationales": {
+        "nativeinterop": "Required to load the native DLL entrypoint for this mod."
+    },
+    "dependencies": [],
+    "exports": {},
+    "uiCategory": "mod"
+}
+

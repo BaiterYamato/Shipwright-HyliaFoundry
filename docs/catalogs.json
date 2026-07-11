@@ -1,5 +1,5 @@
 ﻿{
-    "generatedUtc":  "2026-03-03T18:57:41Z",
+    "generatedUtc":  "2026-04-07T21:26:19Z",
     "apiVersion":  4,
     "runtime":  {
                     "budgetDefaults":  {
@@ -9,7 +9,17 @@
                                            "maxActiveStatuses":  256,
                                            "maxCallMs":  2
                                        },
-                    "type":  "wasm3-v1"
+                    "settingsApplyModes":  [
+                                               "realtime",
+                                               "scene_reload",
+                                               "restart"
+                                           ],
+                    "type":  "wasm3-v1|native-cpp-v1|hybrid-v1",
+                    "settingsDomains":  [
+                                            "global",
+                                            "save",
+                                            "session"
+                                        ]
                 },
     "capabilities":  [
                          {
@@ -107,6 +117,24 @@
                              "schemaVersion":  1,
                              "fileField":  "uiHudDefinitions",
                              "id":  "ui.hud.v1"
+                         },
+                         {
+                             "fileDefault":  "player/player_resources.json",
+                             "schemaVersion":  1,
+                             "fileField":  "playerResourceDefinitions",
+                             "id":  "player.resources.v1"
+                         },
+                         {
+                             "fileDefault":  "ui/resource_rings.json",
+                             "schemaVersion":  1,
+                             "fileField":  "resourceRingDefinitions",
+                             "id":  "ui.resource_rings.v1"
+                         },
+                         {
+                             "fileDefault":  "player/player_consumables.json",
+                             "schemaVersion":  1,
+                             "fileField":  "playerConsumableDefinitions",
+                             "id":  "player.consumables.v1"
                          },
                          {
                              "fileDefault":  "inventory_ext/pages.json",
@@ -313,22 +341,212 @@
                              "id":  "assets.packs.v2"
                          },
                          {
+                             "fileDefault":  "assets/sources.json",
+                             "schemaVersion":  1,
+                             "fileField":  "assetSourceDefinitions",
+                             "id":  "assets.raw.v1",
+                             "note":  "Declares raw loose assets that can be prepared for native host access."
+                         },
+                         {
+                             "fileDefault":  "render/meshes.json",
+                             "schemaVersion":  1,
+                             "fileField":  "meshDefinitions",
+                             "id":  "render.meshes.v1",
+                             "note":  "Registers reusable meshes using the same external model pipeline as custom item models."
+                         },
+                         {
+                             "fileDefault":  "actors/prefabs.json",
+                             "schemaVersion":  1,
+                             "fileField":  "prefabDefinitions",
+                             "id":  "actors.prefabs.v1",
+                             "note":  "Declares visual prefabs that resolve render.meshes.v1 entries for actor/world placement."
+                         },
+                         {
+                             "fileDefault":  "world/instances.json",
+                             "schemaVersion":  1,
+                             "fileField":  "worldInstanceDefinitions",
+                             "id":  "world.instances.v1",
+                             "note":  "Places prefab-backed world visuals by scene and optional room filters."
+                         },
+                         {
+                             "fileDefault":  "editor/placement.json",
+                             "schemaVersion":  1,
+                             "fileField":  "editorPlacementDefinitions",
+                             "id":  "editor.placement.v1",
+                             "note":  "Registers reusable placeable entries that point at prefab visuals and carry default editor/world placement hints."
+                         },
+                         {
+                             "fileDefault":  "world/authoring.json",
+                             "schemaVersion":  1,
+                             "fileField":  "worldAuthoringDefinitions",
+                             "id":  "world.authoring.v1",
+                             "note":  "Places authored prefab visuals using direct prefab references or editor placement library entries."
+                         },
+                         {
                              "fileDefault":  "debug/render_inspector.json",
                              "schemaVersion":  1,
                              "fileField":  "renderInspectorDefinitions",
                              "id":  "debug.render_inspector.v1"
+                         },
+                         {
+                             "fileDefault":  "world/persistence.json",
+                             "schemaVersion":  1,
+                             "fileField":  "worldPersistenceDefinitions",
+                             "id":  "world.persistence.v1"
+                         },
+                         {
+                             "fileDefault":  "world/storage_domains.json",
+                             "schemaVersion":  1,
+                             "fileField":  "worldStorageDefinitions",
+                             "id":  "world.storage.v1"
+                         },
+                         {
+                             "fileDefault":  "world/spawn_profiles.json",
+                             "schemaVersion":  1,
+                             "fileField":  "worldSpawnProfileDefinitions",
+                             "id":  "world.spawn_profiles.v1"
+                         },
+                         {
+                             "fileDefault":  "world/forage.json",
+                             "schemaVersion":  1,
+                             "fileField":  "worldForageDefinitions",
+                             "id":  "world.forage.v1"
+                         },
+                         {
+                             "fileDefault":  "world/time_weather.json",
+                             "schemaVersion":  1,
+                             "fileField":  "worldTimeWeatherDefinitions",
+                             "id":  "world.time_weather.v1"
+                         },
+                         {
+                             "fileDefault":  "world/seeding.json",
+                             "schemaVersion":  1,
+                             "fileField":  "worldSeedingDefinitions",
+                             "id":  "world.seeding.v1"
+                         },
+                         {
+                             "fileDefault":  "world/migrations.json",
+                             "schemaVersion":  1,
+                             "fileField":  "worldMigrationDefinitions",
+                             "id":  "world.migrations.v1"
+                         },
+                         {
+                             "fileDefault":  "debug/persistence_inspector.json",
+                             "schemaVersion":  1,
+                             "fileField":  "persistenceInspectorDefinitions",
+                             "id":  "debug.persistence_inspector.v1"
+                         },
+                         {
+                             "fileDefault":  "narrative/timelines.json",
+                             "schemaVersion":  1,
+                             "fileField":  "narrativeTimelineDefinitions",
+                             "id":  "narrative.timeline.v1"
+                         },
+                         {
+                             "fileDefault":  "narrative/dialogues.json",
+                             "schemaVersion":  1,
+                             "fileField":  "narrativeDialogueDefinitions",
+                             "id":  "narrative.dialogue.v1"
+                         },
+                         {
+                             "fileDefault":  "narrative/quests.json",
+                             "schemaVersion":  1,
+                             "fileField":  "narrativeQuestDefinitions",
+                             "id":  "narrative.quests.v1"
+                         },
+                         {
+                             "fileDefault":  "narrative/flags.json",
+                             "schemaVersion":  1,
+                             "fileField":  "narrativeFlagDefinitions",
+                             "id":  "narrative.flags.v1"
+                         },
+                         {
+                             "fileDefault":  "debug/narrative_inspector.json",
+                             "schemaVersion":  1,
+                             "fileField":  "narrativeInspectorDefinitions",
+                             "id":  "debug.narrative_inspector.v1"
+                         },
+                         {
+                             "fileDefault":  "dev/hot_reload.json",
+                             "schemaVersion":  1,
+                             "fileField":  "devHotReloadDefinitions",
+                             "id":  "dev.hot_reload.v1"
+                         },
+                         {
+                             "fileDefault":  "dev/console_commands.json",
+                             "schemaVersion":  1,
+                             "fileField":  "devConsoleDefinitions",
+                             "id":  "dev.console.v1"
+                         },
+                         {
+                             "fileDefault":  "dev/watchers.json",
+                             "schemaVersion":  1,
+                             "fileField":  "devWatcherDefinitions",
+                             "id":  "dev.watchers.v1"
+                         },
+                         {
+                             "fileDefault":  "",
+                             "fileField":  "",
+                             "id":  "native.sdk.v1",
+                             "note":  "No file required; enables runtime.entryLibrary loading via the stable native SDK ABI."
+                         },
+                         {
+                             "fileDefault":  "",
+                             "fileField":  "",
+                             "id":  "native.raw_cpp.v1",
+                             "note":  "No file required; enables raw native engine interop and requires explicit raw permission grants."
+                         },
+                         {
+                             "fileDefault":  "runtime/wasm_sandbox.json",
+                             "schemaVersion":  1,
+                             "fileField":  "wasmSandboxDefinitions",
+                             "id":  "wasm.sandbox.v2"
+                         },
+                         {
+                             "fileDefault":  "debug/reload_inspector.json",
+                             "schemaVersion":  1,
+                             "fileField":  "reloadInspectorDefinitions",
+                             "id":  "debug.reload_inspector.v1"
                          }
                      ],
     "contracts":  {
-                      "statuses":  {
-                                       "coreStatusPresets":  [
-                                                                 "core:freeze_ice_trap_no_damage"
-                                                             ],
-                                       "freezeProfileMode":  [
-                                                                 "legacy_timer",
-                                                                 "ice_trap_no_damage"
+                      "worldForage":  {
+                                          "sources":  [
+                                                          "tall_grass.cut"
+                                                      ],
+                                          "fileDefaults":  [
+                                                               "world/forage.json"
+                                                           ],
+                                          "manifestFields":  [
+                                                                 "worldForageDefinitions"
                                                              ]
-                                   },
+                                      },
+                      "playerConsumables":  {
+                                                "actions":  [
+                                                                "grantConsumableStack",
+                                                                "consumeConsumableStack",
+                                                                "fillActiveBottleContent"
+                                                            ],
+                                                "fileDefaults":  [
+                                                                     "player/player_consumables.json"
+                                                                 ],
+                                                "conditions":  [
+                                                                   "consumableStackAtLeast",
+                                                                   "activeItemIsEmptyBottle",
+                                                                   "playerInWater"
+                                                               ],
+                                                "manifestFields":  [
+                                                                       "playerConsumableDefinitions"
+                                                                   ]
+                                            },
+                      "narrative":  {
+                                        "keyActions":  [
+                                                           "narrative.startDialogue",
+                                                           "narrative.chooseOption",
+                                                           "narrative.startQuest",
+                                                           "narrative.startTimeline"
+                                                       ]
+                                    },
                       "aoe":  {
                                   "targetScope":  [
                                                       "all_non_player",
@@ -338,6 +556,14 @@
                                                       "all_with_player"
                                                   ]
                               },
+                      "persistence":  {
+                                          "domainFiles":  [
+                                                              "manifest.json",
+                                                              "entities/\u003cscene\u003e_\u003croom\u003e.json",
+                                                              "domains/*.json"
+                                                          ],
+                                          "rootPath":  "\u003csave_root\u003e/external_mods/persist/\u003cworldSlotId\u003e/\u003cmodId\u003e/"
+                                      },
                       "worldGraphics":  {
                                             "tickHooks":  [
                                                               "onWorldOverworldTick",
@@ -355,6 +581,53 @@
                                                                "onWorldRoomEntered",
                                                                "onWorldRoomExited"
                                                            ]
-                                        }
+                                        },
+                      "playerResources":  {
+                                              "actions":  [
+                                                              "setResourceValue",
+                                                              "addResourceValue",
+                                                              "consumeResource",
+                                                              "refillResource",
+                                                              "setResourceCapacity"
+                                                          ],
+                                              "hooks":  [
+                                                            "onResourceChanged",
+                                                            "onResourceDepleted",
+                                                            "onResourceRecovered",
+                                                            "onResourceCapacityChanged"
+                                                        ],
+                                              "fileDefaults":  [
+                                                                   "player/player_resources.json",
+                                                                   "ui/resource_rings.json"
+                                                               ],
+                                              "conditions":  [
+                                                                 "resourceIsEmpty",
+                                                                 "resourceBelowPercent",
+                                                                 "resourceCanConsume"
+                                                             ],
+                                              "manifestFields":  [
+                                                                     "playerResourceDefinitions",
+                                                                     "resourceRingDefinitions"
+                                                                 ]
+                                          },
+                      "statuses":  {
+                                       "coreStatusPresets":  [
+                                                                 "core:freeze_ice_trap_no_damage"
+                                                             ],
+                                       "freezeProfileMode":  [
+                                                                 "legacy_timer",
+                                                                 "ice_trap_no_damage"
+                                                             ]
+                                   },
+                      "settings":  {
+                                       "schemaFile":  "settings/settings.schema.json",
+                                       "actions":  [
+                                                       "settings.get",
+                                                       "settings.set",
+                                                       "settings.reset",
+                                                       "settings.list"
+                                                   ],
+                                       "event":  "settings.changed"
+                                   }
                   }
 }

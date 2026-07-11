@@ -1,0 +1,10 @@
+﻿{
+    "schemaVersion":  1,
+    "archetypes":  [
+                       {
+                           "id":  "com.sylian.ai_templates:patrol_dummy",
+                           "actorDefinitionId":  "core:dummy_actor",
+                           "behaviorId":  "com.sylian.ai_templates:patrol_root"
+                       }
+                   ]
+}

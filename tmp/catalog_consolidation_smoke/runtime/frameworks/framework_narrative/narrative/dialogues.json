@@ -1,0 +1,35 @@
+﻿{
+    "schemaVersion":  1,
+    "dialogues":  [
+                      {
+                          "nodes":  [
+                                        {
+                                            "speaker":  "Guide",
+                                            "options":  [
+                                                            {
+                                                                "nextNodeId":  "end",
+                                                                "onChoose":  [
+                                                                                 {
+                                                                                     "flagId":  "com.sylian.narrative_kit:gate_open",
+                                                                                     "value":  "true",
+                                                                                     "action":  "narrative.setFlag"
+                                                                                 }
+                                                                             ],
+                                                                "id":  "ok",
+                                                                "text":  "OK"
+                                                            }
+                                                        ],
+                                            "id":  "start",
+                                            "line":  "Welcome to v9 narrative runtime."
+                                        },
+                                        {
+                                            "speaker":  "Guide",
+                                            "id":  "end",
+                                            "line":  "Good luck."
+                                        }
+                                    ],
+                          "id":  "com.sylian.narrative_kit:hello_dialogue",
+                          "startNodeId":  "start"
+                      }
+                  ]
+}

@@ -1,0 +1,35 @@
+{
+  "behaviors": [
+    {
+      "id": "com.sylian.demo_furnace_system:furnace_debug_behavior",
+      "events": {
+        "onSpawn": [
+          {
+            "actions": [
+              {
+                "action": "fx.stopFx",
+                "handleKey": "com.sylian.demo_furnace_system:furnace_cube_fx"
+              },
+              {
+                "action": "fx.spawnActorFx",
+                "overlay": "cube",
+                "lifeFrames": 3600,
+                "storeKey": "com.sylian.demo_furnace_system:furnace_cube_fx"
+              }
+            ]
+          }
+        ],
+        "onDestroy": [
+          {
+            "actions": [
+              {
+                "action": "fx.stopFx",
+                "handleKey": "com.sylian.demo_furnace_system:furnace_cube_fx"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
