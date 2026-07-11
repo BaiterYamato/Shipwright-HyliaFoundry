@@ -184,6 +184,21 @@ bool ExternalModWasmRuntime::Initialize(const std::vector<uint8_t>& moduleBytes,
             return Result::Ok;
         };
 
+        auto writeStringResult = [&](const std::string& value, uint32_t outPtr, int32_t outCapacity,
+                                     const char* trapLabel) -> Result {
+            const int32_t clampedCapacity = std::max(0, outCapacity);
+            if (static_cast<size_t>(clampedCapacity) < value.size()) {
+                return writeI32Result(-2);
+            }
+            if (!value.empty()) {
+                if (!memory->IsValidAccess(outPtr, 0, value.size())) {
+                    return writeTrap(std::string(trapLabel) + " output buffer out of bounds");
+                }
+                std::memcpy(memory->UnsafeData() + outPtr, value.data(), value.size());
+            }
+            return writeI32Result(static_cast<int32_t>(value.size()));
+        };
+
         if (funcName == "host_useItemProfile") {
             std::string itemId;
             if (!readStringArg(0, 1, itemId)) {
@@ -411,6 +426,80 @@ bool ExternalModWasmRuntime::Initialize(const std::vector<uint8_t>& moduleBytes,
                 std::memcpy(memory->UnsafeData() + outHitsPtr, hits.data(), bytesToWrite);
             }
             return writeI32Result(writeCount);
+        }
+
+        if (funcName == "host_queryPublicJson") {
+            if (params.size() < 4) {
+                return writeTrap("host_queryPublicJson expects 4 parameters");
+            }
+            std::string requestJson;
+            if (!readStringArg(0, 1, requestJson)) {
+                return writeTrap("host_queryPublicJson invalid request string args");
+            }
+
+            const uint32_t outPtr = params[2].Get<u32>();
+            const int32_t outCapacity = static_cast<int32_t>(params[3].Get<u32>());
+            if (!mConfig.hostApi.queryPublicJson) {
+                return writeTrap("host_queryPublicJson is not bound in runtime host API");
+            }
+
+            std::string responseJson;
+            const int32_t hostResult = mConfig.hostApi.queryPublicJson(requestJson, responseJson);
+            if (hostResult < 0) {
+                return writeI32Result(hostResult);
+            }
+            return writeStringResult(responseJson, outPtr, outCapacity, "host_queryPublicJson");
+        }
+
+        if (funcName == "host_callService") {
+            if (params.size() < 8) {
+                return writeTrap("host_callService expects 8 parameters");
+            }
+
+            std::string targetModId;
+            std::string serviceId;
+            std::string requestJson;
+            if (!readStringArg(0, 1, targetModId) || !readStringArg(2, 3, serviceId) ||
+                !readStringArg(4, 5, requestJson)) {
+                return writeTrap("host_callService invalid string args");
+            }
+
+            const uint32_t outPtr = params[6].Get<u32>();
+            const int32_t outCapacity = static_cast<int32_t>(params[7].Get<u32>());
+            if (!mConfig.hostApi.callService) {
+                return writeTrap("host_callService is not bound in runtime host API");
+            }
+
+            std::string responseJson;
+            const int32_t hostResult = mConfig.hostApi.callService(targetModId, serviceId, requestJson, responseJson);
+            if (hostResult < 0) {
+                return writeI32Result(hostResult);
+            }
+            return writeStringResult(responseJson, outPtr, outCapacity, "host_callService");
+        }
+
+        if (funcName == "host_invokeActionJson") {
+            if (params.size() < 4) {
+                return writeTrap("host_invokeActionJson expects 4 parameters");
+            }
+
+            std::string actionJson;
+            if (!readStringArg(0, 1, actionJson)) {
+                return writeTrap("host_invokeActionJson invalid action string args");
+            }
+
+            const uint32_t outPtr = params[2].Get<u32>();
+            const int32_t outCapacity = static_cast<int32_t>(params[3].Get<u32>());
+            if (!mConfig.hostApi.invokeActionJson) {
+                return writeTrap("host_invokeActionJson is not bound in runtime host API");
+            }
+
+            std::string responseJson;
+            const int32_t hostResult = mConfig.hostApi.invokeActionJson(actionJson, responseJson);
+            if (hostResult < 0) {
+                return writeI32Result(hostResult);
+            }
+            return writeStringResult(responseJson, outPtr, outCapacity, "host_invokeActionJson");
         }
 
         return writeTrap("Unsupported host import function: " + moduleName + "." + funcName);

@@ -49,6 +49,27 @@ static const std::map<int32_t, const char*> textureFilteringMap = {
     { Fast::FILTER_NONE, "None" },
 };
 
+static const std::map<int32_t, const char*> volumetricsDebugModeMap = {
+    { Fast::GFX_VOLUMETRICS_DEBUG_OFF, "Off" },
+    { Fast::GFX_VOLUMETRICS_DEBUG_FOG_DENSITY, "Fog Density" },
+    { Fast::GFX_VOLUMETRICS_DEBUG_LIGHT_ENERGY, "Light Energy" },
+    { Fast::GFX_VOLUMETRICS_DEBUG_FINAL_VOLUME, "Final Volume" },
+    { Fast::GFX_VOLUMETRICS_DEBUG_TRANSMITTANCE, "Transmittance" },
+    { Fast::GFX_VOLUMETRICS_DEBUG_SHADOW_OCCLUSION, "Shadow Occlusion" },
+};
+
+static const std::map<int32_t, const char*> volumetricsPerformanceModeMap = {
+    { Fast::GFX_VOLUMETRICS_PERF_PERFORMANCE, "Performance" },
+    { Fast::GFX_VOLUMETRICS_PERF_BALANCED, "Balanced" },
+    { Fast::GFX_VOLUMETRICS_PERF_QUALITY, "Quality" },
+};
+
+static const std::map<int32_t, const char*> volumetricsTestLightTypeMap = {
+    { 0, "Directional" },
+    { 1, "Point" },
+    { 2, "Spot" },
+};
+
 static const std::map<int32_t, const char*> notificationPosition = {
     { 0, "Top Left" }, { 1, "Top Right" }, { 2, "Bottom Left" }, { 3, "Bottom Right" }, { 4, "Hidden" },
 };
@@ -456,6 +477,533 @@ void SohMenu::AddMenuSettings() {
         .CVar("gEnhancements.Graphics.AO.DebugView")
         .RaceDisable(false)
         .Options(CheckboxOptions().Tooltip("Displays AO buffer instead of compositing it.").DefaultValue(false));
+    AddWidget(path, "Volumetrics", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Graphics.Volumetrics.Enabled")
+        .RaceDisable(false)
+        .Options(CheckboxOptions()
+                     .Tooltip("Enables real volumetric fog/lighting when a render profile or dynamic lights request it.")
+                     .DefaultValue(true));
+    AddWidget(path, "Volumetrics Quality", WIDGET_CVAR_SLIDER_INT)
+        .CVar("gEnhancements.Graphics.Volumetrics.Quality")
+        .RaceDisable(false)
+        .Options(IntSliderOptions()
+                     .Tooltip("0=Auto, 1=Low, 2=Medium, 3=High.")
+                     .Min(0)
+                     .Max(3)
+                     .DefaultValue(0));
+    AddWidget(path, "Volumetrics Performance Mode", WIDGET_CVAR_COMBOBOX)
+        .CVar("gEnhancements.Graphics.Volumetrics.PerformanceMode")
+        .RaceDisable(false)
+        .Options(ComboboxOptions()
+                     .Tooltip("Performance keeps the cheap depth fog path; Balanced limits raymarch cost; Quality enables heavier lighting.")
+                     .ComboMap(volumetricsPerformanceModeMap)
+                     .DefaultIndex(Fast::GFX_VOLUMETRICS_PERF_BALANCED));
+    AddWidget(path, "Performance Fog Preset", WIDGET_BUTTON)
+        .RaceDisable(false)
+        .Callback([](WidgetInfo& info) {
+            CVarSetInteger("gEnhancements.Graphics.Volumetrics.PerformanceMode", Fast::GFX_VOLUMETRICS_PERF_PERFORMANCE);
+            CVarSetInteger("gEnhancements.Graphics.Volumetrics.Quality", 1);
+            CVarSetInteger("gEnhancements.Graphics.Volumetrics.ShadowQuality", 0);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.DensityScale", 0.85f);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.AmbientIntensity", 0.28f);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.DepthExtinctionStrength", 1.65f);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.HorizonFogStrength", 0.45f);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.SkyFallbackStrength", 0.08f);
+            Ship::Context::GetRawInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
+        })
+        .Options(ButtonOptions().Tooltip("Fast depth fog/aerial perspective preset. Best when FPS matters.").Size(Sizes::Inline));
+    AddWidget(path, "Balanced Atmosphere Preset", WIDGET_BUTTON)
+        .RaceDisable(false)
+        .Callback([](WidgetInfo& info) {
+            CVarSetInteger("gEnhancements.Graphics.Volumetrics.PerformanceMode", Fast::GFX_VOLUMETRICS_PERF_BALANCED);
+            CVarSetInteger("gEnhancements.Graphics.Volumetrics.Quality", 2);
+            CVarSetInteger("gEnhancements.Graphics.Volumetrics.ShadowQuality", 0);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.DensityScale", 1.0f);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.AmbientIntensity", 0.35f);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.DepthExtinctionStrength", 2.1f);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.HorizonFogStrength", 0.6f);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.SkyFallbackStrength", 0.1f);
+            Ship::Context::GetRawInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
+        })
+        .Options(ButtonOptions().Tooltip("Balanced depth fog plus limited raymarch when a real volumetric light exists.").Size(Sizes::Inline));
+    AddWidget(path, "Quality Volumetrics Preset", WIDGET_BUTTON)
+        .RaceDisable(false)
+        .Callback([](WidgetInfo& info) {
+            CVarSetInteger("gEnhancements.Graphics.Volumetrics.PerformanceMode", Fast::GFX_VOLUMETRICS_PERF_QUALITY);
+            CVarSetInteger("gEnhancements.Graphics.Volumetrics.Quality", 3);
+            CVarSetInteger("gEnhancements.Graphics.Volumetrics.ShadowQuality", 1);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.DensityScale", 1.0f);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.AmbientIntensity", 0.35f);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.DepthExtinctionStrength", 2.4f);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.HorizonFogStrength", 0.7f);
+            CVarSetFloat("gEnhancements.Graphics.Volumetrics.SkyFallbackStrength", 0.12f);
+            Ship::Context::GetRawInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
+        })
+        .Options(ButtonOptions().Tooltip("Higher quality raymarch budget. Shadows stay conservative to avoid the old 1 FPS path.").Size(Sizes::Inline));
+    AddWidget(path, "Volumetrics Density", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.DensityScale")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Global multiplier for volumetric density. 1.0 = profile default.")
+                     .Min(0.0f)
+                     .Max(3.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Volumetrics Shadow Quality", WIDGET_CVAR_SLIDER_INT)
+        .CVar("gEnhancements.Graphics.Volumetrics.ShadowQuality")
+        .RaceDisable(false)
+        .Options(IntSliderOptions()
+                     .Tooltip("0=Auto, 1=Low, 2=Medium, 3=High.")
+                     .Min(0)
+                     .Max(3)
+                     .DefaultValue(0));
+    AddWidget(path, "Volumetrics Debug View", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Graphics.Volumetrics.DebugView")
+        .RaceDisable(false)
+        .Options(CheckboxOptions().Tooltip("Displays the volumetric buffer instead of the final composite.")
+                     .DefaultValue(false));
+    AddWidget(path, "Advanced Volumetrics Overrides", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "Use Custom Volumetrics", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Graphics.Volumetrics.UseCustom")
+        .RaceDisable(false)
+        .Options(CheckboxOptions()
+                     .Tooltip("Overrides the active volumetrics preset with the advanced values below.")
+                     .DefaultValue(false));
+    AddWidget(path, "Volumetrics Color", WIDGET_CVAR_COLOR_PICKER)
+        .CVar("gEnhancements.Graphics.Volumetrics.Color")
+        .RaceDisable(false)
+        .Options(ColorPickerOptions()
+                     .Tooltip("Base fog color used by volumetrics when custom overrides are enabled.")
+                     .Color(Colors::Blue)
+                     .DefaultValue({ 184, 214, 255, 255 })
+                     .ShowReset());
+    AddWidget(path, "Volumetrics Ambient Intensity", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.AmbientIntensity")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("How strongly the medium fog shows up even without bright dynamic lights.")
+                     .Min(0.0f)
+                     .Max(4.0f)
+                     .DefaultValue(0.35f)
+                     .Step(0.01f));
+    AddWidget(path, "Volumetrics Anisotropy", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.Anisotropy")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Scattering phase bias: negative spreads evenly, positive pushes forward shafts.")
+                     .Min(-0.95f)
+                     .Max(0.95f)
+                     .DefaultValue(0.2f)
+                     .Step(0.01f));
+    AddWidget(path, "Volumetrics Start Distance", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.StartDistance")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("How far from the camera the volumetric fog starts.")
+                     .Min(0.0f)
+                     .Max(1024.0f)
+                     .DefaultValue(64.0f)
+                     .Step(1.0f));
+    AddWidget(path, "Volumetrics Max Distance", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.MaxDistance")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Maximum distance marched by the volumetrics pass.")
+                     .Min(64.0f)
+                     .Max(6000.0f)
+                     .DefaultValue(2400.0f)
+                     .Step(10.0f));
+    AddWidget(path, "Volumetrics Height Fog", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Graphics.Volumetrics.HeightFog")
+        .RaceDisable(false)
+        .Options(CheckboxOptions().Tooltip("Enables exponential height falloff when custom overrides are enabled.")
+                     .DefaultValue(false));
+    AddWidget(path, "Volumetrics Base Height", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.BaseHeight")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Height reference used by the custom volumetric height fog.")
+                     .Min(-4000.0f)
+                     .Max(4000.0f)
+                     .DefaultValue(0.0f)
+                     .Step(10.0f));
+    AddWidget(path, "Volumetrics Height Falloff", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.HeightFalloff")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("How quickly the custom height fog fades above the base height.")
+                     .Min(0.0f)
+                     .Max(0.02f)
+                     .DefaultValue(0.0025f)
+                     .Step(0.0001f)
+                     .Format("%.4f"));
+    AddWidget(path, "Volumetrics Light Shaft Intensity", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.LightShaftIntensity")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Multiplier for volumetric light scattering.")
+                     .Min(0.0f)
+                     .Max(4.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Volumetrics Shadow Intensity", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.ShadowIntensity")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("How much shadowed volumetric occlusion darkens the medium.")
+                     .Min(0.0f)
+                     .Max(1.0f)
+                     .DefaultValue(0.6f)
+                     .Step(0.01f));
+    AddWidget(path, "Volumetrics Temporal Blend", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.TemporalBlend")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Blend factor used when reprojection history is valid.")
+                     .Min(0.0f)
+                     .Max(0.99f)
+                     .DefaultValue(0.88f)
+                     .Step(0.01f));
+    AddWidget(path, "Volumetrics Jitter Scale", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.JitterScale")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Noise jitter amplitude used by the volumetric raymarch.")
+                     .Min(0.0f)
+                     .Max(4.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Volumetrics Aerial Perspective", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.AerialPerspectiveStrength")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Strength of depth-driven haze that makes far geometry lose contrast and readability.")
+                     .Min(0.0f)
+                     .Max(4.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Volumetrics Macro Noise", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.MacroNoiseStrength")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Strength of large world-space fog billows and pockets.")
+                     .Min(0.0f)
+                     .Max(3.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Volumetrics Valley Fog", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.ValleyFogStrength")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("How strongly the fog pools in lower areas and hugs the terrain.")
+                     .Min(0.0f)
+                     .Max(3.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Volumetrics Edge Haze", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.EdgeHazeStrength")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Extra haze applied around distant depth transitions and silhouettes.")
+                     .Min(0.0f)
+                     .Max(3.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Volumetrics Depth Extinction", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.DepthExtinctionStrength")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Strength of depth-driven extinction that fades distant geometry into fog.")
+                     .Min(0.0f)
+                     .Max(8.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Volumetrics Depth Exponent", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.DepthExtinctionExponent")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Curve of the depth extinction response across near to far geometry.")
+                     .Min(0.25f)
+                     .Max(6.0f)
+                     .DefaultValue(1.25f)
+                     .Step(0.05f));
+    AddWidget(path, "Volumetrics Horizon Fog", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.HorizonFogStrength")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Extra horizon haze for broad outdoor depth and map-scale fog layers.")
+                     .Min(0.0f)
+                     .Max(4.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Volumetrics Sky Fallback", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.SkyFallbackStrength")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Fallback fog strength for sky and background when no scene depth is available.")
+                     .Min(0.0f)
+                     .Max(2.0f)
+                     .DefaultValue(0.18f)
+                     .Step(0.01f));
+    AddWidget(path, "Directional Shadow Bias", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.DirectionalShadowBias")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Depth bias for the main directional volumetric shadow.")
+                     .Min(0.0f)
+                     .Max(0.1f)
+                     .DefaultValue(0.01f)
+                     .Step(0.001f));
+    AddWidget(path, "Directional Shadow Normal Bias", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.DirectionalShadowNormalBias")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Normal-based bias that helps reduce shadow acne in the volumetric pass.")
+                     .Min(0.0f)
+                     .Max(0.2f)
+                     .DefaultValue(0.02f)
+                     .Step(0.002f));
+    AddWidget(path, "Directional Shadow Softness", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Volumetrics.DirectionalShadowSoftness")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Softens the main directional volumetric shadow filtering.")
+                     .Min(0.0f)
+                     .Max(4.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Volumetrics Debug Mode", WIDGET_CVAR_COMBOBOX)
+        .CVar("gEnhancements.Graphics.Volumetrics.DebugMode")
+        .RaceDisable(false)
+        .Options(ComboboxOptions()
+                     .Tooltip("Advanced debug visualization for the volumetric pass.")
+                     .ComboMap(volumetricsDebugModeMap)
+                     .DefaultIndex(Fast::GFX_VOLUMETRICS_DEBUG_OFF));
+    AddWidget(path, "Advanced PostFX Overrides", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "Use Custom PostFX", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Graphics.PostFx.UseCustom")
+        .RaceDisable(false)
+        .Options(CheckboxOptions().Tooltip("Overrides the resolved postfx preset values below in real time.")
+                     .DefaultValue(false));
+    AddWidget(path, "PostFX Exposure", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.PostFx.Exposure")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Global postfx exposure override.")
+                     .Min(0.0f)
+                     .Max(4.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.01f));
+    AddWidget(path, "PostFX Bloom", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.PostFx.Bloom")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Global bloom override from the active postfx preset.")
+                     .Min(0.0f)
+                     .Max(2.0f)
+                     .DefaultValue(0.0f)
+                     .Step(0.01f));
+    AddWidget(path, "PostFX Saturation", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.PostFx.Saturation")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Global saturation override from the active postfx preset.")
+                     .Min(0.0f)
+                     .Max(3.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.01f));
+    AddWidget(path, "PostFX Fog Color", WIDGET_CVAR_COLOR_PICKER)
+        .CVar("gEnhancements.Graphics.PostFx.FogColor")
+        .RaceDisable(false)
+        .Options(ColorPickerOptions()
+                     .Tooltip("Fog color override used by postfx and as the default volumetric fog tint.")
+                     .Color(Colors::LightBlue)
+                     .DefaultValue({ 171, 204, 255, 255 })
+                     .ShowReset());
+    AddWidget(path, "PostFX Fog Density", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.PostFx.FogDensity")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Density override used to derive near/far fog when custom postfx is active.")
+                     .Min(0.0f)
+                     .Max(1.0f)
+                     .DefaultValue(0.0f)
+                     .Step(0.01f));
+    AddWidget(path, "Advanced Skylight Overrides", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "Use Custom Skylight", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Graphics.Skylight.UseCustom")
+        .RaceDisable(false)
+        .Options(CheckboxOptions().Tooltip("Overrides the resolved skylight with the custom values below for validation.")
+                     .DefaultValue(false));
+    AddWidget(path, "Skylight Color", WIDGET_CVAR_COLOR_PICKER)
+        .CVar("gEnhancements.Graphics.Skylight.Color")
+        .RaceDisable(false)
+        .Options(ColorPickerOptions()
+                     .Tooltip("Custom skylight color used for both the environment light and volumetrics.")
+                     .Color(Colors::LightBlue)
+                     .DefaultValue({ 255, 255, 255, 255 })
+                     .ShowReset());
+    AddWidget(path, "Skylight Intensity", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Skylight.Intensity")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Intensity multiplier for the custom skylight.")
+                     .Min(0.0f)
+                     .Max(8.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Skylight Volumetric Intensity", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Skylight.VolumetricIntensity")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("How strongly the custom skylight contributes to volumetric scattering.")
+                     .Min(0.0f)
+                     .Max(8.0f)
+                     .DefaultValue(1.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Skylight Direction X", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Skylight.DirectionX")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("X direction of the custom skylight.")
+                     .Min(-1.0f)
+                     .Max(1.0f)
+                     .DefaultValue(0.0f)
+                     .Step(0.01f));
+    AddWidget(path, "Skylight Direction Y", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Skylight.DirectionY")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Y direction of the custom skylight.")
+                     .Min(-1.0f)
+                     .Max(1.0f)
+                     .DefaultValue(-1.0f)
+                     .Step(0.01f));
+    AddWidget(path, "Skylight Direction Z", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.Skylight.DirectionZ")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Z direction of the custom skylight.")
+                     .Min(-1.0f)
+                     .Max(1.0f)
+                     .DefaultValue(0.0f)
+                     .Step(0.01f));
+    AddWidget(path, "Advanced Volumetric Test Light", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "Use Custom Test Light", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Graphics.DebugLight.UseCustom")
+        .RaceDisable(false)
+        .Options(CheckboxOptions().Tooltip("Injects a guaranteed test light for validating volumetrics even when the scene has no dynamic lights.")
+                     .DefaultValue(false));
+    AddWidget(path, "Test Light Type", WIDGET_CVAR_COMBOBOX)
+        .CVar("gEnhancements.Graphics.DebugLight.Type")
+        .RaceDisable(false)
+        .Options(ComboboxOptions()
+                     .Tooltip("Selects the light archetype used by the custom volumetric test light.")
+                     .ComboMap(volumetricsTestLightTypeMap)
+                     .DefaultIndex(1));
+    AddWidget(path, "Test Light Color", WIDGET_CVAR_COLOR_PICKER)
+        .CVar("gEnhancements.Graphics.DebugLight.Color")
+        .RaceDisable(false)
+        .Options(ColorPickerOptions()
+                     .Tooltip("Color of the custom volumetric test light.")
+                     .Color(Colors::Orange)
+                     .DefaultValue({ 255, 232, 196, 255 })
+                     .ShowReset());
+    AddWidget(path, "Test Light Intensity", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.DebugLight.Intensity")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Intensity multiplier for the custom test light.")
+                     .Min(0.0f)
+                     .Max(16.0f)
+                     .DefaultValue(2.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Test Light Volumetric Intensity", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.DebugLight.VolumetricIntensity")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Extra volumetric contribution of the custom test light.")
+                     .Min(0.0f)
+                     .Max(8.0f)
+                     .DefaultValue(2.0f)
+                     .Step(0.05f));
+    AddWidget(path, "Test Light Position X", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.DebugLight.PositionX")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("X offset of the custom test light relative to the player.")
+                     .Min(-2000.0f)
+                     .Max(2000.0f)
+                     .DefaultValue(0.0f)
+                     .Step(5.0f));
+    AddWidget(path, "Test Light Position Y", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.DebugLight.PositionY")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Y offset of the custom test light relative to the player.")
+                     .Min(-2000.0f)
+                     .Max(2000.0f)
+                     .DefaultValue(120.0f)
+                     .Step(5.0f));
+    AddWidget(path, "Test Light Position Z", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.DebugLight.PositionZ")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Z offset of the custom test light relative to the player.")
+                     .Min(-2000.0f)
+                     .Max(2000.0f)
+                     .DefaultValue(220.0f)
+                     .Step(5.0f));
+    AddWidget(path, "Test Light Direction X", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.DebugLight.DirectionX")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("X direction of the custom test light.")
+                     .Min(-1.0f)
+                     .Max(1.0f)
+                     .DefaultValue(0.0f)
+                     .Step(0.01f));
+    AddWidget(path, "Test Light Direction Y", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.DebugLight.DirectionY")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Y direction of the custom test light.")
+                     .Min(-1.0f)
+                     .Max(1.0f)
+                     .DefaultValue(-1.0f)
+                     .Step(0.01f));
+    AddWidget(path, "Test Light Direction Z", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.DebugLight.DirectionZ")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Z direction of the custom test light.")
+                     .Min(-1.0f)
+                     .Max(1.0f)
+                     .DefaultValue(0.0f)
+                     .Step(0.01f));
+    AddWidget(path, "Test Light Radius", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.DebugLight.Radius")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Radius used by the custom point or spot light.")
+                     .Min(1.0f)
+                     .Max(4000.0f)
+                     .DefaultValue(420.0f)
+                     .Step(5.0f));
+    AddWidget(path, "Test Light Inner Cone", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.DebugLight.InnerCone")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Inner cone angle used when the test light type is Spot.")
+                     .Min(0.0f)
+                     .Max(180.0f)
+                     .DefaultValue(20.0f)
+                     .Step(1.0f));
+    AddWidget(path, "Test Light Outer Cone", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.DebugLight.OuterCone")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions().Tooltip("Outer cone angle used when the test light type is Spot.")
+                     .Min(0.0f)
+                     .Max(180.0f)
+                     .DefaultValue(40.0f)
+                     .Step(1.0f));
+    AddWidget(path, "Test Light Cast Shadows", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Graphics.DebugLight.CastShadows")
+        .RaceDisable(false)
+        .Options(CheckboxOptions().Tooltip("Allows the custom test light to consume one volumetric shadow slot when supported.")
+                     .DefaultValue(false));
+    AddWidget(path, "External Mod Resource Bars", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "Use Centered Resource Bar Position", WIDGET_CVAR_CHECKBOX)
+        .CVar("gEnhancements.Graphics.ExternalResourceBars.UseCenteredPosition")
+        .RaceDisable(false)
+        .Options(CheckboxOptions()
+                     .Tooltip("Moves stacked external magic-style resource bars with centered screen coordinates. 0,0 is the middle of the screen.")
+                     .DefaultValue(false));
+    AddWidget(path, "Resource Bars Position X", WIDGET_CVAR_SLIDER_INT)
+        .CVar("gEnhancements.Graphics.ExternalResourceBars.PosX")
+        .RaceDisable(false)
+        .Options(IntSliderOptions()
+                     .Tooltip("Horizontal position for the stacked external resource bars when centered positioning is enabled. 0 is screen center.")
+                     .Min(-300)
+                     .Max(300)
+                     .DefaultValue(0));
+    AddWidget(path, "Resource Bars Position Y", WIDGET_CVAR_SLIDER_INT)
+        .CVar("gEnhancements.Graphics.ExternalResourceBars.PosY")
+        .RaceDisable(false)
+        .Options(IntSliderOptions()
+                     .Tooltip("Vertical position for the stacked external resource bars when centered positioning is enabled. 0 is screen center.")
+                     .Min(-220)
+                     .Max(220)
+                     .DefaultValue(0));
+    AddWidget(path, "Resource Bars Stack Spacing", WIDGET_CVAR_SLIDER_FLOAT)
+        .CVar("gEnhancements.Graphics.ExternalResourceBars.StackSpacing")
+        .RaceDisable(false)
+        .Options(FloatSliderOptions()
+                     .Tooltip("Vertical distance between stacked external magic-style resource bars.")
+                     .Min(12.0f)
+                     .Max(24.0f)
+                     .DefaultValue(17.0f)
+                     .Step(0.5f));
 
     // Controls
     path.sidebarName = "Controls";

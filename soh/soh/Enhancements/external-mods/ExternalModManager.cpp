@@ -8,7 +8,9 @@
 #include <cstring>
 #include <functional>
 #include <fstream>
+#include <iomanip>
 #include <limits>
+#include <locale>
 #include <map>
 #include <queue>
 #include <regex>
@@ -36,6 +38,7 @@
 #include "ExternalModItemRuntime.h"
 #include "ExternalModContentRegistry.h"
 #include "ExternalModInterop.h"
+#include "ExternalModNativeRuntime.h"
 #include "ExternalModWorldGraphicsRuntime.h"
 #include "ExternalModWatCompiler.h"
 #include "ExternalModWasmRuntime.h"
@@ -60,6 +63,8 @@ GetItemID RetrieveGetItemIDFromItemID(ItemID itemID);
 
 extern SaveContext gSaveContext;
 extern PlayState* gPlayState;
+extern const char gBuildVersion[];
+extern const char gGitCommitHash[];
 void Interface_DrawItemIconTexture(PlayState* play, void* texture, s16 button);
 void Interface_DrawAmmoCount(PlayState* play, s16 button, s16 alpha);
 void Player_StartMode_Idle(PlayState* play, Player* thisx);
@@ -76,6 +81,8 @@ constexpr uint64_t kMaxScriptBytes = 1024 * 1024;
 constexpr uint64_t kMaxAssetBytes = 512ull * 1024ull * 1024ull;
 constexpr uint64_t kMaxWasmBytes = 4ull * 1024ull * 1024ull;
 constexpr uint64_t kMaxWatSourceBytes = 4ull * 1024ull * 1024ull;
+constexpr uint64_t kMaxNativeLibraryBytes = 64ull * 1024ull * 1024ull;
+constexpr uint64_t kMaxDslDocumentBytes = 1024 * 1024;
 constexpr uint64_t kMaxItemDefinitionBytes = 256 * 1024;
 constexpr uint64_t kMaxInputDefinitionBytes = 256 * 1024;
 constexpr uint64_t kMaxActorDefinitionBytes = 256 * 1024;
@@ -95,6 +102,9 @@ constexpr uint64_t kMaxHudWidgetDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxReticleDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxUiScreenDefinitionBytes = 1024 * 1024;
 constexpr uint64_t kMaxUiHudDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxPlayerResourceDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxResourceRingDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxPlayerConsumableDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxInventoryExtensionDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxContainerDefinitionBytes = 1024 * 1024;
 constexpr uint64_t kMaxRecipeDefinitionBytes = 1024 * 1024;
@@ -124,6 +134,10 @@ constexpr uint64_t kMaxPostFxDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxSceneProfileDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxRoomProfileDefinitionBytes = 512 * 1024;
 constexpr uint64_t kMaxAssetPackDefinitionBytes = 256 * 1024;
+constexpr uint64_t kMaxAssetSourceDefinitionBytes = 256 * 1024;
+constexpr uint64_t kMaxMeshDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxPrefabDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxWorldInstanceDefinitionBytes = 1024 * 1024;
 constexpr uint64_t kMaxRenderInspectorDefinitionBytes = 256 * 1024;
 constexpr uint64_t kMaxEditorRuntimeDefinitionBytes = 1024 * 1024;
 constexpr uint64_t kMaxEditorUiDefinitionBytes = 1024 * 1024;
@@ -136,6 +150,32 @@ constexpr uint64_t kMaxAssetImporterDefinitionBytes = 1024 * 1024;
 constexpr uint64_t kMaxWorldAuthoringDefinitionBytes = 1024 * 1024;
 constexpr uint64_t kMaxCollisionAuthoringDefinitionBytes = 1024 * 1024;
 constexpr uint64_t kMaxEditorInspectorDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxWorldPersistenceDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxWorldStorageDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxWorldSpawnProfileDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxWorldForageDefinitionBytes = 512 * 1024;
+
+void HydrateConsumableStateForPackage(ExternalModPackage& package);
+void PersistConsumableStackState(ExternalModPackage& package, const ExternalModPlayerConsumableDefinition& definition,
+                                 int32_t count);
+void PersistBottleContentState(ExternalModPackage& package, int32_t bottleSlot,
+                               const ExternalModBottleContentState* contentState);
+void PersistInventoryConsumableSlotState(ExternalModPackage& package, int32_t slot, const std::string* consumableId);
+void PersistInventoryConsumableSlotState(ExternalModPackage& package, int32_t slot, const std::string* consumableId);
+constexpr uint64_t kMaxWorldTimeWeatherDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxWorldSeedingDefinitionBytes = 256 * 1024;
+constexpr uint64_t kMaxWorldMigrationDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxPersistenceInspectorDefinitionBytes = 256 * 1024;
+constexpr uint64_t kMaxNarrativeFlagDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxNarrativeDialogueDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxNarrativeQuestDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxNarrativeTimelineDefinitionBytes = 1024 * 1024;
+constexpr uint64_t kMaxNarrativeInspectorDefinitionBytes = 256 * 1024;
+constexpr uint64_t kMaxDevHotReloadDefinitionBytes = 256 * 1024;
+constexpr uint64_t kMaxDevConsoleDefinitionBytes = 512 * 1024;
+constexpr uint64_t kMaxDevWatcherDefinitionBytes = 256 * 1024;
+constexpr uint64_t kMaxWasmSandboxDefinitionBytes = 256 * 1024;
+constexpr uint64_t kMaxReloadInspectorDefinitionBytes = 256 * 1024;
 constexpr uint64_t kMaxItemIconBytes = 4ull * 1024ull * 1024ull;
 constexpr uint64_t kMaxItemModelBytes = 8ull * 1024ull * 1024ull;
 constexpr uint64_t kMaxItemModelTextureBytes = 16ull * 1024ull * 1024ull;
@@ -186,6 +226,9 @@ std::vector<ExternalModHookshotTexturePatchRecord> gExternalModHookshotTexturePa
 std::string gExternalModHookshotTextureOverrideKey;
 std::unordered_set<std::string> gExternalModMissingDisplayListWarnings{};
 std::unordered_set<std::string> gExternalModDisplayListDrawDebugLogs{};
+std::unordered_set<std::string> gExternalModMissingPlacementWarnings{};
+std::unordered_set<std::string> gExternalModMissingPrefabWarnings{};
+std::unordered_set<std::string> gExternalModMissingMeshWarnings{};
 bool gExternalModPlayerStatusOverridesApplied = false;
 constexpr const char* kCoreFreezeNoDamageStatusId = "core:freeze_ice_trap_no_damage";
 constexpr uint8_t kObjIcePolySizeSmall = 0;
@@ -298,6 +341,15 @@ const std::unordered_map<std::string, Ship::KbScancode> kKeyboardKeyAliases = {
     { "0", Ship::LUS_KB_0 },   { "1", Ship::LUS_KB_1 },   { "2", Ship::LUS_KB_2 },   { "3", Ship::LUS_KB_3 },
     { "4", Ship::LUS_KB_4 },   { "5", Ship::LUS_KB_5 },   { "6", Ship::LUS_KB_6 },   { "7", Ship::LUS_KB_7 },
     { "8", Ship::LUS_KB_8 },   { "9", Ship::LUS_KB_9 },
+    { "ESC", Ship::LUS_KB_ESCAPE },         { "ESCAPE", Ship::LUS_KB_ESCAPE },
+    { "ENTER", Ship::LUS_KB_ENTER },        { "SPACE", Ship::LUS_KB_SPACE },
+    { "BACKSPACE", Ship::LUS_KB_BACKSPACE }, { "SHIFT", Ship::LUS_KB_SHIFT },
+    { "LSHIFT", Ship::LUS_KB_SHIFT },       { "LEFTSHIFT", Ship::LUS_KB_SHIFT },
+    { "RSHIFT", Ship::LUS_KB_RSHIFT },      { "RIGHTSHIFT", Ship::LUS_KB_RSHIFT },
+    { "CTRL", Ship::LUS_KB_CONTROL },       { "CONTROL", Ship::LUS_KB_CONTROL },
+    { "LCTRL", Ship::LUS_KB_CONTROL },      { "LEFTCTRL", Ship::LUS_KB_CONTROL },
+    { "ALT", Ship::LUS_KB_ALT },            { "LALT", Ship::LUS_KB_ALT },
+    { "LEFTALT", Ship::LUS_KB_ALT },
     { "F1", Ship::LUS_KB_F1 }, { "F2", Ship::LUS_KB_F2 }, { "F3", Ship::LUS_KB_F3 }, { "F4", Ship::LUS_KB_F4 },
     { "F5", Ship::LUS_KB_F5 }, { "F6", Ship::LUS_KB_F6 }, { "F7", Ship::LUS_KB_F7 }, { "F8", Ship::LUS_KB_F8 },
     { "F9", Ship::LUS_KB_F9 }, { "F10", Ship::LUS_KB_F10 }, { "F11", Ship::LUS_KB_F11 }, { "F12", Ship::LUS_KB_F12 },
@@ -341,6 +393,7 @@ const std::unordered_set<ExternalModActionType> kSupportedHotkeyActions = {
     ExternalModActionType::SetAimCameraMode,
     ExternalModActionType::SetAimCameraProfile,
     ExternalModActionType::ActorsToggleArchetype,
+    ExternalModActionType::ConsumeConsumableStack,
 };
 constexpr const char* kAimCameraOverShoulderCVar = "gExternalMods.AimCamera.OverShoulderEnabled";
 constexpr const char* kCoreDefaultAimCameraProfileId = "core:ots_default";
@@ -354,7 +407,7 @@ const ExternalModAimCameraProfile& GetCoreDefaultAimCameraProfile() {
         p.bowFirstPersonMode = CAM_MODE_AIM_ADULT;
         p.hookshotFirstPersonMode = CAM_MODE_HOOKSHOT;
         p.slingshotFirstPersonMode = CAM_MODE_AIM_CHILD;
-        p.boomerangFirstPersonMode = CAM_MODE_AIM_BOOMERANG;
+        p.boomerangFirstPersonMode = CAM_MODE_AIM_ADULT;
         p.cUpOverShoulderMode = CAM_MODE_BOWARROWZ;
         p.bowOverShoulderMode = CAM_MODE_BOWARROWZ;
         p.hookshotOverShoulderMode = CAM_MODE_BOWARROWZ;
@@ -420,73 +473,6 @@ const TDefinition* FindDefinitionAcrossPackages(const std::vector<ExternalModPac
         *outOwnerPackage = bestPackage;
     }
     return bestDefinition;
-}
-
-bool MatchesMaterialBind(const ExternalModMaterialDefinition::Bind& bind, const std::string& texturePath,
-                         int16_t sceneId, int16_t roomId) {
-    return bind.otrPath == texturePath && (!bind.hasSceneId || bind.sceneId == sceneId) &&
-           (!bind.hasRoomId || bind.roomId == roomId);
-}
-
-bool MaterialMatchesTexturePath(const ExternalModMaterialDefinition& material, const std::string& texturePath,
-                                int16_t sceneId, int16_t roomId) {
-    if (!material.bindOtrPath.empty() && material.bindOtrPath == texturePath) {
-        return true;
-    }
-    return std::any_of(material.binds.begin(), material.binds.end(), [&](const auto& bind) {
-        return MatchesMaterialBind(bind, texturePath, sceneId, roomId);
-    });
-}
-
-const ExternalModMaterialDefinition* ResolveEffectiveMaterialForTexturePath(
-    const std::vector<ExternalModPackage>& packages, const std::string& texturePath, int16_t sceneId, int16_t roomId) {
-    if (texturePath.empty()) {
-        return nullptr;
-    }
-
-    const ExternalModMaterialDefinition* selectedMaterial = nullptr;
-    const ExternalModPackage* selectedPackage = nullptr;
-    auto consider = [&](const ExternalModPackage& package, const ExternalModMaterialDefinition* material) {
-        if (material != nullptr && IsHigherPriorityProvider(&package, selectedPackage)) {
-            selectedPackage = &package;
-            selectedMaterial = material;
-        }
-    };
-
-    for (const auto& package : packages) {
-        if (!package.valid || !package.runtime.enabled) {
-            continue;
-        }
-        for (const auto& overrideState : package.runtime.materialOverrides) {
-            const auto* material = FindDefinitionAcrossPackages<ExternalModMaterialDefinition>(
-                packages, overrideState.materialId,
-                [](const ExternalModRuntime& runtime) -> const std::vector<ExternalModMaterialDefinition>& {
-                    return runtime.materialDefinitions;
-                });
-            const bool matches = material != nullptr &&
-                                 (!overrideState.match.empty()
-                                      ? overrideState.match == texturePath
-                                      : MaterialMatchesTexturePath(*material, texturePath, sceneId, roomId));
-            if (matches) {
-                consider(package, material);
-            }
-        }
-    }
-    if (selectedMaterial != nullptr) {
-        return selectedMaterial;
-    }
-
-    for (const auto& package : packages) {
-        if (!package.valid || !package.runtime.enabled) {
-            continue;
-        }
-        for (const auto& material : package.runtime.materialDefinitions) {
-            if (MaterialMatchesTexturePath(material, texturePath, sceneId, roomId)) {
-                consider(package, &material);
-            }
-        }
-    }
-    return selectedMaterial;
 }
 
 std::string GetProfileOwnerModId(const std::string& profileId, const std::string& fallbackModId) {
@@ -667,7 +653,7 @@ bool ParseCameraModeTypeToken(const std::string& value, int16_t& outMode) {
         return true;
     }
     if (normalized == "boomerang") {
-        outMode = CAM_MODE_AIM_BOOMERANG;
+        outMode = CAM_MODE_AIM_ADULT;
         return true;
     }
     return false;
@@ -832,12 +818,410 @@ ExternalModRuntimeModuleFormat ResolveRuntimeModuleFormat(const std::filesystem:
     if (extension == ".wat") {
         return ExternalModRuntimeModuleFormat::WatText;
     }
+    if (extension == ".dll") {
+        return ExternalModRuntimeModuleFormat::NativeLibrary;
+    }
     return ExternalModRuntimeModuleFormat::WasmBinary;
 }
 
 bool IsSupportedRuntimeModuleExtension(const std::filesystem::path& modulePath) {
     const auto extension = ToLower(modulePath.extension().string());
     return extension == ".wasm" || extension == ".wat";
+}
+
+bool IsSupportedNativeLibraryExtension(const std::filesystem::path& libraryPath) {
+    return ToLower(libraryPath.extension().string()) == ".dll";
+}
+
+bool IsWasmRuntimeType(const std::string& runtimeType) {
+    const std::string normalized = ToLower(runtimeType);
+    return normalized == "wasm3-v1" || normalized == "wasm";
+}
+
+bool IsNativeRuntimeType(const std::string& runtimeType) {
+    const std::string normalized = ToLower(runtimeType);
+    return normalized == "native-cpp-v1" || normalized == "native";
+}
+
+bool IsHybridRuntimeType(const std::string& runtimeType) {
+    const std::string normalized = ToLower(runtimeType);
+    return normalized == "hybrid-v1" || normalized == "hybrid";
+}
+
+bool IsDataOnlyRuntimeType(const std::string& runtimeType) {
+    const std::string normalized = ToLower(runtimeType);
+    return normalized == "data-only" || normalized == "data-only-v1";
+}
+
+ExternalModRuntimeKind ResolveRuntimeKind(const std::string& runtimeType) {
+    if (IsDataOnlyRuntimeType(runtimeType)) {
+        return ExternalModRuntimeKind::DataOnly;
+    }
+    if (IsNativeRuntimeType(runtimeType)) {
+        return ExternalModRuntimeKind::Native;
+    }
+    if (IsHybridRuntimeType(runtimeType)) {
+        return ExternalModRuntimeKind::Hybrid;
+    }
+    return ExternalModRuntimeKind::Wasm;
+}
+
+bool IsPackageRuntimeRelativePath(const std::filesystem::path& packageRelativePath) {
+    const auto it = packageRelativePath.begin();
+    if (it == packageRelativePath.end()) {
+        return false;
+    }
+
+    const std::string firstSegment = ToLower(it->generic_string());
+    if (firstSegment == "native" || firstSegment == "scripts") {
+        return true;
+    }
+    if (firstSegment == "assets") {
+        return ToLower(packageRelativePath.extension().string()) != ".json";
+    }
+    return false;
+}
+
+void EnsureManifestCapability(ExternalModManifest& manifest, const std::string& capability) {
+    const std::string normalizedCapability = ToLower(capability);
+    if (std::find(manifest.capabilities.begin(), manifest.capabilities.end(), normalizedCapability) ==
+        manifest.capabilities.end()) {
+        manifest.capabilities.push_back(normalizedCapability);
+    }
+}
+
+bool TryParseShareList(const nlohmann::json& json, const char* fieldName, std::vector<std::string>& outValues,
+                       std::string& outError) {
+    outValues.clear();
+    if (!json.contains(fieldName)) {
+        return true;
+    }
+    if (!json[fieldName].is_array()) {
+        outError = std::string(fieldName) + " must be an array";
+        return false;
+    }
+    std::unordered_set<std::string> seen;
+    for (size_t i = 0; i < json[fieldName].size(); ++i) {
+        const auto& entry = json[fieldName][i];
+        if (!entry.is_string()) {
+            outError = std::string(fieldName) + "[" + std::to_string(i) + "] must be string";
+            return false;
+        }
+        const std::string value = entry.get<std::string>();
+        if (!value.empty() && seen.insert(value).second) {
+            outValues.push_back(value);
+        }
+    }
+    return true;
+}
+
+bool TryParseSharePolicyObject(const nlohmann::json& json, ExternalModManifest::SharePolicy& outPolicy,
+                               std::string& outError) {
+    if (!json.is_object()) {
+        outError = "sharePolicy must be an object";
+        return false;
+    }
+
+    auto parseToken = [&](const char* fieldName, std::string& outValue, const std::unordered_set<std::string>& allowed) {
+        if (!json.contains(fieldName)) {
+            return true;
+        }
+        if (!json[fieldName].is_string()) {
+            outError = std::string("sharePolicy.") + fieldName + " must be string";
+            return false;
+        }
+        const std::string normalized = ToLower(json[fieldName].get<std::string>());
+        if (!allowed.contains(normalized)) {
+            outError = std::string("sharePolicy.") + fieldName + " must be one of the supported access tokens";
+            return false;
+        }
+        outValue = normalized;
+        return true;
+    };
+
+    static const std::unordered_set<std::string> kReadAccess = { "public", "friends", "owner", "private" };
+    static const std::unordered_set<std::string> kWriteAccess = { "public", "friends", "owner" };
+
+    if (!parseToken("read", outPolicy.read, kReadAccess) ||
+        !parseToken("write", outPolicy.write, kWriteAccess) ||
+        !parseToken("override", outPolicy.overrideAccess, kWriteAccess) ||
+        !parseToken("nativeService", outPolicy.nativeService, kReadAccess)) {
+        return false;
+    }
+
+    if (!TryParseShareList(json, "denyMods", outPolicy.denyMods, outError) ||
+        !TryParseShareList(json, "friends", outPolicy.friends, outError)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool ShareListContains(const std::vector<std::string>& values, const std::string& needle) {
+    return std::find(values.begin(), values.end(), needle) != values.end();
+}
+
+std::string ResolveShareAccessToken(const std::string& value, const std::string& fallback) {
+    const std::string normalized = ToLower(value.empty() ? fallback : value);
+    return normalized.empty() ? "private" : normalized;
+}
+
+bool IsShareAccessAllowed(const std::string& ownerModId, const std::string& requesterModId, const std::string& accessToken,
+                          const std::vector<std::string>& friends, const std::vector<std::string>& denyMods,
+                          const std::string& fallbackAccessToken) {
+    if (!requesterModId.empty() && requesterModId == ownerModId) {
+        return true;
+    }
+    if (!requesterModId.empty() && ShareListContains(denyMods, requesterModId)) {
+        return false;
+    }
+
+    const std::string resolvedAccess = ResolveShareAccessToken(accessToken, fallbackAccessToken);
+    if (resolvedAccess == "public") {
+        return true;
+    }
+    if (resolvedAccess == "friends") {
+        return !requesterModId.empty() && ShareListContains(friends, requesterModId);
+    }
+    return false;
+}
+
+nlohmann::json TryParseEmbeddedJson(const std::string& rawJson) {
+    if (rawJson.empty()) {
+        return nlohmann::json();
+    }
+
+    nlohmann::json parsed = nlohmann::json::parse(rawJson, nullptr, false);
+    if (parsed.is_discarded()) {
+        return rawJson;
+    }
+    return parsed;
+}
+
+nlohmann::json SerializeManifestSharePolicy(const ExternalModManifest::SharePolicy& sharePolicy) {
+    nlohmann::json json = nlohmann::json::object();
+    json["read"] = sharePolicy.read;
+    json["write"] = sharePolicy.write;
+    json["override"] = sharePolicy.overrideAccess;
+    json["nativeService"] = sharePolicy.nativeService;
+    json["friends"] = sharePolicy.friends;
+    json["denyMods"] = sharePolicy.denyMods;
+    return json;
+}
+
+nlohmann::json SerializeExportDefinition(const ExternalModManifest::ExportDefinition& definition) {
+    nlohmann::json json = nlohmann::json::object();
+    json["id"] = definition.id;
+    json["namespace"] = definition.namespaceId;
+    json["kind"] = definition.kind;
+    json["source"] = definition.source;
+    json["visibility"] = definition.visibility;
+    json["mutableBy"] = definition.mutableBy;
+    if (!definition.friends.empty()) {
+        json["friends"] = definition.friends;
+    }
+    if (!definition.denyMods.empty()) {
+        json["denyMods"] = definition.denyMods;
+    }
+    return json;
+}
+
+nlohmann::json SerializeServiceEndpointDefinition(const ExternalModManifest::ServiceEndpointDefinition& definition) {
+    nlohmann::json json = nlohmann::json::object();
+    json["id"] = definition.id;
+    json["kind"] = definition.kind;
+    json["entry"] = definition.entry;
+    json["visibility"] = definition.visibility;
+    json["mutableBy"] = definition.mutableBy;
+    if (!definition.friends.empty()) {
+        json["friends"] = definition.friends;
+    }
+    if (!definition.denyMods.empty()) {
+        json["denyMods"] = definition.denyMods;
+    }
+    return json;
+}
+
+nlohmann::json SerializeDslDocument(const ExternalModDslDocument& document, bool includeRawJson) {
+    nlohmann::json json = nlohmann::json::object();
+    json["id"] = document.id;
+    json["category"] = document.category;
+    json["type"] = document.subtype;
+    json["sourcePath"] = document.sourcePath;
+    json["visibility"] = document.visibility;
+    json["mutableBy"] = document.mutableBy;
+    if (!document.friends.empty()) {
+        json["friends"] = document.friends;
+    }
+    if (!document.denyMods.empty()) {
+        json["denyMods"] = document.denyMods;
+    }
+    if (includeRawJson) {
+        json["document"] = TryParseEmbeddedJson(document.rawJson);
+    }
+    return json;
+}
+
+nlohmann::json SerializeStringMap(const std::unordered_map<std::string, std::string>& values) {
+    nlohmann::json json = nlohmann::json::object();
+    for (const auto& [key, value] : values) {
+        json[key] = value;
+    }
+    return json;
+}
+
+nlohmann::json SerializeBoolMap(const std::unordered_map<std::string, bool>& values) {
+    nlohmann::json json = nlohmann::json::object();
+    for (const auto& [key, value] : values) {
+        json[key] = value;
+    }
+    return json;
+}
+
+nlohmann::json SerializeIntMap(const std::unordered_map<std::string, int32_t>& values) {
+    nlohmann::json json = nlohmann::json::object();
+    for (const auto& [key, value] : values) {
+        json[key] = value;
+    }
+    return json;
+}
+
+nlohmann::json SerializeStringSet(const std::unordered_set<std::string>& values) {
+    nlohmann::json json = nlohmann::json::array();
+    for (const auto& value : values) {
+        json.push_back(value);
+    }
+    return json;
+}
+
+nlohmann::json SerializeNestedStringMap(
+    const std::unordered_map<std::string, std::unordered_map<std::string, std::string>>& values) {
+    nlohmann::json json = nlohmann::json::object();
+    for (const auto& [key, nestedValues] : values) {
+        json[key] = SerializeStringMap(nestedValues);
+    }
+    return json;
+}
+
+nlohmann::json SerializeIndexedStringMap(const std::unordered_map<int32_t, std::string>& values) {
+    nlohmann::json json = nlohmann::json::object();
+    for (const auto& [key, value] : values) {
+        json[std::to_string(key)] = value;
+    }
+    return json;
+}
+
+nlohmann::json SerializePersistentEntities(
+    const std::unordered_map<std::string, ExternalModRuntime::PersistentEntityState>& entities) {
+    nlohmann::json json = nlohmann::json::array();
+    for (const auto& [entityGuid, state] : entities) {
+        nlohmann::json entry = nlohmann::json::object();
+        entry["entityGuid"] = entityGuid;
+        entry["scope"] = state.scope;
+        entry["sceneId"] = state.sceneId;
+        entry["roomId"] = state.roomId;
+        entry["values"] = SerializeStringMap(state.values);
+        json.push_back(std::move(entry));
+    }
+    return json;
+}
+
+nlohmann::json SerializeNarrativeQuestStates(
+    const std::unordered_map<std::string, ExternalModRuntime::NarrativeQuestState>& quests) {
+    nlohmann::json json = nlohmann::json::array();
+    for (const auto& [questId, state] : quests) {
+        nlohmann::json entry = nlohmann::json::object();
+        entry["questId"] = questId;
+        entry["state"] = state.state;
+        entry["objectives"] = SerializeStringMap(state.objectives);
+        json.push_back(std::move(entry));
+    }
+    return json;
+}
+
+nlohmann::json SerializeNarrativeTimelineStates(
+    const std::unordered_map<std::string, ExternalModRuntime::NarrativeTimelineState>& timelines) {
+    nlohmann::json json = nlohmann::json::array();
+    for (const auto& [timelineId, state] : timelines) {
+        nlohmann::json entry = nlohmann::json::object();
+        entry["timelineId"] = timelineId;
+        entry["frame"] = state.frame;
+        entry["durationFrames"] = state.durationFrames;
+        entry["skippable"] = state.skippable;
+        json.push_back(std::move(entry));
+    }
+    return json;
+}
+
+const ExternalModDslDocument* FindDslDocumentByEntry(const ExternalModRuntime& runtime, const std::string& entry) {
+    const auto it =
+        std::find_if(runtime.dslDocuments.begin(), runtime.dslDocuments.end(), [&entry](const ExternalModDslDocument& doc) {
+            return doc.id == entry || doc.sourcePath == entry;
+        });
+    if (it == runtime.dslDocuments.end()) {
+        return nullptr;
+    }
+    return &(*it);
+}
+
+const ExternalModDslDocument* FindDslDocumentByIdAndCategory(const ExternalModRuntime& runtime, const std::string& id,
+                                                             const char* category) {
+    const auto it = std::find_if(runtime.dslDocuments.begin(), runtime.dslDocuments.end(),
+                                 [&](const ExternalModDslDocument& document) {
+                                     if (document.id != id) {
+                                         return false;
+                                     }
+                                     return category == nullptr || document.category == category;
+                                 });
+    if (it == runtime.dslDocuments.end()) {
+        return nullptr;
+    }
+    return &(*it);
+}
+
+bool TryParseDslDocumentObject(const ExternalModDslDocument& document, nlohmann::json& outJson, std::string& outError) {
+    outJson = nlohmann::json::object();
+    outError.clear();
+
+    outJson = nlohmann::json::parse(document.rawJson, nullptr, false);
+    if (outJson.is_discarded() || !outJson.is_object()) {
+        outError = document.sourcePath + " must contain a JSON object document";
+        return false;
+    }
+
+    return true;
+}
+
+std::string ResolveDslDocumentId(const nlohmann::json& json, const std::filesystem::path& sourcePath) {
+    if (json.is_object() && json.contains("id") && json["id"].is_string()) {
+        return json["id"].get<std::string>();
+    }
+    return sourcePath.stem().generic_string();
+}
+
+std::string ResolveDslDocumentSubtype(const nlohmann::json& json, const std::string& fallbackSubtype) {
+    if (json.is_object() && json.contains("type") && json["type"].is_string()) {
+        return ToLower(json["type"].get<std::string>());
+    }
+    return fallbackSubtype;
+}
+
+ExternalModNativeMode ResolveNativeModeToken(const std::string& value) {
+    const std::string normalized = ToLower(value);
+    if (normalized == "raw") {
+        return ExternalModNativeMode::Raw;
+    }
+    if (normalized == "sdk") {
+        return ExternalModNativeMode::Sdk;
+    }
+    return ExternalModNativeMode::None;
+}
+
+std::string ResolveCurrentRuntimeBuildId() {
+    if (gGitCommitHash[0] != '\0') {
+        return gGitCommitHash;
+    }
+    return gBuildVersion;
 }
 
 struct SemVersion {
@@ -926,6 +1310,1235 @@ bool IsVersionRangeSatisfied(const std::string& version, const std::string& rang
     return true;
 }
 
+std::string SanitizeModIdForPath(const std::string& modId);
+bool TryParseIntToken(const std::string& token, int32_t& outValue);
+bool TryParseFloatString(const std::string& value, float& outNumber);
+constexpr const char* kPersistentWorldStateDomainId = "core:world_state";
+constexpr const char* kPersistentNarrativeStateDomainId = "core:narrative_state";
+constexpr const char* kPersistentMigrationsDomainId = "core:migrations";
+constexpr const char* kPersistentPlayerConsumablesDomainId = "core:player_consumables";
+
+bool RuntimeHasPersistentState(const ExternalModRuntime& runtime) {
+    return !runtime.worldPersistenceDefinitions.empty() || !runtime.worldStorageDefinitions.empty() ||
+           !runtime.playerResourceDefinitions.empty() || !runtime.playerConsumableDefinitions.empty() ||
+           !runtime.persistentDomains.empty() ||
+           !runtime.persistentEntities.empty() || !runtime.narrativeFlags.empty() || !runtime.narrativeQuests.empty();
+}
+
+std::filesystem::path GetExternalModsPersistenceRootPath() {
+    auto context = Ship::Context::GetRawInstance();
+    if (context == nullptr) {
+        return std::filesystem::path("Save") / "external_mods" / "persist";
+    }
+    return std::filesystem::path(context->GetPathRelativeToAppDirectory("Save")) / "external_mods" / "persist";
+}
+
+std::string BuildWorldSlotId() {
+    const int32_t fileNum = std::clamp(static_cast<int32_t>(gSaveContext.fileNum), 0, 9);
+    return std::string("slot_") + std::to_string(fileNum) + "_api4";
+}
+
+std::filesystem::path GetPersistentModRootPath(const std::string& modId) {
+    return GetExternalModsPersistenceRootPath() / BuildWorldSlotId() / SanitizeModIdForPath(modId);
+}
+
+std::filesystem::path GetExternalModsPermissionsRootPath() {
+    auto context = Ship::Context::GetRawInstance();
+    if (context == nullptr) {
+        return std::filesystem::path("Save") / "external_mods" / "permissions";
+    }
+    return std::filesystem::path(context->GetPathRelativeToAppDirectory("Save")) / "external_mods" / "permissions";
+}
+
+std::filesystem::path GetPermissionsFilePathForMod(const std::string& modId) {
+    return GetExternalModsPermissionsRootPath() / (SanitizeModIdForPath(modId) + ".json");
+}
+
+struct RuntimeQuarantineRecord {
+    int32_t failureCount = 0;
+    bool quarantined = false;
+    std::string lastReason;
+};
+
+std::filesystem::path GetExternalModsQuarantineRootPath() {
+    auto context = Ship::Context::GetRawInstance();
+    if (context == nullptr) {
+        return std::filesystem::path("Save") / "external_mods" / "quarantine";
+    }
+    return std::filesystem::path(context->GetPathRelativeToAppDirectory("Save")) / "external_mods" / "quarantine";
+}
+
+std::filesystem::path GetQuarantineFilePathForMod(const std::string& modId) {
+    return GetExternalModsQuarantineRootPath() / (SanitizeModIdForPath(modId) + ".json");
+}
+
+RuntimeQuarantineRecord LoadRuntimeQuarantineRecord(const std::string& modId) {
+    RuntimeQuarantineRecord record{};
+    if (modId.empty()) {
+        return record;
+    }
+
+    const auto quarantinePath = GetQuarantineFilePathForMod(modId);
+    if (!std::filesystem::exists(quarantinePath)) {
+        return record;
+    }
+
+    std::ifstream in(quarantinePath, std::ios::binary);
+    if (!in.is_open()) {
+        return record;
+    }
+
+    try {
+        nlohmann::json json = nlohmann::json::object();
+        in >> json;
+        if (!json.is_object()) {
+            return record;
+        }
+        if (json.contains("failureCount") && json["failureCount"].is_number_integer()) {
+            record.failureCount = std::max(0, json["failureCount"].get<int32_t>());
+        }
+        if (json.contains("quarantined") && json["quarantined"].is_boolean()) {
+            record.quarantined = json["quarantined"].get<bool>();
+        }
+        if (json.contains("lastReason") && json["lastReason"].is_string()) {
+            record.lastReason = json["lastReason"].get<std::string>();
+        }
+    } catch (const std::exception& ex) {
+        SPDLOG_WARN("[ExternalMods] Failed parsing quarantine record for {}: {}", modId, ex.what());
+    }
+
+    return record;
+}
+
+bool PersistRuntimeQuarantineRecord(const std::string& modId, const RuntimeQuarantineRecord& record,
+                                    std::string* outError = nullptr) {
+    if (modId.empty()) {
+        if (outError != nullptr) {
+            *outError = "Invalid modId for quarantine record";
+        }
+        return false;
+    }
+
+    const auto quarantinePath = GetQuarantineFilePathForMod(modId);
+    std::error_code ec;
+    std::filesystem::create_directories(quarantinePath.parent_path(), ec);
+    if (ec) {
+        if (outError != nullptr) {
+            *outError = "Failed creating quarantine dir: " + ec.message();
+        }
+        return false;
+    }
+
+    nlohmann::json json = nlohmann::json::object();
+    json["schemaVersion"] = "security.quarantine.v1";
+    json["modId"] = modId;
+    json["failureCount"] = std::max(0, record.failureCount);
+    json["quarantined"] = record.quarantined;
+    json["lastReason"] = record.lastReason;
+
+    std::ofstream out(quarantinePath, std::ios::binary | std::ios::trunc);
+    if (!out.is_open()) {
+        if (outError != nullptr) {
+            *outError = "Failed opening quarantine file for write";
+        }
+        return false;
+    }
+    out << json.dump(2);
+    return true;
+}
+
+bool ClearRuntimeQuarantineRecord(const std::string& modId, std::string* outError = nullptr) {
+    if (modId.empty()) {
+        if (outError != nullptr) {
+            *outError = "Invalid modId for quarantine clear";
+        }
+        return false;
+    }
+
+    const auto quarantinePath = GetQuarantineFilePathForMod(modId);
+    std::error_code ec;
+    if (std::filesystem::exists(quarantinePath) && !std::filesystem::remove(quarantinePath, ec)) {
+        if (ec) {
+            if (outError != nullptr) {
+                *outError = "Failed removing quarantine file: " + ec.message();
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+bool RegisterRuntimeFailureForMod(const std::string& modId, const std::string& reason, RuntimeQuarantineRecord* outRecord = nullptr,
+                                  std::string* outError = nullptr) {
+    RuntimeQuarantineRecord record = LoadRuntimeQuarantineRecord(modId);
+    record.failureCount = std::max(0, record.failureCount) + 1;
+    record.lastReason = reason;
+    if (record.failureCount >= 3) {
+        record.quarantined = true;
+    }
+
+    const bool persisted = PersistRuntimeQuarantineRecord(modId, record, outError);
+    if (outRecord != nullptr) {
+        *outRecord = record;
+    }
+    return persisted;
+}
+
+bool IsRiskyRuntimePermission(const std::string& permission) {
+    return permission == "network" || permission == "process" || permission == "nativeinterop" ||
+           permission == "nativeinterop.raw" || permission == "engine.memory";
+}
+
+bool DefaultGrantForRuntimePermission(const std::string& permission) {
+    return !IsRiskyRuntimePermission(permission);
+}
+
+void ResolvePermissionGrantsForManifest(const ExternalModManifest& manifest,
+                                        std::unordered_map<std::string, bool>& outGrants) {
+    outGrants.clear();
+    if (manifest.id.empty()) {
+        return;
+    }
+
+    const std::string profileId = BuildWorldSlotId();
+    for (const auto& permission : manifest.permissions) {
+        outGrants[permission] = DefaultGrantForRuntimePermission(permission);
+    }
+    if (manifest.permissions.empty()) {
+        return;
+    }
+
+    const auto permissionsPath = GetPermissionsFilePathForMod(manifest.id);
+    if (!std::filesystem::exists(permissionsPath)) {
+        return;
+    }
+
+    try {
+        std::ifstream in(permissionsPath, std::ios::binary);
+        if (!in.is_open()) {
+            return;
+        }
+        nlohmann::json permissionJson = nlohmann::json::object();
+        in >> permissionJson;
+        if (!permissionJson.is_object() || !permissionJson.contains("grants") || !permissionJson["grants"].is_object()) {
+            return;
+        }
+        if (permissionJson.contains("profileId") && permissionJson["profileId"].is_string() &&
+            permissionJson["profileId"].get<std::string>() != profileId) {
+            return;
+        }
+        const auto& grants = permissionJson["grants"];
+        for (const auto& permission : manifest.permissions) {
+            if (grants.contains(permission) && grants[permission].is_boolean()) {
+                outGrants[permission] = grants[permission].get<bool>();
+            }
+        }
+    } catch (const std::exception& ex) {
+        SPDLOG_WARN("[ExternalMods] Failed reading permission preview for {}: {}", manifest.id, ex.what());
+    }
+}
+
+std::string FormatPermissionListPreview(const std::vector<std::string>& permissions, size_t maxItems = 2) {
+    if (permissions.empty()) {
+        return "";
+    }
+
+    std::string out;
+    const size_t count = std::min(maxItems, permissions.size());
+    for (size_t i = 0; i < count; ++i) {
+        if (!out.empty()) {
+            out += ", ";
+        }
+        out += permissions[i];
+    }
+    if (permissions.size() > maxItems) {
+        out += ", +" + std::to_string(permissions.size() - maxItems);
+    }
+    return out;
+}
+
+void EmitPermissionGuidanceNotificationIfNeeded(const ExternalModPackage& package) {
+    if (!package.runtime.enabled || package.manifest.id.empty() || package.manifest.permissions.empty()) {
+        return;
+    }
+
+    std::vector<std::string> deniedRiskyPermissions;
+    deniedRiskyPermissions.reserve(package.manifest.permissions.size());
+    for (const auto& permission : package.manifest.permissions) {
+        if (!IsRiskyRuntimePermission(permission)) {
+            continue;
+        }
+        const auto grantIt = package.runtime.permissionGrants.find(permission);
+        const bool granted = (grantIt != package.runtime.permissionGrants.end()) ? grantIt->second
+                                                                                  : DefaultGrantForRuntimePermission(permission);
+        if (!granted) {
+            deniedRiskyPermissions.push_back(permission);
+        }
+    }
+
+    if (deniedRiskyPermissions.empty()) {
+        return;
+    }
+
+    const std::string modName = package.manifest.name.empty() ? package.manifest.id : package.manifest.name;
+    Notification::Emit({
+        .message = "[ExternalMods] " + modName + ": denied permission(s) " +
+                   FormatPermissionListPreview(deniedRiskyPermissions) +
+                   ". Open External Mods to grant if needed.",
+        .remainingTime = 8.0f,
+    });
+}
+
+bool IsReleaseChannelAllowedInModloaderUi(const std::string& channel) {
+    return channel == "stable";
+}
+
+const char* GetIssueSeverityCode(ExternalModIssueSeverity severity) {
+    switch (severity) {
+        case ExternalModIssueSeverity::Info:
+            return "INFO";
+        case ExternalModIssueSeverity::Warn:
+            return "WARN";
+        case ExternalModIssueSeverity::Error:
+            return "ERROR";
+        case ExternalModIssueSeverity::Fatal:
+            return "FATAL";
+        default:
+            return "INFO";
+    }
+}
+
+void RecomputePackageSeveritySummary(ExternalModPackage& package) {
+    package.severitySummary = ExternalModSeveritySummary{};
+    for (const auto& issue : package.issues) {
+        switch (issue.severity) {
+            case ExternalModIssueSeverity::Info:
+                package.severitySummary.info++;
+                break;
+            case ExternalModIssueSeverity::Warn:
+                package.severitySummary.warn++;
+                break;
+            case ExternalModIssueSeverity::Error:
+                package.severitySummary.error++;
+                break;
+            case ExternalModIssueSeverity::Fatal:
+                package.severitySummary.fatal++;
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+bool PackageHasFatalIssue(const ExternalModPackage& package) {
+    return std::any_of(package.issues.begin(), package.issues.end(), [](const ExternalModIssue& issue) {
+        return issue.severity == ExternalModIssueSeverity::Fatal;
+    });
+}
+
+void AddPackageIssue(ExternalModPackage& package, ExternalModIssueSeverity severity, const std::string& code,
+                     const std::string& message, const std::string& sourcePath = std::string{},
+                     const std::string& registryId = std::string{}, const std::string& referencedId = std::string{},
+                     const std::string& suggestedFix = std::string{}) {
+    ExternalModIssue issue{};
+    issue.severity = severity;
+    issue.code = code;
+    issue.message = message;
+    issue.sourcePath = sourcePath;
+    issue.registryId = registryId;
+    issue.referencedId = referencedId;
+    issue.suggestedFix = suggestedFix;
+    package.issues.push_back(std::move(issue));
+    RecomputePackageSeveritySummary(package);
+}
+
+std::string NormalizeSettingDomainToken(const std::string& value) {
+    const std::string normalized = ToLower(value);
+    if (normalized == "save" || normalized == "session") {
+        return normalized;
+    }
+    return "global";
+}
+
+std::string NormalizeSettingApplyModeToken(const std::string& value) {
+    const std::string normalized = ToLower(value);
+    if (normalized == "scene_reload" || normalized == "restart") {
+        return normalized;
+    }
+    return "realtime";
+}
+
+std::filesystem::path GetExternalModsSettingsRootPath() {
+    auto context = Ship::Context::GetRawInstance();
+    if (context == nullptr) {
+        return std::filesystem::path("Save") / "external_mods" / "settings";
+    }
+    return std::filesystem::path(context->GetPathRelativeToAppDirectory("Save")) / "external_mods" / "settings";
+}
+
+std::filesystem::path GetGlobalSettingsPathForMod(const std::string& modId) {
+    return GetExternalModsSettingsRootPath() / "global" / (SanitizeModIdForPath(modId) + ".json");
+}
+
+std::filesystem::path GetSaveSettingsPathForMod(const std::string& modId) {
+    return GetExternalModsSettingsRootPath() / "save" / BuildWorldSlotId() / (SanitizeModIdForPath(modId) + ".json");
+}
+
+void PersistSettingsStoreForPackage(ExternalModPackage& package) {
+    if (package.manifest.id.empty()) {
+        return;
+    }
+    auto writeSettingsFile = [&](const std::filesystem::path& path,
+                                 const std::unordered_map<std::string, std::string>& values) {
+        std::error_code ec;
+        std::filesystem::create_directories(path.parent_path(), ec);
+        if (ec) {
+            return;
+        }
+        nlohmann::json json = nlohmann::json::object();
+        json["schemaVersion"] = 1;
+        json["modId"] = package.manifest.id;
+        json["values"] = values;
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        if (out.is_open()) {
+            out << json.dump(2);
+        }
+    };
+
+    if (package.runtime.settingsGlobalDirty) {
+        writeSettingsFile(GetGlobalSettingsPathForMod(package.manifest.id), package.runtime.settingsGlobalValues);
+        package.runtime.settingsGlobalDirty = false;
+    }
+    if (package.runtime.settingsSaveDirty) {
+        writeSettingsFile(GetSaveSettingsPathForMod(package.manifest.id), package.runtime.settingsSaveValues);
+        package.runtime.settingsSaveDirty = false;
+    }
+}
+
+void LoadSettingsStoreForPackage(ExternalModPackage& package) {
+    package.runtime.settingsGlobalValues.clear();
+    package.runtime.settingsSaveValues.clear();
+    package.runtime.settingsSessionValues.clear();
+    package.runtime.pendingSceneReloadSettings.clear();
+    package.runtime.pendingRestartSettings.clear();
+    package.runtime.settingsGlobalDirty = false;
+    package.runtime.settingsSaveDirty = false;
+
+    if (package.manifest.id.empty()) {
+        return;
+    }
+
+    auto readSettingsFile = [](const std::filesystem::path& path, std::unordered_map<std::string, std::string>& outValues) {
+        if (!std::filesystem::exists(path)) {
+            return;
+        }
+        std::ifstream in(path, std::ios::binary);
+        if (!in.is_open()) {
+            return;
+        }
+        nlohmann::json json;
+        try {
+            in >> json;
+        } catch (...) {
+            return;
+        }
+        if (!json.is_object() || !json.contains("values") || !json["values"].is_object()) {
+            return;
+        }
+        for (auto it = json["values"].begin(); it != json["values"].end(); ++it) {
+            if (it.value().is_string()) {
+                outValues[it.key()] = it.value().get<std::string>();
+            } else if (it.value().is_boolean()) {
+                outValues[it.key()] = it.value().get<bool>() ? "true" : "false";
+            } else if (it.value().is_number_integer()) {
+                outValues[it.key()] = std::to_string(it.value().get<long long>());
+            } else if (it.value().is_number_float()) {
+                outValues[it.key()] = std::to_string(it.value().get<double>());
+            }
+        }
+    };
+
+    readSettingsFile(GetGlobalSettingsPathForMod(package.manifest.id), package.runtime.settingsGlobalValues);
+    readSettingsFile(GetSaveSettingsPathForMod(package.manifest.id), package.runtime.settingsSaveValues);
+
+    for (const auto& group : package.runtime.settingsSchema.groups) {
+        for (const auto& entry : group.entries) {
+            std::unordered_map<std::string, std::string>* targetMap = &package.runtime.settingsGlobalValues;
+            switch (entry.domain) {
+                case ExternalModSettingDomain::Save:
+                    targetMap = &package.runtime.settingsSaveValues;
+                    break;
+                case ExternalModSettingDomain::Session:
+                    targetMap = &package.runtime.settingsSessionValues;
+                    break;
+                case ExternalModSettingDomain::Global:
+                default:
+                    targetMap = &package.runtime.settingsGlobalValues;
+                    break;
+            }
+            if (!targetMap->contains(entry.key)) {
+                (*targetMap)[entry.key] = entry.defaultValue;
+                if (entry.domain == ExternalModSettingDomain::Global) {
+                    package.runtime.settingsGlobalDirty = true;
+                } else if (entry.domain == ExternalModSettingDomain::Save) {
+                    package.runtime.settingsSaveDirty = true;
+                }
+            }
+        }
+    }
+}
+
+const ExternalModSettingEntryDefinition* FindSettingSchemaEntry(const ExternalModSettingsSchemaDefinition& schema,
+                                                                const std::string& key) {
+    for (const auto& group : schema.groups) {
+        const auto it = std::find_if(group.entries.begin(), group.entries.end(),
+                                     [&key](const ExternalModSettingEntryDefinition& entry) { return entry.key == key; });
+        if (it != group.entries.end()) {
+            return &(*it);
+        }
+    }
+    return nullptr;
+}
+
+bool TryParseSettingBoolToken(const std::string& value, bool& outValue) {
+    const std::string normalized = ToLower(value);
+    if (normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on") {
+        outValue = true;
+        return true;
+    }
+    if (normalized == "0" || normalized == "false" || normalized == "no" || normalized == "off") {
+        outValue = false;
+        return true;
+    }
+    return false;
+}
+
+bool NormalizeSettingValueForEntry(const ExternalModSettingEntryDefinition* entry, const std::string& rawValue,
+                                   std::string& outValue, std::string& outError) {
+    outError.clear();
+    if (entry == nullptr) {
+        outValue = rawValue;
+        return true;
+    }
+
+    switch (entry->type) {
+        case ExternalModSettingValueType::Bool: {
+            bool boolValue = false;
+            if (!TryParseSettingBoolToken(rawValue, boolValue)) {
+                outError = "setting requires boolean value";
+                return false;
+            }
+            outValue = boolValue ? "true" : "false";
+            return true;
+        }
+        case ExternalModSettingValueType::Int: {
+            int32_t intValue = 0;
+            if (!TryParseIntToken(rawValue, intValue)) {
+                outError = "setting requires integer value";
+                return false;
+            }
+            if (entry->hasMin) {
+                intValue = std::max(intValue, static_cast<int32_t>(std::floor(entry->minValue)));
+            }
+            if (entry->hasMax) {
+                intValue = std::min(intValue, static_cast<int32_t>(std::ceil(entry->maxValue)));
+            }
+            outValue = std::to_string(intValue);
+            return true;
+        }
+        case ExternalModSettingValueType::Float: {
+            float floatValue = 0.0f;
+            if (!TryParseFloatString(rawValue, floatValue)) {
+                outError = "setting requires numeric value";
+                return false;
+            }
+            if (entry->hasMin) {
+                floatValue = std::max(floatValue, entry->minValue);
+            }
+            if (entry->hasMax) {
+                floatValue = std::min(floatValue, entry->maxValue);
+            }
+            if (entry->hasStep && entry->stepValue > 0.0f) {
+                const float stepCount = std::round(floatValue / entry->stepValue);
+                floatValue = stepCount * entry->stepValue;
+                if (entry->hasMin) {
+                    floatValue = std::max(floatValue, entry->minValue);
+                }
+                if (entry->hasMax) {
+                    floatValue = std::min(floatValue, entry->maxValue);
+                }
+            }
+
+            std::ostringstream stream;
+            stream.imbue(std::locale::classic());
+            stream << std::fixed << std::setprecision(4) << floatValue;
+            std::string normalized = stream.str();
+            while (!normalized.empty() && normalized.back() == '0') {
+                normalized.pop_back();
+            }
+            if (!normalized.empty() && normalized.back() == '.') {
+                normalized.pop_back();
+            }
+            outValue = normalized.empty() ? "0" : normalized;
+            return true;
+        }
+        case ExternalModSettingValueType::Enum: {
+            if (entry->enumValues.empty()) {
+                outValue = rawValue;
+                return true;
+            }
+            const auto it = std::find_if(entry->enumValues.begin(), entry->enumValues.end(),
+                                         [&rawValue](const std::string& candidate) {
+                                             return ToLower(candidate) == ToLower(rawValue);
+                                         });
+            if (it == entry->enumValues.end()) {
+                outError = "setting requires one of declared enumValues";
+                return false;
+            }
+            outValue = *it;
+            return true;
+        }
+        case ExternalModSettingValueType::String:
+        case ExternalModSettingValueType::Color:
+        case ExternalModSettingValueType::Keybind:
+        default:
+            outValue = rawValue;
+            return true;
+    }
+}
+
+std::unordered_map<std::string, std::string>* ResolveSettingsStoreByDomain(ExternalModRuntime& runtime,
+                                                                           ExternalModSettingDomain domain) {
+    switch (domain) {
+        case ExternalModSettingDomain::Save:
+            return &runtime.settingsSaveValues;
+        case ExternalModSettingDomain::Session:
+            return &runtime.settingsSessionValues;
+        case ExternalModSettingDomain::Global:
+        default:
+            return &runtime.settingsGlobalValues;
+    }
+}
+
+const std::unordered_map<std::string, std::string>* ResolveSettingsStoreByDomain(const ExternalModRuntime& runtime,
+                                                                                 ExternalModSettingDomain domain) {
+    switch (domain) {
+        case ExternalModSettingDomain::Save:
+            return &runtime.settingsSaveValues;
+        case ExternalModSettingDomain::Session:
+            return &runtime.settingsSessionValues;
+        case ExternalModSettingDomain::Global:
+        default:
+            return &runtime.settingsGlobalValues;
+    }
+}
+
+ExternalModSettingDomain ResolveEffectiveSettingDomain(const ExternalModManifest& manifest,
+                                                       const ExternalModSettingEntryDefinition* entry,
+                                                       const std::string& requestedDomain) {
+    if (!requestedDomain.empty()) {
+        const std::string normalized = NormalizeSettingDomainToken(requestedDomain);
+        if (normalized == "save") {
+            return ExternalModSettingDomain::Save;
+        }
+        if (normalized == "session") {
+            return ExternalModSettingDomain::Session;
+        }
+        return ExternalModSettingDomain::Global;
+    }
+
+    if (entry != nullptr) {
+        return entry->domain;
+    }
+
+    const std::string normalizedDefault = NormalizeSettingDomainToken(manifest.settings.defaultDomain);
+    if (normalizedDefault == "save") {
+        return ExternalModSettingDomain::Save;
+    }
+    if (normalizedDefault == "session") {
+        return ExternalModSettingDomain::Session;
+    }
+    return ExternalModSettingDomain::Global;
+}
+
+ExternalModSettingApplyMode ResolveEffectiveSettingApplyMode(const ExternalModSettingEntryDefinition* entry,
+                                                             const std::string& requestedApplyMode) {
+    if (!requestedApplyMode.empty()) {
+        const std::string normalized = NormalizeSettingApplyModeToken(requestedApplyMode);
+        if (normalized == "scene_reload") {
+            return ExternalModSettingApplyMode::SceneReload;
+        }
+        if (normalized == "restart") {
+            return ExternalModSettingApplyMode::Restart;
+        }
+        return ExternalModSettingApplyMode::Realtime;
+    }
+
+    if (entry != nullptr) {
+        return entry->applyMode;
+    }
+    return ExternalModSettingApplyMode::Realtime;
+}
+
+const char* GetSettingDomainToken(ExternalModSettingDomain domain) {
+    switch (domain) {
+        case ExternalModSettingDomain::Save:
+            return "save";
+        case ExternalModSettingDomain::Session:
+            return "session";
+        case ExternalModSettingDomain::Global:
+        default:
+            return "global";
+    }
+}
+
+const char* GetSettingApplyModeToken(ExternalModSettingApplyMode mode) {
+    switch (mode) {
+        case ExternalModSettingApplyMode::SceneReload:
+            return "scene_reload";
+        case ExternalModSettingApplyMode::Restart:
+            return "restart";
+        case ExternalModSettingApplyMode::Realtime:
+        default:
+            return "realtime";
+    }
+}
+
+void DispatchSettingsChangedHookForPackage(const ExternalModPackage& package, const std::string& key,
+                                           ExternalModSettingDomain domain, ExternalModSettingApplyMode applyMode,
+                                           const std::string& value) {
+    ExternalModHookEventContext context;
+    context.scene = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->sceneNum) : static_cast<int16_t>(-1);
+    context.itemId = ITEM_NONE;
+    context.value = value;
+    context.settingsKey = key;
+    context.settingsDomain = GetSettingDomainToken(domain);
+    context.settingsApplyMode = GetSettingApplyModeToken(applyMode);
+    ExternalModManager::Instance().EmitExtendedHook(ExternalModHookType::OnSettingsChanged, context,
+                                                    "OnSettingsChanged");
+}
+
+const char* ResolveRequiredRuntimePermissionForAction(ExternalModActionType actionType) {
+    switch (actionType) {
+        case ExternalModActionType::PersistEnsureEntityGuid:
+        case ExternalModActionType::PersistSaveEntityState:
+        case ExternalModActionType::PersistLoadEntityState:
+        case ExternalModActionType::PersistDeleteEntityState:
+        case ExternalModActionType::PersistSetDomainValue:
+        case ExternalModActionType::PersistGetDomainValue:
+        case ExternalModActionType::PersistRunMigrations:
+            return "filesystem";
+        case ExternalModActionType::DevReloadAll:
+        case ExternalModActionType::DevReloadTarget:
+        case ExternalModActionType::DevConsoleExec:
+            return "process";
+        default:
+            return nullptr;
+    }
+}
+
+std::string DescribeActionForPermissionLog(ExternalModActionType actionType) {
+    switch (actionType) {
+        case ExternalModActionType::PersistEnsureEntityGuid:
+            return "persist.ensureEntityGuid";
+        case ExternalModActionType::PersistSaveEntityState:
+            return "persist.saveEntityState";
+        case ExternalModActionType::PersistLoadEntityState:
+            return "persist.loadEntityState";
+        case ExternalModActionType::PersistDeleteEntityState:
+            return "persist.deleteEntityState";
+        case ExternalModActionType::PersistSetDomainValue:
+            return "persist.setDomainValue";
+        case ExternalModActionType::PersistGetDomainValue:
+            return "persist.getDomainValue";
+        case ExternalModActionType::PersistRunMigrations:
+            return "persist.runMigrations";
+        case ExternalModActionType::DevReloadAll:
+            return "dev.reloadAll";
+        case ExternalModActionType::DevReloadTarget:
+            return "dev.reloadTarget";
+        case ExternalModActionType::DevConsoleExec:
+            return "dev.console.exec";
+        default:
+            return "unknown";
+    }
+}
+
+bool ManifestDeclaresRuntimePermission(const ExternalModManifest& manifest, const std::string& permission) {
+    return std::find(manifest.permissions.begin(), manifest.permissions.end(), permission) != manifest.permissions.end();
+}
+
+bool PersistPermissionStoreForRuntime(const ExternalModPackage& package, std::string* outError = nullptr) {
+    if (package.manifest.id.empty()) {
+        return true;
+    }
+
+    nlohmann::json permissionJson = nlohmann::json::object();
+    permissionJson["schemaVersion"] = "security.permissions.v1";
+    permissionJson["modId"] = package.manifest.id;
+    permissionJson["profileId"] = BuildWorldSlotId();
+    permissionJson["grants"] = nlohmann::json::object();
+
+    auto& grants = permissionJson["grants"];
+    for (const auto& permission : package.manifest.permissions) {
+        bool resolved = DefaultGrantForRuntimePermission(permission);
+        if (const auto it = package.runtime.permissionGrants.find(permission); it != package.runtime.permissionGrants.end()) {
+            resolved = it->second;
+        }
+        grants[permission] = resolved;
+    }
+
+    const auto permissionsPath = GetPermissionsFilePathForMod(package.manifest.id);
+    std::error_code ec;
+    std::filesystem::create_directories(permissionsPath.parent_path(), ec);
+    if (ec) {
+        if (outError != nullptr) {
+            *outError = "Failed creating permission store dir: " + ec.message();
+        }
+        SPDLOG_WARN("[ExternalMods] Failed to create permission store directory {}: {}",
+                    permissionsPath.parent_path().generic_string(), ec.message());
+        return false;
+    }
+
+    std::ofstream out(permissionsPath, std::ios::binary | std::ios::trunc);
+    if (!out.is_open()) {
+        if (outError != nullptr) {
+            *outError = "Failed opening permission store file for write";
+        }
+        SPDLOG_WARN("[ExternalMods] Failed to write permission store {}", permissionsPath.generic_string());
+        return false;
+    }
+    out << permissionJson.dump(2);
+    return true;
+}
+
+void EnsurePermissionStoreForRuntime(ExternalModPackage& package) {
+    package.runtime.permissionGrants.clear();
+    if (package.manifest.id.empty()) {
+        return;
+    }
+
+    const std::string profileId = BuildWorldSlotId();
+
+    for (const auto& permission : package.manifest.permissions) {
+        package.runtime.permissionGrants[permission] = DefaultGrantForRuntimePermission(permission);
+    }
+
+    if (package.manifest.permissions.empty()) {
+        return;
+    }
+
+    bool dirty = false;
+    const auto permissionsPath = GetPermissionsFilePathForMod(package.manifest.id);
+    nlohmann::json permissionJson = nlohmann::json::object();
+    permissionJson["schemaVersion"] = "security.permissions.v1";
+    permissionJson["modId"] = package.manifest.id;
+    permissionJson["profileId"] = profileId;
+    permissionJson["grants"] = nlohmann::json::object();
+
+    if (std::filesystem::exists(permissionsPath)) {
+        std::ifstream in(permissionsPath, std::ios::binary);
+        if (in.is_open()) {
+            try {
+                in >> permissionJson;
+            } catch (const std::exception& ex) {
+                SPDLOG_WARN("[ExternalMods] Failed parsing permission store {}: {}",
+                            permissionsPath.generic_string(), ex.what());
+                dirty = true;
+                permissionJson = nlohmann::json::object();
+                permissionJson["schemaVersion"] = "security.permissions.v1";
+                permissionJson["modId"] = package.manifest.id;
+                permissionJson["profileId"] = profileId;
+                permissionJson["grants"] = nlohmann::json::object();
+            }
+        }
+    } else {
+        dirty = true;
+    }
+
+    if (!permissionJson.is_object()) {
+        permissionJson = nlohmann::json::object();
+        dirty = true;
+    }
+    if (!permissionJson.contains("schemaVersion") || !permissionJson["schemaVersion"].is_string() ||
+        permissionJson["schemaVersion"].get<std::string>() != "security.permissions.v1") {
+        permissionJson["schemaVersion"] = "security.permissions.v1";
+        dirty = true;
+    }
+    if (!permissionJson.contains("modId") || !permissionJson["modId"].is_string() ||
+        permissionJson["modId"].get<std::string>() != package.manifest.id) {
+        permissionJson["modId"] = package.manifest.id;
+        dirty = true;
+    }
+    if (!permissionJson.contains("profileId") || !permissionJson["profileId"].is_string() ||
+        permissionJson["profileId"].get<std::string>() != profileId) {
+        permissionJson["profileId"] = profileId;
+        dirty = true;
+    }
+    if (!permissionJson.contains("grants") || !permissionJson["grants"].is_object()) {
+        permissionJson["grants"] = nlohmann::json::object();
+        dirty = true;
+    }
+
+    auto& grants = permissionJson["grants"];
+    for (const auto& permission : package.manifest.permissions) {
+        bool resolved = DefaultGrantForRuntimePermission(permission);
+        if (grants.contains(permission) && grants[permission].is_boolean()) {
+            resolved = grants[permission].get<bool>();
+        } else {
+            grants[permission] = resolved;
+            dirty = true;
+        }
+        package.runtime.permissionGrants[permission] = resolved;
+    }
+
+    std::vector<std::string> staleKeys;
+    for (auto it = grants.begin(); it != grants.end(); ++it) {
+        const std::string key = it.key();
+        if (!ManifestDeclaresRuntimePermission(package.manifest, key)) {
+            staleKeys.push_back(key);
+            dirty = true;
+        }
+    }
+    for (const auto& key : staleKeys) {
+        grants.erase(key);
+    }
+
+    if (dirty) {
+        PersistPermissionStoreForRuntime(package);
+    }
+
+    EmitPermissionGuidanceNotificationIfNeeded(package);
+}
+
+bool IsRuntimePermissionGranted(const ExternalModPackage& package, const std::string& permission) {
+    if (permission.empty()) {
+        return true;
+    }
+    if (!ManifestDeclaresRuntimePermission(package.manifest, permission)) {
+        return false;
+    }
+    const auto it = package.runtime.permissionGrants.find(permission);
+    if (it != package.runtime.permissionGrants.end()) {
+        return it->second;
+    }
+    return DefaultGrantForRuntimePermission(permission);
+}
+
+std::filesystem::path GetPersistentDomainFilePath(const std::string& modId, const std::string& domainId) {
+    return GetPersistentModRootPath(modId) / "domains" / (SanitizeModIdForPath(domainId) + ".json");
+}
+
+bool IsSafePersistentRelativePath(const std::filesystem::path& relativePath) {
+    if (relativePath.empty() || relativePath.has_root_name() || relativePath.has_root_directory() ||
+        relativePath.is_absolute()) {
+        return false;
+    }
+    const auto normalized = relativePath.lexically_normal();
+    for (const auto& segment : normalized) {
+        if (segment.generic_string() == "..") {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::filesystem::path ResolvePersistentDomainFilePath(const ExternalModPackage& package, const std::string& domainId) {
+    for (const auto& definition : package.runtime.worldStorageDefinitions) {
+        if (definition.id != domainId || definition.file.empty()) {
+            continue;
+        }
+        const std::filesystem::path relativeFile(definition.file);
+        if (IsSafePersistentRelativePath(relativeFile)) {
+            return GetPersistentModRootPath(package.manifest.id) / relativeFile.lexically_normal();
+        }
+        break;
+    }
+
+    return GetPersistentDomainFilePath(package.manifest.id, domainId);
+}
+
+std::filesystem::path GetPersistentEntitiesFilePath(const std::string& modId) {
+    const int32_t scene = gPlayState != nullptr ? gPlayState->sceneNum : -1;
+    const int32_t room = gPlayState != nullptr ? gPlayState->roomCtx.curRoom.num : -1;
+    return GetPersistentModRootPath(modId) / "entities" / (std::to_string(scene) + "_" + std::to_string(room) + ".json");
+}
+
+void PersistRuntimeStateForPackage(const ExternalModPackage& package) {
+    if (package.manifest.id.empty() || !RuntimeHasPersistentState(package.runtime)) {
+        return;
+    }
+    try {
+        const auto modRoot = GetPersistentModRootPath(package.manifest.id);
+        std::filesystem::create_directories(modRoot / "domains");
+        std::filesystem::create_directories(modRoot / "entities");
+
+        auto domainsSnapshot = package.runtime.persistentDomains;
+        {
+            auto& worldDomain = domainsSnapshot[kPersistentWorldStateDomainId];
+            worldDomain["timeSegment"] = package.runtime.worldTimeSegment;
+            worldDomain["weatherState"] = package.runtime.worldWeatherState;
+            worldDomain["seed"] = std::to_string(package.runtime.worldSeed);
+        }
+        {
+            auto& narrativeDomain = domainsSnapshot[kPersistentNarrativeStateDomainId];
+            for (const auto& flagPair : package.runtime.narrativeFlags) {
+                narrativeDomain["flag:" + flagPair.first] = flagPair.second;
+            }
+            for (const auto& questPair : package.runtime.narrativeQuests) {
+                narrativeDomain["quest:" + questPair.first + ":state"] = questPair.second.state;
+                for (const auto& objectivePair : questPair.second.objectives) {
+                    narrativeDomain["quest:" + questPair.first + ":objective:" + objectivePair.first] = objectivePair.second;
+                }
+            }
+            if (!package.runtime.activeDialogueId.empty()) {
+                narrativeDomain["dialogue:activeId"] = package.runtime.activeDialogueId;
+            }
+            if (!package.runtime.activeDialogueNodeId.empty()) {
+                narrativeDomain["dialogue:activeNodeId"] = package.runtime.activeDialogueNodeId;
+            }
+        }
+
+        for (const auto& domainPair : domainsSnapshot) {
+            nlohmann::json domainJson = nlohmann::json::object();
+            domainJson["schemaVersion"] = 1;
+            domainJson["domainId"] = domainPair.first;
+            domainJson["values"] = domainPair.second;
+            const auto domainPath = ResolvePersistentDomainFilePath(package, domainPair.first);
+            std::filesystem::create_directories(domainPath.parent_path());
+            std::ofstream out(domainPath, std::ios::binary | std::ios::trunc);
+            if (out.is_open()) {
+                out << domainJson.dump(2);
+            }
+        }
+
+        nlohmann::json entitiesJson = nlohmann::json::object();
+        entitiesJson["schemaVersion"] = 1;
+        entitiesJson["entities"] = nlohmann::json::array();
+        for (const auto& entityPair : package.runtime.persistentEntities) {
+            const auto& entity = entityPair.second;
+            nlohmann::json entityJson = nlohmann::json::object();
+            entityJson["entityGuid"] = entity.entityGuid;
+            entityJson["scope"] = entity.scope;
+            entityJson["sceneId"] = entity.sceneId;
+            entityJson["roomId"] = entity.roomId;
+            entityJson["values"] = entity.values;
+            entitiesJson["entities"].push_back(std::move(entityJson));
+        }
+        std::ofstream entitiesOut(GetPersistentEntitiesFilePath(package.manifest.id), std::ios::binary | std::ios::trunc);
+        if (entitiesOut.is_open()) {
+            entitiesOut << entitiesJson.dump(2);
+        }
+    } catch (...) {
+    }
+}
+
+void LoadRuntimeStateForPackage(ExternalModPackage& package) {
+    package.runtime.persistentDomains.clear();
+    package.runtime.persistentEntities.clear();
+    package.runtime.persistentEntityGuidByActorHandle.clear();
+    package.runtime.consumableStackCounts.clear();
+    package.runtime.customBottleContentBySlot.clear();
+    package.runtime.persistentStateDirty = false;
+    package.runtime.narrativeFlags.clear();
+    package.runtime.narrativeQuests.clear();
+    package.runtime.activeTimelines.clear();
+    package.runtime.activeDialogueId.clear();
+    package.runtime.activeDialogueNodeId.clear();
+
+    if (package.manifest.id.empty()) {
+        return;
+    }
+
+    auto appendDomainValues = [&](const std::string& domainId, const nlohmann::json& valuesJson) {
+        auto& values = package.runtime.persistentDomains[domainId];
+        for (auto it = valuesJson.begin(); it != valuesJson.end(); ++it) {
+            if (it.value().is_string()) {
+                values[it.key()] = it.value().get<std::string>();
+            } else if (it.value().is_boolean()) {
+                values[it.key()] = it.value().get<bool>() ? "true" : "false";
+            } else if (it.value().is_number_integer()) {
+                values[it.key()] = std::to_string(it.value().get<long long>());
+            } else if (it.value().is_number_float()) {
+                values[it.key()] = std::to_string(it.value().get<double>());
+            }
+        }
+    };
+
+    std::unordered_set<std::string> loadedDomainIds;
+    for (const auto& domainDefinition : package.runtime.worldStorageDefinitions) {
+        const auto domainPath = ResolvePersistentDomainFilePath(package, domainDefinition.id);
+        std::ifstream in(domainPath, std::ios::binary);
+        if (!in.is_open()) {
+            continue;
+        }
+        nlohmann::json domainJson;
+        try {
+            in >> domainJson;
+        } catch (...) {
+            continue;
+        }
+        if (!domainJson.is_object() || !domainJson.contains("values") || !domainJson["values"].is_object()) {
+            continue;
+        }
+        const std::string domainId =
+            (domainJson.contains("domainId") && domainJson["domainId"].is_string())
+                ? domainJson["domainId"].get<std::string>()
+                : domainDefinition.id;
+        appendDomainValues(domainId, domainJson["values"]);
+        loadedDomainIds.insert(ToLower(domainId));
+    }
+
+    const auto domainDir = GetPersistentModRootPath(package.manifest.id) / "domains";
+    std::error_code listError;
+    if (std::filesystem::exists(domainDir, listError) && std::filesystem::is_directory(domainDir, listError)) {
+        for (const auto& entry : std::filesystem::directory_iterator(domainDir, listError)) {
+            if (listError || !entry.is_regular_file()) {
+                continue;
+            }
+            if (ToLower(entry.path().extension().string()) != ".json") {
+                continue;
+            }
+            std::ifstream in(entry.path(), std::ios::binary);
+            if (!in.is_open()) {
+                continue;
+            }
+            nlohmann::json domainJson;
+            try {
+                in >> domainJson;
+            } catch (...) {
+                continue;
+            }
+            if (!domainJson.is_object() || !domainJson.contains("values") || !domainJson["values"].is_object()) {
+                continue;
+            }
+            const std::string domainId =
+                (domainJson.contains("domainId") && domainJson["domainId"].is_string())
+                    ? domainJson["domainId"].get<std::string>()
+                    : entry.path().stem().generic_string();
+            const std::string lowerDomainId = ToLower(domainId);
+            if (loadedDomainIds.contains(lowerDomainId)) {
+                continue;
+            }
+            appendDomainValues(domainId, domainJson["values"]);
+            loadedDomainIds.insert(lowerDomainId);
+        }
+    }
+
+    const auto entitiesPath = GetPersistentEntitiesFilePath(package.manifest.id);
+    std::ifstream entitiesIn(entitiesPath, std::ios::binary);
+    if (!entitiesIn.is_open()) {
+        return;
+    }
+    nlohmann::json entitiesJson;
+    try {
+        entitiesIn >> entitiesJson;
+    } catch (...) {
+        return;
+    }
+    if (!entitiesJson.is_object() || !entitiesJson.contains("entities") || !entitiesJson["entities"].is_array()) {
+        return;
+    }
+
+    for (const auto& entityJson : entitiesJson["entities"]) {
+        if (!entityJson.is_object() || !entityJson.contains("entityGuid") || !entityJson["entityGuid"].is_string()) {
+            continue;
+        }
+        ExternalModRuntime::PersistentEntityState state;
+        state.entityGuid = entityJson["entityGuid"].get<std::string>();
+        if (entityJson.contains("scope") && entityJson["scope"].is_string()) {
+            state.scope = entityJson["scope"].get<std::string>();
+        }
+        if (entityJson.contains("sceneId") && entityJson["sceneId"].is_number_integer()) {
+            state.sceneId = static_cast<int16_t>(entityJson["sceneId"].get<int32_t>());
+        }
+        if (entityJson.contains("roomId") && entityJson["roomId"].is_number_integer()) {
+            state.roomId = static_cast<int16_t>(entityJson["roomId"].get<int32_t>());
+        }
+        if (entityJson.contains("values") && entityJson["values"].is_object()) {
+            for (auto it = entityJson["values"].begin(); it != entityJson["values"].end(); ++it) {
+                if (it.value().is_string()) {
+                    state.values[it.key()] = it.value().get<std::string>();
+                } else if (it.value().is_boolean()) {
+                    state.values[it.key()] = it.value().get<bool>() ? "true" : "false";
+                } else if (it.value().is_number_integer()) {
+                    state.values[it.key()] = std::to_string(it.value().get<long long>());
+                } else if (it.value().is_number_float()) {
+                    state.values[it.key()] = std::to_string(it.value().get<double>());
+                }
+            }
+        }
+        package.runtime.persistentEntities[state.entityGuid] = std::move(state);
+    }
+
+    const auto worldStateIt = package.runtime.persistentDomains.find(kPersistentWorldStateDomainId);
+    if (worldStateIt != package.runtime.persistentDomains.end()) {
+        const auto& worldValues = worldStateIt->second;
+        if (const auto it = worldValues.find("timeSegment"); it != worldValues.end()) {
+            package.runtime.worldTimeSegment = ToLower(it->second);
+        }
+        if (const auto it = worldValues.find("weatherState"); it != worldValues.end()) {
+            package.runtime.worldWeatherState = ToLower(it->second);
+        }
+        if (const auto it = worldValues.find("seed"); it != worldValues.end()) {
+            try {
+                package.runtime.worldSeed = std::stoi(it->second);
+            } catch (...) {
+            }
+        }
+    }
+    package.runtime.globalBlackboard["__world_time_segment"] = package.runtime.worldTimeSegment;
+    package.runtime.globalBlackboard["__world_weather_state"] = package.runtime.worldWeatherState;
+    package.runtime.globalBlackboard["__world_seed"] = std::to_string(package.runtime.worldSeed);
+
+    const auto narrativeStateIt = package.runtime.persistentDomains.find(kPersistentNarrativeStateDomainId);
+    if (narrativeStateIt != package.runtime.persistentDomains.end()) {
+        for (const auto& valuePair : narrativeStateIt->second) {
+            if (valuePair.first.rfind("flag:", 0) == 0) {
+                const std::string flagId = valuePair.first.substr(5);
+                if (!flagId.empty()) {
+                    package.runtime.narrativeFlags[flagId] = valuePair.second;
+                    package.runtime.globalBlackboard["narrative.flag." + flagId] = valuePair.second;
+                }
+                continue;
+            }
+            if (valuePair.first == "dialogue:activeId") {
+                package.runtime.activeDialogueId = valuePair.second;
+                package.runtime.globalBlackboard["__narrative_dialogue"] = valuePair.second;
+                continue;
+            }
+            if (valuePair.first == "dialogue:activeNodeId") {
+                package.runtime.activeDialogueNodeId = valuePair.second;
+                package.runtime.globalBlackboard["__narrative_dialogue_node"] = valuePair.second;
+                continue;
+            }
+            if (valuePair.first.rfind("quest:", 0) == 0) {
+                const std::string payload = valuePair.first.substr(6);
+                const size_t statePos = payload.rfind(":state");
+                const size_t objectivePos = payload.find(":objective:");
+                if (statePos != std::string::npos) {
+                    const std::string questId = payload.substr(0, statePos);
+                    if (!questId.empty()) {
+                        auto& questState = package.runtime.narrativeQuests[questId];
+                        questState.questId = questId;
+                        questState.state = valuePair.second;
+                    }
+                } else if (objectivePos != std::string::npos) {
+                    const std::string questId = payload.substr(0, objectivePos);
+                    const std::string objectiveId = payload.substr(objectivePos + std::string(":objective:").size());
+                    if (!questId.empty() && !objectiveId.empty()) {
+                        auto& questState = package.runtime.narrativeQuests[questId];
+                        questState.questId = questId;
+                        questState.objectives[objectiveId] = valuePair.second;
+                    }
+                }
+            }
+        }
+    }
+
+    HydrateConsumableStateForPackage(package);
+}
+
 const std::unordered_set<std::string> kSupportedCapabilities = {
     "hooks.extended.v1",
     "items.data.v2",
@@ -948,6 +2561,9 @@ const std::unordered_set<std::string> kSupportedCapabilities = {
     "input.bindings.v2",
     "ui.runtime.v1",
     "ui.hud.v1",
+    "player.resources.v1",
+    "ui.resource_rings.v1",
+    "player.consumables.v1",
     "ui.inventory_ext.v1",
     "containers.v1",
     "recipes.processing.v1",
@@ -982,6 +2598,17 @@ const std::unordered_set<std::string> kSupportedCapabilities = {
     "world.scenes.v1",
     "world.rooms.v1",
     "assets.packs.v2",
+    "assets.raw.v1",
+    "render.meshes.v1",
+    "render.skeletons.v1",
+    "render.animations.v1",
+    "render.animation_graphs.v1",
+    "actors.prefabs.v1",
+    "world.instances.v1",
+    "world.triggers.v1",
+    "world.encounters.v1",
+    "audio.events.v1",
+    "cutscenes.tracks.v1",
     "debug.render_inspector.v1",
     "editor.runtime.v1",
     "editor.ui.v1",
@@ -994,6 +2621,30 @@ const std::unordered_set<std::string> kSupportedCapabilities = {
     "world.authoring.v1",
     "world.collision_authoring.v1",
     "debug.editor_inspector.v1",
+    "world.persistence.v1",
+    "world.storage.v1",
+    "world.spawn_profiles.v1",
+    "world.forage.v1",
+    "world.time_weather.v1",
+    "world.seeding.v1",
+    "world.migrations.v1",
+    "debug.persistence_inspector.v1",
+    "narrative.timeline.v1",
+    "narrative.dialogue.v1",
+    "narrative.quests.v1",
+    "narrative.flags.v1",
+    "debug.narrative_inspector.v1",
+    "dev.hot_reload.v1",
+    "dev.console.v1",
+    "dev.watchers.v1",
+    "wasm.sandbox.v2",
+    "debug.reload_inspector.v1",
+    "native.sdk.v1",
+    "native.raw_cpp.v1",
+    "dsl.components.v1",
+    "dsl.entities.v1",
+    "dsl.graphs.v1",
+    "services.endpoints.v1",
 };
 
 const std::unordered_set<std::string> kSupportedRuntimePermissions = {
@@ -1001,7 +2652,267 @@ const std::unordered_set<std::string> kSupportedRuntimePermissions = {
     "network",
     "process",
     "nativeinterop",
+    "nativeinterop.raw",
+    "engine.memory",
+    "editor.livelink",
 };
+
+const std::unordered_set<std::string> kSupportedManifestTypes = {
+    "framework",
+    "content",
+    "tools",
+};
+
+const std::unordered_set<std::string> kSupportedReleaseChannels = {
+    "stable",
+    "beta",
+    "testers",
+};
+
+bool ManifestHasCapability(const ExternalModManifest& manifest, const char* capability);
+bool IsPathWithinBase(const std::filesystem::path& basePath, const std::filesystem::path& candidatePath);
+
+struct ManifestPathConvention {
+    const char* capability;
+    std::string ExternalModManifest::* field;
+    const char* relativePath;
+};
+
+const std::vector<ManifestPathConvention> kManifestPathConventions = {
+    { "items.data.v2", &ExternalModManifest::itemDefinitions, "items/items.json" },
+    { "items.catalog.v1", &ExternalModManifest::itemDefinitions, "items/items.json" },
+    { "input.bindings.v2", &ExternalModManifest::inputDefinitions, "config/input.json" },
+    { "hooks.extended.v1", &ExternalModManifest::hookDefinitions, "config/hooks.json" },
+    { "actors.vm.v1", &ExternalModManifest::actorDefinitions, "actors/actors.json" },
+    { "actors.generic.v1", &ExternalModManifest::actorDefinitions, "actors/actors.json" },
+    { "behaviors.graph.v1", &ExternalModManifest::behaviorDefinitions, "behaviors/behaviors.json" },
+    { "scenes.bundle.v1", &ExternalModManifest::sceneDefinitions, "scenes/scenes.json" },
+    { "statuses.catalog.v1", &ExternalModManifest::statusDefinitions, "combat/statuses.json" },
+    { "combat.damage.v1", &ExternalModManifest::damageDefinitions, "combat/damage.json" },
+    { "combat.targeting.v1", &ExternalModManifest::targetingDefinitions, "combat/targeting.json" },
+    { "combat.projectiles.v1", &ExternalModManifest::projectileDefinitions, "combat/projectiles.json" },
+    { "combat.aoe.v1", &ExternalModManifest::aoeDefinitions, "combat/aoe.json" },
+    { "movement.profiles.v1", &ExternalModManifest::movementDefinitions, "movement/profiles.json" },
+    { "items.use_profiles.v1", &ExternalModManifest::itemUseProfiles, "items/use_profiles.json" },
+    { "patches.vanilla_items.v1", &ExternalModManifest::vanillaItemPatches, "patches/vanilla_items.json" },
+    { "camera.aim_profiles.v2", &ExternalModManifest::cameraDefinitions, "camera/aim_profiles.json" },
+    { "ui.runtime.v1", &ExternalModManifest::uiScreenDefinitions, "ui/screens.json" },
+    { "ui.hud.v1", &ExternalModManifest::uiHudDefinitions, "ui/hud.json" },
+    { "player.resources.v1", &ExternalModManifest::playerResourceDefinitions, "player/resources.json" },
+    { "ui.resource_rings.v1", &ExternalModManifest::resourceRingDefinitions, "ui/resource_rings.json" },
+    { "player.consumables.v1", &ExternalModManifest::playerConsumableDefinitions, "player/consumables.json" },
+    { "ui.inventory_ext.v1", &ExternalModManifest::inventoryExtensionDefinitions, "ui/inventory_extension.json" },
+    { "containers.v1", &ExternalModManifest::containerDefinitions, "gameplay/containers.json" },
+    { "recipes.processing.v1", &ExternalModManifest::recipeDefinitions, "gameplay/recipes.json" },
+    { "interactions.v1", &ExternalModManifest::interactionDefinitions, "gameplay/interactions.json" },
+    { "actors.archetypes.v1", &ExternalModManifest::actorArchetypeDefinitions, "actors/archetypes.json" },
+    { "actors.adapters.v1", &ExternalModManifest::actorAdapterDefinitions, "actors/adapters.json" },
+    { "ai.behavior_trees.v1", &ExternalModManifest::behaviorTreeDefinitions, "graphs/behavior_trees.json" },
+    { "ai.sensors.v1", &ExternalModManifest::sensorDefinitions, "actors/sensors.json" },
+    { "nav.routes.v1", &ExternalModManifest::routeDefinitions, "world/routes.json" },
+    { "nav.navmesh_bridge.v1", &ExternalModManifest::navBridgeDefinitions, "world/navmesh_bridge.json" },
+    { "debug.overlay.v1", &ExternalModManifest::debugOverlayDefinitions, "debug/overlays.json" },
+    { "items.state_machine.v1", &ExternalModManifest::itemStateDefinitions, "items/state_machine.json" },
+    { "render.equipped_models.v1", &ExternalModManifest::equippedModelDefinitions, "render/equipped_models.json" },
+    { "hud.widgets.v1", &ExternalModManifest::hudWidgetDefinitions, "ui/hud_widgets.json" },
+    { "hud.reticles.v2", &ExternalModManifest::hudReticleDefinitions, "ui/hud_reticles.json" },
+    { "effects.graph.v2", &ExternalModManifest::effectGraphDefinitions, "effects/graph.json" },
+    { "combat.hit_rules.v2", &ExternalModManifest::combatHitRuleDefinitions, "combat/hit_rules.json" },
+    { "movement.surf.v2", &ExternalModManifest::surfDefinitions, "movement/surf.json" },
+    { "actors.tags.v1", &ExternalModManifest::actorTagDefinitions, "actors/tags.json" },
+    { "world.patchsets.v1", &ExternalModManifest::worldPatchDefinitions, "world/patchsets.json" },
+    { "quests.graph.v1", &ExternalModManifest::questDefinitions, "narrative/quests.json" },
+    { "dialog.nodes.v1", &ExternalModManifest::dialogDefinitions, "narrative/dialogue.json" },
+    { "sdk.generators.v1", &ExternalModManifest::sdkGeneratorDefinitions, "sdk/generators.json" },
+    { "fx.presets.v1", &ExternalModManifest::fxPresetDefinitions, "render/fx_presets.json" },
+    { "states.catalog.v1", &ExternalModManifest::stateDefinitions, "gameplay/states.json" },
+    { "spells.catalog.v1", &ExternalModManifest::spellDefinitions, "gameplay/spells.json" },
+    { "render.materials.v1", &ExternalModManifest::materialDefinitions, "render/materials.json" },
+    { "render.pbr.v1", &ExternalModManifest::pbrDefinitions, "render/pbr.json" },
+    { "render.lighting.v1", &ExternalModManifest::lightingDefinitions, "render/lighting.json" },
+    { "render.postfx.v1", &ExternalModManifest::postFxDefinitions, "render/postfx.json" },
+    { "world.scenes.v1", &ExternalModManifest::sceneProfileDefinitions, "world/scene_profiles.json" },
+    { "world.rooms.v1", &ExternalModManifest::roomProfileDefinitions, "world/room_profiles.json" },
+    { "assets.packs.v2", &ExternalModManifest::assetPackDefinitions, "assets/packs.json" },
+    { "assets.raw.v1", &ExternalModManifest::assetSourceDefinitions, "assets/sources.json" },
+    { "render.meshes.v1", &ExternalModManifest::meshDefinitions, "render/meshes.json" },
+    { "actors.prefabs.v1", &ExternalModManifest::prefabDefinitions, "prefabs/prefabs.json" },
+    { "world.instances.v1", &ExternalModManifest::worldInstanceDefinitions, "world/instances.json" },
+    { "debug.render_inspector.v1", &ExternalModManifest::renderInspectorDefinitions, "debug/render_inspector.json" },
+    { "editor.runtime.v1", &ExternalModManifest::editorRuntimeDefinitions, "editor/runtime.json" },
+    { "editor.ui.v1", &ExternalModManifest::editorUiDefinitions, "editor/ui.json" },
+    { "editor.selection.v1", &ExternalModManifest::editorSelectionDefinitions, "editor/selection.json" },
+    { "editor.gizmos.v1", &ExternalModManifest::editorGizmoDefinitions, "editor/gizmos.json" },
+    { "editor.library.v1", &ExternalModManifest::editorLibraryDefinitions, "editor/library.json" },
+    { "editor.projects.v1", &ExternalModManifest::editorProjectDefinitions, "editor/projects.json" },
+    { "editor.placement.v1", &ExternalModManifest::editorPlacementDefinitions, "world/placement.json" },
+    { "assets.importer.v1", &ExternalModManifest::assetImporterDefinitions, "assets/importers.json" },
+    { "world.authoring.v1", &ExternalModManifest::worldAuthoringDefinitions, "world/authoring.json" },
+    { "world.collision_authoring.v1", &ExternalModManifest::collisionAuthoringDefinitions, "world/collision.json" },
+    { "debug.editor_inspector.v1", &ExternalModManifest::editorInspectorDefinitions, "debug/editor_inspector.json" },
+    { "world.persistence.v1", &ExternalModManifest::worldPersistenceDefinitions, "world/persistence.json" },
+    { "world.storage.v1", &ExternalModManifest::worldStorageDefinitions, "world/storage.json" },
+    { "world.spawn_profiles.v1", &ExternalModManifest::worldSpawnProfileDefinitions, "world/spawn_profiles.json" },
+    { "world.forage.v1", &ExternalModManifest::worldForageDefinitions, "world/forage.json" },
+    { "world.time_weather.v1", &ExternalModManifest::worldTimeWeatherDefinitions, "world/time_weather.json" },
+    { "world.seeding.v1", &ExternalModManifest::worldSeedingDefinitions, "world/seeding.json" },
+    { "world.migrations.v1", &ExternalModManifest::worldMigrationDefinitions, "world/migrations.json" },
+    { "debug.persistence_inspector.v1", &ExternalModManifest::persistenceInspectorDefinitions, "debug/persistence_inspector.json" },
+    { "narrative.timeline.v1", &ExternalModManifest::narrativeTimelineDefinitions, "narrative/timelines.json" },
+    { "narrative.dialogue.v1", &ExternalModManifest::narrativeDialogueDefinitions, "narrative/dialogue.json" },
+    { "narrative.quests.v1", &ExternalModManifest::narrativeQuestDefinitions, "narrative/quests.json" },
+    { "narrative.flags.v1", &ExternalModManifest::narrativeFlagDefinitions, "narrative/flags.json" },
+    { "debug.narrative_inspector.v1", &ExternalModManifest::narrativeInspectorDefinitions, "debug/narrative_inspector.json" },
+    { "dev.hot_reload.v1", &ExternalModManifest::devHotReloadDefinitions, "dev/hot_reload.json" },
+    { "dev.console.v1", &ExternalModManifest::devConsoleDefinitions, "dev/console.json" },
+    { "dev.watchers.v1", &ExternalModManifest::devWatcherDefinitions, "dev/watchers.json" },
+    { "wasm.sandbox.v2", &ExternalModManifest::wasmSandboxDefinitions, "runtime/wasm_sandbox.json" },
+    { "debug.reload_inspector.v1", &ExternalModManifest::reloadInspectorDefinitions, "debug/reload_inspector.json" },
+};
+
+bool ZipEntryExists(const std::filesystem::path& zipPath, const std::filesystem::path& packageRelativePath) {
+    int err = 0;
+    zip_t* archive = zip_open(zipPath.string().c_str(), ZIP_RDONLY, &err);
+    if (archive == nullptr) {
+        return false;
+    }
+
+    std::string zipEntry = packageRelativePath.generic_string();
+    std::string zipEntryBackslash = zipEntry;
+    std::replace(zipEntryBackslash.begin(), zipEntryBackslash.end(), '/', '\\');
+
+    zip_stat_t stat;
+    zip_stat_init(&stat);
+    const bool found = zip_stat(archive, zipEntry.c_str(), ZIP_FL_ENC_GUESS, &stat) == 0 ||
+                       (zipEntryBackslash != zipEntry &&
+                        zip_stat(archive, zipEntryBackslash.c_str(), ZIP_FL_ENC_GUESS, &stat) == 0);
+    zip_close(archive);
+    return found;
+}
+
+std::filesystem::path ResolvePackageZipPrefix(const ExternalModPackage& package,
+                                              const std::filesystem::path& packageRelativePath) {
+    const bool useRuntimeRoot = IsPackageRuntimeRelativePath(packageRelativePath);
+    const std::filesystem::path prefix =
+        useRuntimeRoot ? std::filesystem::path(package.zipRuntimePrefix) : std::filesystem::path(package.zipDataPrefix);
+    if (prefix.empty()) {
+        return packageRelativePath;
+    }
+    return (prefix / packageRelativePath).lexically_normal();
+}
+
+std::filesystem::path ResolvePackageDirectoryRoot(const ExternalModPackage& package,
+                                                  const std::filesystem::path& packageRelativePath) {
+    const bool useRuntimeRoot = IsPackageRuntimeRelativePath(packageRelativePath);
+    if (useRuntimeRoot) {
+        if (!package.runtimeRootPath.empty()) {
+            return package.runtimeRootPath;
+        }
+        if (package.isSplitLayout) {
+            return {};
+        }
+    }
+
+    if (!package.dataRootPath.empty()) {
+        return package.dataRootPath;
+    }
+    return package.sourcePath;
+}
+
+bool PackageEntryExists(const ExternalModPackage& package, const std::filesystem::path& packageRelativePath) {
+    if (package.isZip) {
+        return ZipEntryExists(package.sourcePath, ResolvePackageZipPrefix(package, packageRelativePath));
+    }
+
+    const auto root = ResolvePackageDirectoryRoot(package, packageRelativePath);
+    if (root.empty()) {
+        return false;
+    }
+    const auto fullPath = (root / packageRelativePath).lexically_normal();
+    return IsPathWithinBase(root, fullPath) && std::filesystem::exists(fullPath) && std::filesystem::is_regular_file(fullPath);
+}
+
+bool ApplyManifestConventionsForPackage(ExternalModPackage& package, std::string& outError) {
+    auto& manifest = package.manifest;
+    if (ToLower(manifest.schemaVersion) != "mod.manifest.v3") {
+        return true;
+    }
+
+    if (manifest.entryScript.empty() && (IsWasmRuntimeType(manifest.runtimeType) || IsHybridRuntimeType(manifest.runtimeType))) {
+        for (const auto& candidate : { std::filesystem::path("scripts/init.json"), std::filesystem::path("scripts/entry.json") }) {
+            if (PackageEntryExists(package, candidate)) {
+                manifest.entryScript = candidate.generic_string();
+                break;
+            }
+        }
+    }
+
+    if (manifest.runtimeModule.empty() && (IsWasmRuntimeType(manifest.runtimeType) || IsHybridRuntimeType(manifest.runtimeType))) {
+        for (const auto& candidate : { std::filesystem::path("scripts/module.wasm"), std::filesystem::path("scripts/module.wat"),
+                                       std::filesystem::path("scripts/noop.wat") }) {
+            if (PackageEntryExists(package, candidate)) {
+                manifest.runtimeModule = candidate.generic_string();
+                break;
+            }
+        }
+    }
+
+    if (manifest.entryLibrary.empty() && (IsNativeRuntimeType(manifest.runtimeType) || IsHybridRuntimeType(manifest.runtimeType))) {
+        const std::filesystem::path candidate("native/win64/plugin.dll");
+        if (PackageEntryExists(package, candidate)) {
+            manifest.entryLibrary = candidate.generic_string();
+        }
+    }
+
+    for (const auto& binding : kManifestPathConventions) {
+        auto& fieldValue = manifest.*(binding.field);
+        if (fieldValue.empty() && PackageEntryExists(package, binding.relativePath)) {
+            fieldValue = binding.relativePath;
+            EnsureManifestCapability(manifest, binding.capability);
+        } else if (!fieldValue.empty()) {
+            EnsureManifestCapability(manifest, binding.capability);
+        }
+    }
+
+    if (manifest.exports.empty()) {
+        for (const auto& provided : manifest.provides) {
+            ExternalModManifest::ExportDefinition exportDefinition;
+            exportDefinition.id = provided;
+            exportDefinition.namespaceId = "provides";
+            exportDefinition.kind = "provide";
+            exportDefinition.source = provided;
+            exportDefinition.visibility = manifest.sharePolicy.read;
+            exportDefinition.mutableBy = manifest.sharePolicy.write;
+            exportDefinition.friends = manifest.sharePolicy.friends;
+            exportDefinition.denyMods = manifest.sharePolicy.denyMods;
+            manifest.exports.push_back(std::move(exportDefinition));
+        }
+    }
+
+    if ((IsWasmRuntimeType(manifest.runtimeType) || IsHybridRuntimeType(manifest.runtimeType)) && manifest.entryScript.empty()) {
+        outError = "runtime requires scripts/init.json or explicit entryScript for wasm/hybrid manifest v3 packages";
+        return false;
+    }
+    if ((IsWasmRuntimeType(manifest.runtimeType) || IsHybridRuntimeType(manifest.runtimeType)) && manifest.runtimeModule.empty()) {
+        outError = "runtime requires scripts/module.wasm|scripts/module.wat or explicit runtime.module for wasm/hybrid manifest v3 packages";
+        return false;
+    }
+    if ((IsNativeRuntimeType(manifest.runtimeType) || IsHybridRuntimeType(manifest.runtimeType)) && manifest.entryLibrary.empty()) {
+        outError = "runtime requires native/win64/plugin.dll or explicit runtime.entryLibrary for native/hybrid manifest v3 packages";
+        return false;
+    }
+
+    for (const auto& binding : kManifestPathConventions) {
+        const auto& fieldValue = manifest.*(binding.field);
+        if (ManifestHasCapability(manifest, binding.capability) && fieldValue.empty()) {
+            outError = std::string("Capability '") + binding.capability +
+                       "' requires either explicit manifest path binding or conventional file '" + binding.relativePath + "'";
+            return false;
+        }
+    }
+
+    return true;
+}
 
 const std::unordered_map<std::string, ExternalModHookType> kHookAliases = {
     { "onloadgame", ExternalModHookType::OnLoadGame },
@@ -1052,6 +2963,28 @@ const std::unordered_map<std::string, ExternalModHookType> kHookAliases = {
     { "onrenderlightspawned", ExternalModHookType::OnRenderLightSpawned },
     { "onrenderlightexpired", ExternalModHookType::OnRenderLightExpired },
     { "onrenderfallbackapplied", ExternalModHookType::OnRenderFallbackApplied },
+    { "onpersistententityloaded", ExternalModHookType::OnPersistentEntityLoaded },
+    { "onpersistententitysaved", ExternalModHookType::OnPersistentEntitySaved },
+    { "onpersistentdomainmigrated", ExternalModHookType::OnPersistentDomainMigrated },
+    { "onworldspawnprofiletick", ExternalModHookType::OnWorldSpawnProfileTick },
+    { "world.time.segmentchanged", ExternalModHookType::OnWorldTimeSegmentChanged },
+    { "world.weather.changed", ExternalModHookType::OnWorldWeatherChanged },
+    { "ondialoguestarted", ExternalModHookType::OnDialogueStarted },
+    { "ondialoguechoicecommitted", ExternalModHookType::OnDialogueChoiceCommitted },
+    { "onqueststatechanged", ExternalModHookType::OnQuestStateChanged },
+    { "ontimelinestarted", ExternalModHookType::OnTimelineStarted },
+    { "ontimelinecompleted", ExternalModHookType::OnTimelineCompleted },
+    { "ontimelineskipped", ExternalModHookType::OnTimelineSkipped },
+    { "onhotreloadapplied", ExternalModHookType::OnHotReloadApplied },
+    { "onhotreloadfailed", ExternalModHookType::OnHotReloadFailed },
+    { "onsandboxbudgetexceeded", ExternalModHookType::OnSandboxBudgetExceeded },
+    { "onsandboxpermissiondenied", ExternalModHookType::OnSandboxPermissionDenied },
+    { "onsettingschanged", ExternalModHookType::OnSettingsChanged },
+    { "settings.changed", ExternalModHookType::OnSettingsChanged },
+    { "onresourcechanged", ExternalModHookType::OnResourceChanged },
+    { "onresourcedepleted", ExternalModHookType::OnResourceDepleted },
+    { "onresourcerecovered", ExternalModHookType::OnResourceRecovered },
+    { "onresourcecapacitychanged", ExternalModHookType::OnResourceCapacityChanged },
     { "onplaydestroy", ExternalModHookType::OnPlayDestroy },
     { "ongameframeupdate", ExternalModHookType::OnGameFrameUpdate },
 };
@@ -1146,6 +3079,314 @@ bool ParseHookTypeAlias(const std::string& value, ExternalModHookType& outHookTy
     }
     outHookType = it->second;
     return true;
+}
+
+void HydrateConsumableStateForPackage(ExternalModPackage& package);
+void PersistConsumableStackState(ExternalModPackage& package, const ExternalModPlayerConsumableDefinition& definition,
+                                 int32_t count);
+void PersistBottleContentState(ExternalModPackage& package, int32_t bottleSlot,
+                               const ExternalModBottleContentState* contentState);
+
+ExternalModPlayerResourcesRuntime::SettingsResolver BuildPlayerResourceSettingsResolver(ExternalModManager& manager) {
+    ExternalModPlayerResourcesRuntime::SettingsResolver resolver;
+    resolver.resolveFloat = [&manager](const ExternalModPackage& package, const std::string& key, const std::string& domain,
+                                       float fallback) -> float {
+        std::string rawValue;
+        if (!manager.GetModSettingValue(package.manifest.id, key, domain, rawValue)) {
+            return fallback;
+        }
+        float parsedValue = fallback;
+        return TryParseFloatString(rawValue, parsedValue) ? parsedValue : fallback;
+    };
+    resolver.resolveBool = [&manager](const ExternalModPackage& package, const std::string& key, const std::string& domain,
+                                      bool fallback) -> bool {
+        std::string rawValue;
+        if (!manager.GetModSettingValue(package.manifest.id, key, domain, rawValue)) {
+            return fallback;
+        }
+        const std::string normalizedValue = ToLower(rawValue);
+        if (normalizedValue == "1" || normalizedValue == "true" || normalizedValue == "yes" || normalizedValue == "on") {
+            return true;
+        }
+        if (normalizedValue == "0" || normalizedValue == "false" || normalizedValue == "no" || normalizedValue == "off") {
+            return false;
+        }
+        return fallback;
+    };
+    resolver.emitHook = [&manager](const ExternalModPackage& package, ExternalModHookType hookType,
+                                   const ExternalModHookEventContext& context, const char* triggerName) {
+        (void)package;
+        manager.EmitExtendedHook(hookType, context, triggerName);
+    };
+    resolver.resolveLinkedRegenMultiplier = [&manager](const std::string& targetResourceId) -> float {
+        float multiplier = 1.0f;
+        for (const auto& package : manager.GetPackages()) {
+            if (!package.runtime.enabled || package.runtime.playerResourceDefinitions.empty()) {
+                continue;
+            }
+            for (const auto& definition : package.runtime.playerResourceDefinitions) {
+                const auto stateIt = package.runtime.playerResourceStates.find(definition.id);
+                if (stateIt == package.runtime.playerResourceStates.end() || !stateIt->second.initialized ||
+                    !stateIt->second.depleted) {
+                    continue;
+                }
+                for (const auto& link : definition.resourceLinks) {
+                    if (link.targetResourceId == targetResourceId && link.onDepletedRegenMultiplier > 0.0f) {
+                        multiplier = std::min(multiplier, link.onDepletedRegenMultiplier);
+                    }
+                }
+            }
+        }
+        return std::clamp(multiplier, 0.0f, 1.0f);
+    };
+    return resolver;
+}
+
+const ExternalModPlayerConsumableDefinition* FindPlayerConsumableDefinition(const ExternalModRuntime& runtime,
+                                                                            const std::string& consumableId) {
+    const auto it =
+        std::find_if(runtime.playerConsumableDefinitions.begin(), runtime.playerConsumableDefinitions.end(),
+                     [&](const ExternalModPlayerConsumableDefinition& definition) { return definition.id == consumableId; });
+    return it == runtime.playerConsumableDefinitions.end() ? nullptr : &(*it);
+}
+
+ExternalModPlayerConsumableDefinition* FindPlayerConsumableDefinition(ExternalModRuntime& runtime,
+                                                                      const std::string& consumableId) {
+    const auto it =
+        std::find_if(runtime.playerConsumableDefinitions.begin(), runtime.playerConsumableDefinitions.end(),
+                     [&](const ExternalModPlayerConsumableDefinition& definition) { return definition.id == consumableId; });
+    return it == runtime.playerConsumableDefinitions.end() ? nullptr : &(*it);
+}
+
+std::string ResolveConsumableStorageDomainId(const ExternalModPlayerConsumableDefinition& definition) {
+    return definition.storageDomainId.empty() ? definition.id : definition.storageDomainId;
+}
+
+int32_t ResolveBottlePlaceholderItemId(const ExternalModPlayerConsumableDefinition& definition, int32_t remainingUses) {
+    if (remainingUses <= 1 && definition.placeholderPartialItemId >= 0) {
+        return definition.placeholderPartialItemId;
+    }
+    if (definition.placeholderItemId >= 0) {
+        return definition.placeholderItemId;
+    }
+    if (remainingUses <= 1 && definition.placeholderPartialItemId >= 0) {
+        return definition.placeholderPartialItemId;
+    }
+    return ITEM_MILK_BOTTLE;
+}
+
+const uint8_t* ResolveBottlePlaceholderIconTexture(const ExternalModPlayerConsumableDefinition& definition,
+                                                   int32_t remainingUses) {
+    if (remainingUses <= 1 && !definition.placeholderPartialIconRgba32.empty()) {
+        return definition.placeholderPartialIconRgba32.data();
+    }
+    if (!definition.placeholderIconRgba32.empty()) {
+        return definition.placeholderIconRgba32.data();
+    }
+    if (remainingUses <= 1 && !definition.placeholderPartialIconRgba32.empty()) {
+        return definition.placeholderPartialIconRgba32.data();
+    }
+    return nullptr;
+}
+
+int32_t ResolveBottlePlaceholderActionParam(int32_t itemId) {
+    if (itemId == ITEM_MILK_HALF) {
+        return PLAYER_IA_BOTTLE_MILK_HALF;
+    }
+    if (itemId == ITEM_MILK_BOTTLE) {
+        return PLAYER_IA_BOTTLE_MILK_FULL;
+    }
+    return PLAYER_IA_BOTTLE_MILK_FULL;
+}
+
+int32_t ResolveHeldEquippedSlot(const Player* player) {
+    if (player == nullptr || player->heldItemButton <= 0 || player->heldItemButton >= ARRAY_COUNT(gSaveContext.equips.buttonItems)) {
+        return -1;
+    }
+    return gSaveContext.equips.cButtonSlots[player->heldItemButton - 1];
+}
+
+int32_t ResolveHeldBottleSlot(const Player* player) {
+    const int32_t slot = ResolveHeldEquippedSlot(player);
+    if (slot < SLOT_BOTTLE_1 || slot > SLOT_BOTTLE_4) {
+        return -1;
+    }
+    return slot;
+}
+
+int32_t ResolveConsumableInventorySlot(const ExternalModPlayerConsumableDefinition& definition) {
+    if (definition.inventoryPlaceholderItemId < 0 ||
+        definition.inventoryPlaceholderItemId >= static_cast<int32_t>(ARRAY_COUNT(gItemSlots))) {
+        return -1;
+    }
+    const int32_t slot = gItemSlots[definition.inventoryPlaceholderItemId];
+    return (slot >= 0 && slot < static_cast<int32_t>(ARRAY_COUNT(gSaveContext.inventory.items))) ? slot : -1;
+}
+
+void RefreshEquippedButtonsForSlot(PlayState* play, Player* player, int32_t slot, int32_t itemId) {
+    if (slot < 0 || slot >= static_cast<int32_t>(ARRAY_COUNT(gSaveContext.inventory.items))) {
+        return;
+    }
+
+    gSaveContext.inventory.items[slot] = static_cast<int8_t>(itemId);
+    for (int32_t buttonIndex = 1; buttonIndex < static_cast<int32_t>(ARRAY_COUNT(gSaveContext.equips.buttonItems)); ++buttonIndex) {
+        if (gSaveContext.equips.cButtonSlots[buttonIndex - 1] != slot) {
+            continue;
+        }
+
+        gSaveContext.equips.buttonItems[buttonIndex] = static_cast<int8_t>(itemId);
+        if (buttonIndex < static_cast<int32_t>(ARRAY_COUNT(gSaveContext.adultEquips.buttonItems))) {
+            gSaveContext.adultEquips.buttonItems[buttonIndex] = static_cast<int8_t>(itemId);
+            gSaveContext.childEquips.buttonItems[buttonIndex] = static_cast<int8_t>(itemId);
+        }
+        if (play != nullptr) {
+            Interface_LoadItemIcon1(play, buttonIndex);
+        }
+        if (player != nullptr && player->heldItemButton == buttonIndex && itemId == ITEM_NONE) {
+            player->heldItemId = ITEM_NONE;
+            player->heldItemAction = PLAYER_IA_NONE;
+            player->itemAction = PLAYER_IA_NONE;
+        }
+    }
+}
+
+void UpdateHeldBottleItemDirect(PlayState* play, Player* player, int32_t itemId, int32_t actionParam) {
+    const int32_t slot = ResolveHeldBottleSlot(player);
+    if (play == nullptr || player == nullptr || slot < 0) {
+        return;
+    }
+
+    gSaveContext.inventory.items[slot] = static_cast<uint8_t>(itemId);
+    gSaveContext.equips.buttonItems[player->heldItemButton] = static_cast<uint8_t>(itemId);
+    Interface_LoadItemIcon1(play, player->heldItemButton);
+    play->pauseCtx.cursorItem[PAUSE_ITEM] = itemId;
+    gSaveContext.buttonStatus[player->heldItemButton] = BTN_ENABLED;
+
+    if (itemId != ITEM_BOTTLE) {
+        player->heldItemId = itemId;
+        player->heldItemAction = actionParam;
+    }
+    player->itemAction = actionParam;
+}
+
+bool IsPlayerInWaterBox(PlayState* play, Player* player) {
+    if (play == nullptr || player == nullptr) {
+        return false;
+    }
+    f32 surfaceY = player->actor.world.pos.y;
+    WaterBox* waterBox = nullptr;
+    if (!WaterBox_GetSurface1(play, &play->colCtx, player->actor.world.pos.x, player->actor.world.pos.z, &surfaceY, &waterBox)) {
+        return false;
+    }
+    return player->actor.world.pos.y <= surfaceY + 20.0f;
+}
+
+void HydrateConsumableStateForPackage(ExternalModPackage& package) {
+    package.runtime.consumableStackCounts.clear();
+    package.runtime.customBottleContentBySlot.clear();
+    package.runtime.customInventoryConsumableBySlot.clear();
+
+    for (const auto& definition : package.runtime.playerConsumableDefinitions) {
+        if (definition.storageMode != ExternalModPlayerConsumableStorageMode::Stack) {
+            continue;
+        }
+        int32_t count = 0;
+        const std::string domainId = ResolveConsumableStorageDomainId(definition);
+        const auto domainIt = package.runtime.persistentDomains.find(domainId);
+        if (domainIt != package.runtime.persistentDomains.end()) {
+            const auto valueIt = domainIt->second.find(definition.countStorageKey);
+            if (valueIt != domainIt->second.end()) {
+                try {
+                    count = std::stoi(valueIt->second);
+                } catch (...) {
+                    count = 0;
+                }
+            }
+        }
+        package.runtime.consumableStackCounts[definition.id] = std::clamp(count, 0, std::max(1, definition.maxStack));
+    }
+
+    const auto bottleDomainIt = package.runtime.persistentDomains.find(kPersistentPlayerConsumablesDomainId);
+    if (bottleDomainIt == package.runtime.persistentDomains.end()) {
+        return;
+    }
+    for (const auto& valuePair : bottleDomainIt->second) {
+        if (valuePair.first.rfind("inventorySlot.", 0) == 0) {
+            try {
+                const int32_t slot = std::stoi(valuePair.first.substr(std::string("inventorySlot.").size()));
+                if (slot < 0 || slot >= static_cast<int32_t>(ARRAY_COUNT(gSaveContext.inventory.items))) {
+                    continue;
+                }
+                const auto* definition = FindPlayerConsumableDefinition(package.runtime, valuePair.second);
+                if (definition != nullptr &&
+                    definition->storageMode == ExternalModPlayerConsumableStorageMode::Stack &&
+                    ResolveConsumableInventorySlot(*definition) == slot) {
+                    package.runtime.customInventoryConsumableBySlot[slot] = valuePair.second;
+                }
+            } catch (...) {
+            }
+            continue;
+        }
+        if (valuePair.first.rfind("bottleSlot.", 0) != 0) {
+            continue;
+        }
+        try {
+            const int32_t slot = std::stoi(valuePair.first.substr(std::string("bottleSlot.").size()));
+            if (slot < SLOT_BOTTLE_1 || slot > SLOT_BOTTLE_4) {
+                continue;
+            }
+
+            std::string consumableId = valuePair.second;
+            int32_t remainingUses = 0;
+            const size_t sepPos = valuePair.second.rfind('|');
+            if (sepPos != std::string::npos) {
+                consumableId = valuePair.second.substr(0, sepPos);
+                try {
+                    remainingUses = std::stoi(valuePair.second.substr(sepPos + 1));
+                } catch (...) {
+                    remainingUses = 0;
+                }
+            }
+
+            const auto* definition = FindPlayerConsumableDefinition(package.runtime, consumableId);
+            if (definition != nullptr) {
+                if (remainingUses <= 0) {
+                    remainingUses = std::max(1, definition->usesPerFill);
+                }
+                package.runtime.customBottleContentBySlot[slot] = { consumableId, remainingUses };
+            }
+        } catch (...) {
+        }
+    }
+}
+
+void PersistConsumableStackState(ExternalModPackage& package, const ExternalModPlayerConsumableDefinition& definition,
+                                 int32_t count) {
+    auto& domain = package.runtime.persistentDomains[ResolveConsumableStorageDomainId(definition)];
+    domain[definition.countStorageKey] = std::to_string(std::max(0, count));
+    package.runtime.persistentStateDirty = true;
+}
+
+void PersistBottleContentState(ExternalModPackage& package, int32_t slot, const ExternalModBottleContentState* contentState) {
+    auto& domain = package.runtime.persistentDomains[kPersistentPlayerConsumablesDomainId];
+    const std::string key = "bottleSlot." + std::to_string(slot);
+    if (contentState == nullptr || contentState->consumableId.empty() || contentState->remainingUses <= 0) {
+        domain.erase(key);
+    } else {
+        domain[key] = contentState->consumableId + "|" + std::to_string(contentState->remainingUses);
+    }
+    package.runtime.persistentStateDirty = true;
+}
+
+void PersistInventoryConsumableSlotState(ExternalModPackage& package, int32_t slot, const std::string* consumableId) {
+    auto& domain = package.runtime.persistentDomains[kPersistentPlayerConsumablesDomainId];
+    const std::string key = "inventorySlot." + std::to_string(slot);
+    if (consumableId == nullptr || consumableId->empty()) {
+        domain.erase(key);
+    } else {
+        domain[key] = *consumableId;
+    }
+    package.runtime.persistentStateDirty = true;
 }
 
 bool ParseItemAgePolicy(const nlohmann::json& value, ExternalModItemAgePolicy& outPolicy, std::string& outError) {
@@ -1540,9 +3781,112 @@ std::string SanitizeCVarSegment(const std::string& value) {
     return sanitized;
 }
 
+const ExternalModRenderInspectorDefinition* FindRenderInspectorDefinitionInPackage(const ExternalModPackage& package,
+                                                                                    const std::string& overlayId) {
+    const auto it = std::find_if(package.runtime.renderInspectorDefinitions.begin(),
+                                 package.runtime.renderInspectorDefinitions.end(),
+                                 [&overlayId](const ExternalModRenderInspectorDefinition& definition) {
+                                     return definition.id == overlayId;
+                                 });
+    return it == package.runtime.renderInspectorDefinitions.end() ? nullptr : &(*it);
+}
+
 bool HasSupportedArchiveExtension(const std::filesystem::path& path) {
     const auto extension = ToLower(path.extension().string());
     return extension == ".otr" || extension == ".o2r";
+}
+
+std::string NormalizeAssetSourceFormatToken(const std::string& value) {
+    std::string trimmed = value;
+    size_t start = 0;
+    while (start < trimmed.size() && std::isspace(static_cast<unsigned char>(trimmed[start]))) {
+        ++start;
+    }
+    size_t end = trimmed.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(trimmed[end - 1]))) {
+        --end;
+    }
+    const auto normalized = ToLower(trimmed.substr(start, end - start));
+    if (normalized == ".png") {
+        return "png";
+    }
+    if (normalized == ".jpg" || normalized == ".jpeg") {
+        return normalized == ".jpg" ? "jpg" : "jpeg";
+    }
+    if (normalized == ".dds") {
+        return "dds";
+    }
+    if (normalized == ".wav") {
+        return "wav";
+    }
+    if (normalized == ".ogg") {
+        return "ogg";
+    }
+    if (normalized == ".obj") {
+        return "obj";
+    }
+    if (normalized == ".gltf") {
+        return "gltf";
+    }
+    if (normalized == ".glb") {
+        return "glb";
+    }
+    if (normalized == ".json") {
+        return "json";
+    }
+    if (normalized == ".bin") {
+        return "bin";
+    }
+    if (normalized == ".otr") {
+        return "otr";
+    }
+    if (normalized == ".o2r") {
+        return "o2r";
+    }
+    return normalized;
+}
+
+bool IsSupportedAssetSourceFormat(const std::string& format) {
+    static const std::unordered_set<std::string> kFormats = {
+        "png",  "jpg", "jpeg", "dds", "wav", "ogg",  "obj",
+        "gltf", "glb", "json", "bin", "otr", "o2r",
+    };
+    return kFormats.contains(format);
+}
+
+std::string InferAssetSourceFormatFromPath(const std::filesystem::path& path) {
+    const auto extension = NormalizeAssetSourceFormatToken(path.extension().string());
+    return IsSupportedAssetSourceFormat(extension) ? extension : std::string{};
+}
+
+std::string InferAssetSourceKindFromFormat(const std::string& format) {
+    if (format == "png" || format == "jpg" || format == "jpeg" || format == "dds") {
+        return "image";
+    }
+    if (format == "wav" || format == "ogg") {
+        return "audio";
+    }
+    if (format == "obj" || format == "gltf" || format == "glb") {
+        return "model";
+    }
+    if (format == "json" || format == "bin") {
+        return "data";
+    }
+    if (format == "otr" || format == "o2r") {
+        return "archive";
+    }
+    return {};
+}
+
+bool IsSupportedAssetSourceKind(const std::string& kind) {
+    static const std::unordered_set<std::string> kKinds = {
+        "image",
+        "audio",
+        "model",
+        "data",
+        "archive",
+    };
+    return kKinds.contains(kind);
 }
 
 bool ValidateRequiredString(const nlohmann::json& json, const char* key, std::string& value, std::string& outError) {
@@ -1612,6 +3956,138 @@ bool StartsWithString(const std::string& value, const std::string& prefix) {
         return false;
     }
     return std::equal(prefix.begin(), prefix.end(), value.begin());
+}
+
+bool IsHigherPriorityPackage(const ExternalModPackage* lhs, const ExternalModPackage* rhs) {
+    if (lhs == nullptr) {
+        return false;
+    }
+    if (rhs == nullptr) {
+        return true;
+    }
+    if (lhs->manifest.loadPriority != rhs->manifest.loadPriority) {
+        return lhs->manifest.loadPriority > rhs->manifest.loadPriority;
+    }
+    return lhs->manifest.id < rhs->manifest.id;
+}
+
+bool MatchesMaterialBind(const ExternalModMaterialDefinition::Bind& bind, const std::string& texturePath, int16_t sceneId,
+                         int16_t roomId) {
+    if (bind.otrPath != texturePath) {
+        return false;
+    }
+    if (bind.hasSceneId && bind.sceneId != sceneId) {
+        return false;
+    }
+    if (bind.hasRoomId && bind.roomId != roomId) {
+        return false;
+    }
+    return true;
+}
+
+bool MaterialHasSceneRoomBinding(const ExternalModMaterialDefinition& material, int16_t sceneId, int16_t roomId) {
+    if (!material.bindOtrPath.empty()) {
+        return true;
+    }
+    return std::any_of(material.binds.begin(), material.binds.end(),
+                       [sceneId, roomId](const ExternalModMaterialDefinition::Bind& bind) {
+                           return (!bind.hasSceneId || bind.sceneId == sceneId) &&
+                                  (!bind.hasRoomId || bind.roomId == roomId);
+                       });
+}
+
+bool MaterialMatchesTexturePath(const ExternalModMaterialDefinition& material, const std::string& texturePath, int16_t sceneId,
+                                int16_t roomId) {
+    if (!material.bindOtrPath.empty() && material.bindOtrPath == texturePath) {
+        return true;
+    }
+    return std::any_of(material.binds.begin(), material.binds.end(),
+                       [&](const ExternalModMaterialDefinition::Bind& bind) {
+                           return MatchesMaterialBind(bind, texturePath, sceneId, roomId);
+                       });
+}
+
+bool MaterialOverrideMatchesTexturePath(const ExternalModRuntime::MaterialOverrideState& overrideState,
+                                        const ExternalModMaterialDefinition& material, const std::string& texturePath,
+                                        int16_t sceneId, int16_t roomId) {
+    if (!overrideState.match.empty()) {
+        return overrideState.match == texturePath;
+    }
+    return MaterialMatchesTexturePath(material, texturePath, sceneId, roomId);
+}
+
+enum : uint32_t {
+    kMaterialFallbackGenerateNormal = 1u << 0,
+    kMaterialFallbackGenerateOrm = 1u << 1,
+};
+
+const ExternalModMaterialDefinition* ResolveEffectiveMaterialForTexturePath(const std::vector<ExternalModPackage>& packages,
+                                                                            const std::string& texturePath, int16_t sceneId,
+                                                                            int16_t roomId,
+                                                                            const ExternalModPackage** outPackage = nullptr) {
+    if (outPackage != nullptr) {
+        *outPackage = nullptr;
+    }
+    if (texturePath.empty()) {
+        return nullptr;
+    }
+
+    const ExternalModMaterialDefinition* selectedMaterial = nullptr;
+    const ExternalModPackage* selectedPackage = nullptr;
+
+    for (const auto& package : packages) {
+        if (!package.valid || !package.runtime.enabled) {
+            continue;
+        }
+
+        for (const auto& overrideState : package.runtime.materialOverrides) {
+            const auto* materialDefinition = FindDefinitionAcrossPackages<ExternalModMaterialDefinition>(
+                packages, overrideState.materialId,
+                [](const ExternalModRuntime& runtime) -> const std::vector<ExternalModMaterialDefinition>& {
+                    return runtime.materialDefinitions;
+                });
+            if (materialDefinition == nullptr) {
+                continue;
+            }
+            if (!MaterialOverrideMatchesTexturePath(overrideState, *materialDefinition, texturePath, sceneId, roomId)) {
+                continue;
+            }
+            if (!IsHigherPriorityPackage(&package, selectedPackage)) {
+                continue;
+            }
+            selectedPackage = &package;
+            selectedMaterial = materialDefinition;
+        }
+    }
+
+    if (selectedMaterial != nullptr) {
+        if (outPackage != nullptr) {
+            *outPackage = selectedPackage;
+        }
+        return selectedMaterial;
+    }
+
+    for (const auto& package : packages) {
+        if (!package.valid || !package.runtime.enabled) {
+            continue;
+        }
+
+        for (const auto& material : package.runtime.materialDefinitions) {
+            if (!MaterialMatchesTexturePath(material, texturePath, sceneId, roomId)) {
+                continue;
+            }
+            if (!IsHigherPriorityPackage(&package, selectedPackage)) {
+                continue;
+            }
+            selectedPackage = &package;
+            selectedMaterial = &material;
+        }
+    }
+
+    if (outPackage != nullptr) {
+        *outPackage = selectedPackage;
+    }
+    return selectedMaterial;
 }
 
 std::string NormalizeZipEntryPath(std::string path) {
@@ -5858,6 +8334,440 @@ bool ParseAction(const nlohmann::json& json, int32_t apiVersion, ExternalModActi
         return true;
     }
 
+    if (actionType == "persist.ensureEntityGuid") {
+        outAction.type = ExternalModActionType::PersistEnsureEntityGuid;
+        if (json.contains("entityGuid") && !ValidateRequiredString(json, "entityGuid", outAction.persistenceEntityGuid, outError)) {
+            return false;
+        }
+        if (json.contains("scope") && !ValidateRequiredString(json, "scope", outAction.persistenceEntityScope, outError)) {
+            return false;
+        }
+        if (outAction.persistenceEntityScope.empty()) {
+            outAction.persistenceEntityScope = "room";
+        }
+        return true;
+    }
+
+    if (actionType == "persist.saveEntityState") {
+        outAction.type = ExternalModActionType::PersistSaveEntityState;
+        if (json.contains("entityGuid") && !ValidateRequiredString(json, "entityGuid", outAction.persistenceEntityGuid, outError)) {
+            return false;
+        }
+        if (json.contains("key") && !ValidateRequiredString(json, "key", outAction.persistenceStateKey, outError)) {
+            return false;
+        }
+        if (json.contains("value")) {
+            if (json["value"].is_string()) {
+                outAction.persistenceStateValue = json["value"].get<std::string>();
+            } else if (json["value"].is_boolean()) {
+                outAction.persistenceStateValue = json["value"].get<bool>() ? "true" : "false";
+            } else if (json["value"].is_number_integer()) {
+                outAction.persistenceStateValue = std::to_string(json["value"].get<long long>());
+            } else if (json["value"].is_number_float()) {
+                outAction.persistenceStateValue = std::to_string(json["value"].get<double>());
+            } else {
+                outError = "persist.saveEntityState.value must be string|number|boolean";
+                return false;
+            }
+        } else {
+            outAction.persistenceStateValue.clear();
+        }
+        return true;
+    }
+
+    if (actionType == "persist.loadEntityState") {
+        outAction.type = ExternalModActionType::PersistLoadEntityState;
+        if (json.contains("entityGuid") && !ValidateRequiredString(json, "entityGuid", outAction.persistenceEntityGuid, outError)) {
+            return false;
+        }
+        if (json.contains("key") && !ValidateRequiredString(json, "key", outAction.persistenceStateKey, outError)) {
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "persist.deleteEntityState") {
+        outAction.type = ExternalModActionType::PersistDeleteEntityState;
+        if (json.contains("entityGuid") && !ValidateRequiredString(json, "entityGuid", outAction.persistenceEntityGuid, outError)) {
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "persist.setDomainValue") {
+        outAction.type = ExternalModActionType::PersistSetDomainValue;
+        if (!ValidateRequiredString(json, "domainId", outAction.persistenceDomainId, outError) &&
+            !ValidateRequiredString(json, "domain", outAction.persistenceDomainId, outError)) {
+            outError = "persist.setDomainValue requires domainId/domain";
+            return false;
+        }
+        if (!ValidateRequiredString(json, "key", outAction.persistenceStateKey, outError)) {
+            return false;
+        }
+        if (!json.contains("value")) {
+            outError = "persist.setDomainValue requires value";
+            return false;
+        }
+        if (json["value"].is_string()) {
+            outAction.persistenceStateValue = json["value"].get<std::string>();
+        } else if (json["value"].is_boolean()) {
+            outAction.persistenceStateValue = json["value"].get<bool>() ? "true" : "false";
+        } else if (json["value"].is_number_integer()) {
+            outAction.persistenceStateValue = std::to_string(json["value"].get<long long>());
+        } else if (json["value"].is_number_float()) {
+            outAction.persistenceStateValue = std::to_string(json["value"].get<double>());
+        } else {
+            outError = "persist.setDomainValue.value must be string|number|boolean";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "persist.getDomainValue") {
+        outAction.type = ExternalModActionType::PersistGetDomainValue;
+        if (!ValidateRequiredString(json, "domainId", outAction.persistenceDomainId, outError) &&
+            !ValidateRequiredString(json, "domain", outAction.persistenceDomainId, outError)) {
+            outError = "persist.getDomainValue requires domainId/domain";
+            return false;
+        }
+        if (!ValidateRequiredString(json, "key", outAction.persistenceStateKey, outError)) {
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "persist.runMigrations") {
+        outAction.type = ExternalModActionType::PersistRunMigrations;
+        if (json.contains("migrationId") && !ValidateRequiredString(json, "migrationId", outAction.migrationId, outError)) {
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "world.spawnFromProfile") {
+        outAction.type = ExternalModActionType::WorldSpawnFromProfile;
+        if (!ValidateRequiredString(json, "profileId", outAction.spawnProfileId, outError) &&
+            !ValidateRequiredString(json, "profile", outAction.spawnProfileId, outError)) {
+            outError = "world.spawnFromProfile requires profileId/profile";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "world.time.setOverride") {
+        outAction.type = ExternalModActionType::WorldTimeSetOverride;
+        if (!ValidateRequiredString(json, "segment", outAction.timeSegmentId, outError) &&
+            !ValidateRequiredString(json, "value", outAction.timeSegmentId, outError)) {
+            outError = "world.time.setOverride requires segment/value";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "world.weather.setOverride") {
+        outAction.type = ExternalModActionType::WorldWeatherSetOverride;
+        if (!ValidateRequiredString(json, "weather", outAction.weatherProfileId, outError) &&
+            !ValidateRequiredString(json, "value", outAction.weatherProfileId, outError)) {
+            outError = "world.weather.setOverride requires weather/value";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "narrative.startDialogue") {
+        outAction.type = ExternalModActionType::NarrativeStartDialogue;
+        if (!ValidateRequiredString(json, "dialogueId", outAction.dialogueId, outError) &&
+            !ValidateRequiredString(json, "id", outAction.dialogueId, outError)) {
+            outError = "narrative.startDialogue requires dialogueId/id";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "narrative.chooseOption") {
+        outAction.type = ExternalModActionType::NarrativeChooseOption;
+        if (!ValidateRequiredString(json, "optionId", outAction.dialogueOptionId, outError) &&
+            !ValidateRequiredString(json, "id", outAction.dialogueOptionId, outError)) {
+            outError = "narrative.chooseOption requires optionId/id";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "narrative.advanceDialogue") {
+        outAction.type = ExternalModActionType::NarrativeAdvanceDialogue;
+        if (json.contains("nodeId") && !ValidateRequiredString(json, "nodeId", outAction.dialogueNodeId, outError)) {
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "narrative.setFlag") {
+        outAction.type = ExternalModActionType::NarrativeSetFlag;
+        if (!ValidateRequiredString(json, "flagId", outAction.variableKey, outError) &&
+            !ValidateRequiredString(json, "key", outAction.variableKey, outError)) {
+            outError = "narrative.setFlag requires flagId/key";
+            return false;
+        }
+        if (!json.contains("value")) {
+            outAction.variableValue = "true";
+            return true;
+        }
+        if (json["value"].is_string()) {
+            outAction.variableValue = json["value"].get<std::string>();
+        } else if (json["value"].is_boolean()) {
+            outAction.variableValue = json["value"].get<bool>() ? "true" : "false";
+        } else if (json["value"].is_number_integer()) {
+            outAction.variableValue = std::to_string(json["value"].get<long long>());
+        } else if (json["value"].is_number_float()) {
+            outAction.variableValue = std::to_string(json["value"].get<double>());
+        } else {
+            outError = "narrative.setFlag.value must be string|number|boolean";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "narrative.clearFlag") {
+        outAction.type = ExternalModActionType::NarrativeClearFlag;
+        if (!ValidateRequiredString(json, "flagId", outAction.variableKey, outError) &&
+            !ValidateRequiredString(json, "key", outAction.variableKey, outError)) {
+            outError = "narrative.clearFlag requires flagId/key";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "narrative.startQuest") {
+        outAction.type = ExternalModActionType::NarrativeStartQuest;
+        if (!ValidateRequiredString(json, "questId", outAction.questId, outError) &&
+            !ValidateRequiredString(json, "id", outAction.questId, outError)) {
+            outError = "narrative.startQuest requires questId/id";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "narrative.updateObjective") {
+        outAction.type = ExternalModActionType::NarrativeUpdateObjective;
+        if (!ValidateRequiredString(json, "questId", outAction.questId, outError)) {
+            return false;
+        }
+        if (!ValidateRequiredString(json, "objectiveId", outAction.questObjectiveId, outError)) {
+            return false;
+        }
+        if (json.contains("state") && !ValidateRequiredString(json, "state", outAction.questState, outError)) {
+            return false;
+        }
+        if (outAction.questState.empty()) {
+            outAction.questState = "completed";
+        }
+        return true;
+    }
+
+    if (actionType == "narrative.startTimeline") {
+        outAction.type = ExternalModActionType::NarrativeStartTimeline;
+        if (!ValidateRequiredString(json, "timelineId", outAction.timelineId, outError) &&
+            !ValidateRequiredString(json, "id", outAction.timelineId, outError)) {
+            outError = "narrative.startTimeline requires timelineId/id";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "narrative.skipTimeline") {
+        outAction.type = ExternalModActionType::NarrativeSkipTimeline;
+        if (json.contains("timelineId") && !ValidateRequiredString(json, "timelineId", outAction.timelineId, outError)) {
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "dev.reloadAll") {
+        outAction.type = ExternalModActionType::DevReloadAll;
+        return true;
+    }
+
+    if (actionType == "dev.reloadTarget") {
+        outAction.type = ExternalModActionType::DevReloadTarget;
+        if (!ValidateRequiredString(json, "target", outAction.variableValue, outError) &&
+            !ValidateRequiredString(json, "registry", outAction.variableValue, outError)) {
+            outError = "dev.reloadTarget requires target/registry";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "dev.console.exec") {
+        outAction.type = ExternalModActionType::DevConsoleExec;
+        if (!ValidateRequiredString(json, "commandId", outAction.consoleCommandId, outError) &&
+            !ValidateRequiredString(json, "id", outAction.consoleCommandId, outError)) {
+            outError = "dev.console.exec requires commandId/id";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "settings.get") {
+        outAction.type = ExternalModActionType::SettingsGet;
+        if (!ValidateRequiredString(json, "key", outAction.settingsKey, outError)) {
+            outError = "settings.get requires key";
+            return false;
+        }
+        if (json.contains("domain") && !ValidateRequiredString(json, "domain", outAction.settingsDomain, outError)) {
+            return false;
+        }
+        if (json.contains("storeKey")) {
+            if (!ValidateRequiredString(json, "storeKey", outAction.variableKey, outError)) {
+                return false;
+            }
+        } else {
+            outAction.variableKey = "__settings_value";
+        }
+        return true;
+    }
+
+    if (actionType == "settings.set") {
+        outAction.type = ExternalModActionType::SettingsSet;
+        if (!ValidateRequiredString(json, "key", outAction.settingsKey, outError)) {
+            outError = "settings.set requires key";
+            return false;
+        }
+        if (!json.contains("value")) {
+            outError = "settings.set requires value";
+            return false;
+        }
+        if (json["value"].is_string()) {
+            outAction.settingsValue = json["value"].get<std::string>();
+        } else if (json["value"].is_boolean()) {
+            outAction.settingsValue = json["value"].get<bool>() ? "true" : "false";
+        } else if (json["value"].is_number_integer()) {
+            outAction.settingsValue = std::to_string(json["value"].get<long long>());
+        } else if (json["value"].is_number_float()) {
+            outAction.settingsValue = std::to_string(json["value"].get<double>());
+        } else {
+            outError = "settings.set.value must be string|number|boolean";
+            return false;
+        }
+        if (json.contains("domain") && !ValidateRequiredString(json, "domain", outAction.settingsDomain, outError)) {
+            return false;
+        }
+        if (json.contains("applyMode") &&
+            !ValidateRequiredString(json, "applyMode", outAction.settingsApplyMode, outError)) {
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "settings.reset") {
+        outAction.type = ExternalModActionType::SettingsReset;
+        if (json.contains("key") && !ValidateRequiredString(json, "key", outAction.settingsKey, outError)) {
+            return false;
+        }
+        if (json.contains("domain") && !ValidateRequiredString(json, "domain", outAction.settingsDomain, outError)) {
+            return false;
+        }
+        if (json.contains("all")) {
+            if (!json["all"].is_boolean()) {
+                outError = "settings.reset.all must be boolean";
+                return false;
+            }
+            outAction.settingsResetAll = json["all"].get<bool>();
+        }
+        if (!outAction.settingsResetAll && outAction.settingsKey.empty()) {
+            outError = "settings.reset requires key or all=true";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "settings.list") {
+        outAction.type = ExternalModActionType::SettingsList;
+        if (json.contains("domain") && !ValidateRequiredString(json, "domain", outAction.settingsDomain, outError)) {
+            return false;
+        }
+        if (json.contains("storeKey")) {
+            if (!ValidateRequiredString(json, "storeKey", outAction.variableKey, outError)) {
+                return false;
+            }
+        } else {
+            outAction.variableKey = "__settings_list";
+        }
+        return true;
+    }
+
+    if (actionType == "setResourceValue" || actionType == "addResourceValue" || actionType == "consumeResource" ||
+        actionType == "refillResource" || actionType == "setResourceCapacity") {
+        if (actionType == "setResourceValue") {
+            outAction.type = ExternalModActionType::SetResourceValue;
+        } else if (actionType == "addResourceValue") {
+            outAction.type = ExternalModActionType::AddResourceValue;
+        } else if (actionType == "consumeResource") {
+            outAction.type = ExternalModActionType::ConsumeResource;
+        } else if (actionType == "refillResource") {
+            outAction.type = ExternalModActionType::RefillResource;
+        } else {
+            outAction.type = ExternalModActionType::SetResourceCapacity;
+        }
+        if (!ValidateRequiredString(json, "resourceId", outAction.resourceId, outError)) {
+            outError = actionType + " requires resourceId";
+            return false;
+        }
+        if (json.contains("value")) {
+            if (!json["value"].is_number()) {
+                outError = actionType + " value must be number";
+                return false;
+            }
+            outAction.floatValue = json["value"].get<float>();
+            outAction.hasFloatValue = true;
+        } else if (json.contains("amount")) {
+            if (!json["amount"].is_number()) {
+                outError = actionType + " amount must be number";
+                return false;
+            }
+            outAction.floatValue = json["amount"].get<float>();
+            outAction.hasFloatValue = true;
+        } else if (outAction.type != ExternalModActionType::RefillResource) {
+            outError = actionType + " requires value or amount";
+            return false;
+        }
+        return true;
+    }
+
+    if (actionType == "grantConsumableStack" || actionType == "consumeConsumableStack" ||
+        actionType == "fillActiveBottleContent") {
+        if (actionType == "grantConsumableStack") {
+            outAction.type = ExternalModActionType::GrantConsumableStack;
+        } else if (actionType == "consumeConsumableStack") {
+            outAction.type = ExternalModActionType::ConsumeConsumableStack;
+        } else {
+            outAction.type = ExternalModActionType::FillActiveBottleContent;
+        }
+        if (!ValidateRequiredString(json, "consumableId", outAction.consumableId, outError)) {
+            outError = actionType + " requires consumableId";
+            return false;
+        }
+        if (json.contains("value")) {
+            if (!json["value"].is_number()) {
+                outError = actionType + " value must be number";
+                return false;
+            }
+            outAction.floatValue = json["value"].get<float>();
+            outAction.hasFloatValue = true;
+        } else if (json.contains("amount")) {
+            if (!json["amount"].is_number()) {
+                outError = actionType + " amount must be number";
+                return false;
+            }
+            outAction.floatValue = json["amount"].get<float>();
+            outAction.hasFloatValue = true;
+        } else if (outAction.type != ExternalModActionType::FillActiveBottleContent) {
+            outAction.floatValue = 1.0f;
+            outAction.hasFloatValue = true;
+        }
+        return true;
+    }
+
     outError = "Unsupported action: " + actionType;
     return false;
 }
@@ -7202,7 +10112,12 @@ const ExternalModItemDefinition* FindCustomModelDefinitionForItem(const std::vec
     return selectedDefinition;
 }
 
-bool DrawCustomItemDefinitionModel(PlayState* play, const ExternalModItemDefinition& definition, bool loadModelViewMatrix) {
+bool HasCustomMeshModel(const ExternalModMeshDefinition& definition) {
+    return !definition.customModelTriangles.empty() || !definition.modelDisplayList.empty();
+}
+
+template <typename TDefinition>
+bool DrawCustomRenderableDefinitionModel(PlayState* play, const TDefinition& definition, bool loadModelViewMatrix) {
     if (play == nullptr) {
         return false;
     }
@@ -7338,6 +10253,14 @@ bool DrawCustomItemDefinitionModel(PlayState* play, const ExternalModItemDefinit
     }
 
     return drewCustomModel;
+}
+
+bool DrawCustomItemDefinitionModel(PlayState* play, const ExternalModItemDefinition& definition, bool loadModelViewMatrix) {
+    return DrawCustomRenderableDefinitionModel(play, definition, loadModelViewMatrix);
+}
+
+bool DrawCustomMeshDefinitionModel(PlayState* play, const ExternalModMeshDefinition& definition, bool loadModelViewMatrix) {
+    return DrawCustomRenderableDefinitionModel(play, definition, loadModelViewMatrix);
 }
 
 extern "C" void ExternalMods_DrawCustomGetItemModel(PlayState* play, GetItemEntry* getItemEntry) {
@@ -10113,17 +13036,37 @@ std::string NormalizeBlackboardScope(const std::string& scope) {
 }
 
 bool TryParseFloatString(const std::string& value, float& outNumber) {
-    try {
-        size_t parsed = 0;
-        const float parsedValue = std::stof(value, &parsed);
-        if (parsed != value.size()) {
-            return false;
+    std::string normalizedValue = value;
+    auto trimWhitespace = [](std::string& text) {
+        size_t start = 0;
+        while (start < text.size() && std::isspace(static_cast<unsigned char>(text[start]))) {
+            ++start;
         }
-        outNumber = parsedValue;
-        return std::isfinite(outNumber);
-    } catch (...) {
+        size_t end = text.size();
+        while (end > start && std::isspace(static_cast<unsigned char>(text[end - 1]))) {
+            --end;
+        }
+        text = text.substr(start, end - start);
+    };
+
+    trimWhitespace(normalizedValue);
+    if (normalizedValue.empty()) {
         return false;
     }
+
+    std::replace(normalizedValue.begin(), normalizedValue.end(), ',', '.');
+
+    std::istringstream stream(normalizedValue);
+    stream.imbue(std::locale::classic());
+
+    float parsedValue = 0.0f;
+    stream >> std::noskipws >> parsedValue;
+    if (stream.fail() || !stream.eof()) {
+        return false;
+    }
+
+    outNumber = parsedValue;
+    return std::isfinite(outNumber);
 }
 
 bool TryParseUIntPtrString(const std::string& value, uintptr_t& outNumber) {
@@ -10453,6 +13396,67 @@ bool EvaluateBehaviorCondition(const ExternalModPackage& package, const External
         return isSet;
     }
 
+    if (type == "resourceisempty" || type == "resourcebelowpercent" || type == "resourcecanconsume") {
+        const std::string resourceId = condition.key.empty() ? condition.value : condition.key;
+        if (resourceId.empty()) {
+            return false;
+        }
+        const auto stateIt = package.runtime.playerResourceStates.find(resourceId);
+        if (stateIt == package.runtime.playerResourceStates.end() || !stateIt->second.initialized) {
+            return false;
+        }
+        const auto& state = stateIt->second;
+        if (type == "resourceisempty") {
+            return state.currentValue <= 0.0001f;
+        }
+        if (type == "resourcebelowpercent") {
+            if (state.capacityValue <= 0.0f) {
+                return false;
+            }
+            float threshold = condition.hasNumberValue ? condition.numberValue : 0.0f;
+            if (!condition.value.empty() && condition.key != condition.value) {
+                TryParseFloatString(condition.value, threshold);
+            }
+            threshold = std::clamp(threshold, 0.0f, 1.0f);
+            return (state.currentValue / state.capacityValue) <= threshold;
+        }
+
+        float amount = condition.hasNumberValue ? condition.numberValue : 0.0f;
+        if (!condition.value.empty() && condition.key != condition.value) {
+            TryParseFloatString(condition.value, amount);
+        }
+        amount = std::max(0.0f, amount);
+        return state.currentValue + 0.0001f >= amount;
+    }
+
+    if (type == "consumablestackatleast") {
+        const std::string consumableId = condition.key.empty() ? condition.value : condition.key;
+        if (consumableId.empty()) {
+            return false;
+        }
+        const auto stackIt = package.runtime.consumableStackCounts.find(consumableId);
+        if (stackIt == package.runtime.consumableStackCounts.end()) {
+            return false;
+        }
+        float amount = condition.hasNumberValue ? condition.numberValue : 0.0f;
+        if (!condition.value.empty() && condition.key != condition.value) {
+            TryParseFloatString(condition.value, amount);
+        }
+        return stackIt->second >= static_cast<int32_t>(std::ceil(std::max(0.0f, amount)));
+    }
+
+    if (type == "activeitemisemptybottle") {
+        auto* player = gPlayState != nullptr ? GET_PLAYER(gPlayState) : nullptr;
+        if (player == nullptr || player->heldItemButton <= 0 || player->heldItemButton >= ARRAY_COUNT(gSaveContext.equips.buttonItems)) {
+            return false;
+        }
+        return gSaveContext.equips.buttonItems[player->heldItemButton] == ITEM_BOTTLE;
+    }
+
+    if (type == "playerinwater") {
+        return IsPlayerInWaterBox(gPlayState, gPlayState != nullptr ? GET_PLAYER(gPlayState) : nullptr);
+    }
+
     if (type == "var" || type == "varequals" || type == "varcompare") {
         if (condition.key.empty()) {
             return false;
@@ -10602,37 +13606,314 @@ const std::vector<ExternalModPackage>& ExternalModManager::GetPackages() const {
     return mPackages;
 }
 
-bool ExternalModManager::TryResolveMaterialAlbedoOverridePath(const std::string& texturePath, int16_t sceneId,
-                                                              int16_t roomId, std::string& outOverridePath) const {
+bool ExternalModManager::TryResolveMaterialAlbedoOverridePath(const std::string& texturePath, int16_t sceneId, int16_t roomId,
+                                                              std::string& outOverridePath) const {
     outOverridePath.clear();
-    const auto* material = ResolveEffectiveMaterialForTexturePath(mPackages, texturePath, sceneId, roomId);
-    if (material == nullptr || material->mapAlbedoAsset.empty()) {
-        return false;
+    const auto* selectedMaterial = ResolveEffectiveMaterialForTexturePath(mPackages, texturePath, sceneId, roomId);
+    if (selectedMaterial != nullptr && !selectedMaterial->mapAlbedoAsset.empty()) {
+        outOverridePath = selectedMaterial->mapAlbedoAsset;
+        return true;
     }
-    outOverridePath = material->mapAlbedoAsset;
-    return true;
+    return false;
 }
 
 uint32_t ExternalModManager::GetMaterialFallbackGenerationFlags(const std::string& texturePath, int16_t sceneId,
                                                                 int16_t roomId) const {
-    const auto* material = ResolveEffectiveMaterialForTexturePath(mPackages, texturePath, sceneId, roomId);
-    if (material == nullptr) {
+    const auto* selectedMaterial = ResolveEffectiveMaterialForTexturePath(mPackages, texturePath, sceneId, roomId);
+    if (selectedMaterial == nullptr) {
         return 0;
     }
+
     uint32_t flags = 0;
-    if (material->mapNormalAsset.empty()) {
-        flags |= 1u << 0;
+    if (selectedMaterial->mapNormalAsset.empty()) {
+        flags |= kMaterialFallbackGenerateNormal;
     }
-    if (material->mapOrmAsset.empty()) {
-        flags |= 1u << 1;
+    if (selectedMaterial->mapOrmAsset.empty()) {
+        flags |= kMaterialFallbackGenerateOrm;
     }
     return flags;
 }
 
 float ExternalModManager::GetMaterialFallbackNormalScale(const std::string& texturePath, int16_t sceneId,
                                                          int16_t roomId) const {
-    const auto* material = ResolveEffectiveMaterialForTexturePath(mPackages, texturePath, sceneId, roomId);
-    return material == nullptr ? 1.0f : std::clamp(material->normalScale, 0.0f, 8.0f);
+    const auto* selectedMaterial = ResolveEffectiveMaterialForTexturePath(mPackages, texturePath, sceneId, roomId);
+    if (selectedMaterial == nullptr) {
+        return 1.0f;
+    }
+    return std::clamp(selectedMaterial->normalScale, 0.0f, 8.0f);
+}
+
+void ExternalModManager::GetMaterialRuntimeStats(int16_t sceneId, int16_t roomId, size_t& outActiveOverrides,
+                                                 size_t& outBoundDefinitions, size_t& outBoundAlbedoDefinitions) const {
+    outActiveOverrides = 0;
+    outBoundDefinitions = 0;
+    outBoundAlbedoDefinitions = 0;
+
+    for (const auto& package : mPackages) {
+        if (!package.valid || !package.runtime.enabled) {
+            continue;
+        }
+
+        outActiveOverrides += package.runtime.materialOverrides.size();
+        for (const auto& material : package.runtime.materialDefinitions) {
+            if (!MaterialHasSceneRoomBinding(material, sceneId, roomId)) {
+                continue;
+            }
+            outBoundDefinitions++;
+            if (!material.mapAlbedoAsset.empty()) {
+                outBoundAlbedoDefinitions++;
+            }
+        }
+    }
+}
+
+bool ExternalModManager::GetRuntimePermissionGrant(const std::string& modId, const std::string& permission,
+                                                   bool& outGranted) const {
+    if (modId.empty() || permission.empty()) {
+        return false;
+    }
+
+    const auto normalizedPermission = ToLower(permission);
+    const auto* package = FindPackageByModId(modId);
+    if (package == nullptr) {
+        return false;
+    }
+    if (!ManifestDeclaresRuntimePermission(package->manifest, normalizedPermission)) {
+        return false;
+    }
+
+    if (const auto it = package->runtime.permissionGrants.find(normalizedPermission);
+        it != package->runtime.permissionGrants.end()) {
+        outGranted = it->second;
+    } else {
+        outGranted = DefaultGrantForRuntimePermission(normalizedPermission);
+    }
+    return true;
+}
+
+bool ExternalModManager::SetRuntimePermissionGrant(const std::string& modId, const std::string& permission, bool granted,
+                                                   std::string& outError) {
+    outError.clear();
+    if (modId.empty() || permission.empty()) {
+        outError = "Invalid modId/permission";
+        return false;
+    }
+
+    const auto normalizedPermission = ToLower(permission);
+    auto* package = FindPackageByModId(modId);
+    if (package == nullptr) {
+        outError = "Mod package not found";
+        return false;
+    }
+    if (!ManifestDeclaresRuntimePermission(package->manifest, normalizedPermission)) {
+        outError = "Manifest does not declare permission: " + normalizedPermission;
+        return false;
+    }
+
+    package->runtime.permissionGrants[normalizedPermission] = granted;
+    if (!PersistPermissionStoreForRuntime(*package, &outError)) {
+        return false;
+    }
+
+    SPDLOG_INFO("[ExternalMods] Permission {} for {} is now {}", normalizedPermission, package->manifest.id,
+                granted ? "granted" : "denied");
+    return true;
+}
+
+bool ExternalModManager::IsRuntimePermissionRisky(const std::string& permission) {
+    return IsRiskyRuntimePermission(ToLower(permission));
+}
+
+bool ExternalModManager::ClearRuntimeQuarantineForMod(const std::string& modId, std::string& outError) {
+    outError.clear();
+    if (modId.empty()) {
+        outError = "Invalid modId";
+        return false;
+    }
+
+    if (!ClearRuntimeQuarantineRecord(modId, &outError)) {
+        return false;
+    }
+
+    SPDLOG_INFO("[ExternalMods] Cleared runtime quarantine for {}", modId);
+    return true;
+}
+
+bool ExternalModManager::GetModSettingValue(const std::string& modId, const std::string& key, const std::string& domain,
+                                            std::string& outValue) const {
+    outValue.clear();
+    if (modId.empty() || key.empty()) {
+        return false;
+    }
+
+    const auto* package = FindPackageByModId(modId);
+    if (package == nullptr) {
+        return false;
+    }
+
+    const auto* entry = FindSettingSchemaEntry(package->runtime.settingsSchema, key);
+    const auto effectiveDomain = ResolveEffectiveSettingDomain(package->manifest, entry, domain);
+    const auto* store = ResolveSettingsStoreByDomain(package->runtime, effectiveDomain);
+    if (store == nullptr) {
+        return false;
+    }
+
+    if (const auto it = store->find(key); it != store->end()) {
+        outValue = it->second;
+        return true;
+    }
+
+    if (entry != nullptr) {
+        outValue = entry->defaultValue;
+        return true;
+    }
+
+    return false;
+}
+
+bool ExternalModManager::SetModSettingValue(const std::string& modId, const std::string& key, const std::string& value,
+                                            const std::string& domain, const std::string& applyMode,
+                                            std::string& outError) {
+    outError.clear();
+    if (modId.empty() || key.empty()) {
+        outError = "Invalid modId/key";
+        return false;
+    }
+
+    auto* package = FindPackageByModId(modId);
+    if (package == nullptr) {
+        outError = "Mod package not found";
+        return false;
+    }
+
+    const auto* entry = FindSettingSchemaEntry(package->runtime.settingsSchema, key);
+    std::string normalizedValue;
+    if (!NormalizeSettingValueForEntry(entry, value, normalizedValue, outError)) {
+        return false;
+    }
+
+    const auto effectiveDomain = ResolveEffectiveSettingDomain(package->manifest, entry, domain);
+    auto* store = ResolveSettingsStoreByDomain(package->runtime, effectiveDomain);
+    if (store == nullptr) {
+        outError = "Failed resolving settings domain";
+        return false;
+    }
+
+    const auto effectiveApplyMode = ResolveEffectiveSettingApplyMode(entry, applyMode);
+    const auto existingIt = store->find(key);
+    if (existingIt != store->end() && existingIt->second == normalizedValue) {
+        return true;
+    }
+
+    (*store)[key] = normalizedValue;
+    if (effectiveDomain == ExternalModSettingDomain::Global) {
+        package->runtime.settingsGlobalDirty = true;
+    } else if (effectiveDomain == ExternalModSettingDomain::Save) {
+        package->runtime.settingsSaveDirty = true;
+    }
+
+    package->runtime.globalBlackboard["settings." + key] = normalizedValue;
+    package->runtime.globalBlackboard["__settings_last_key"] = key;
+    package->runtime.globalBlackboard["__settings_last_value"] = normalizedValue;
+
+    switch (effectiveApplyMode) {
+        case ExternalModSettingApplyMode::SceneReload:
+            package->runtime.pendingSceneReloadSettings[key] = normalizedValue;
+            package->runtime.pendingRestartSettings.erase(key);
+            break;
+        case ExternalModSettingApplyMode::Restart:
+            package->runtime.pendingRestartSettings[key] = normalizedValue;
+            package->runtime.pendingSceneReloadSettings.erase(key);
+            break;
+        case ExternalModSettingApplyMode::Realtime:
+        default:
+            package->runtime.pendingSceneReloadSettings.erase(key);
+            package->runtime.pendingRestartSettings.erase(key);
+            DispatchSettingsChangedHookForPackage(*package, key, effectiveDomain, effectiveApplyMode, normalizedValue);
+            break;
+    }
+
+    return true;
+}
+
+bool ExternalModManager::ResetModSettingValue(const std::string& modId, const std::string& key, const std::string& domain,
+                                              bool resetAll, std::string& outError) {
+    outError.clear();
+    if (modId.empty()) {
+        outError = "Invalid modId";
+        return false;
+    }
+
+    auto* package = FindPackageByModId(modId);
+    if (package == nullptr) {
+        outError = "Mod package not found";
+        return false;
+    }
+
+    auto resetKey = [&](const std::string& targetKey) -> bool {
+        if (targetKey.empty()) {
+            outError = "Invalid setting key";
+            return false;
+        }
+        const auto* entry = FindSettingSchemaEntry(package->runtime.settingsSchema, targetKey);
+        const auto effectiveDomain = ResolveEffectiveSettingDomain(package->manifest, entry, domain);
+        auto* store = ResolveSettingsStoreByDomain(package->runtime, effectiveDomain);
+        if (store == nullptr) {
+            outError = "Failed resolving settings domain";
+            return false;
+        }
+
+        const std::string resetValue = entry != nullptr ? entry->defaultValue : std::string{};
+        if (resetValue.empty() && entry == nullptr) {
+            store->erase(targetKey);
+        } else {
+            (*store)[targetKey] = resetValue;
+        }
+
+        if (effectiveDomain == ExternalModSettingDomain::Global) {
+            package->runtime.settingsGlobalDirty = true;
+        } else if (effectiveDomain == ExternalModSettingDomain::Save) {
+            package->runtime.settingsSaveDirty = true;
+        }
+
+        package->runtime.pendingSceneReloadSettings.erase(targetKey);
+        package->runtime.pendingRestartSettings.erase(targetKey);
+        if (!resetValue.empty()) {
+            package->runtime.globalBlackboard["settings." + targetKey] = resetValue;
+            DispatchSettingsChangedHookForPackage(*package, targetKey, effectiveDomain,
+                                                  entry != nullptr ? entry->applyMode : ExternalModSettingApplyMode::Realtime,
+                                                  resetValue);
+        } else {
+            package->runtime.globalBlackboard.erase("settings." + targetKey);
+        }
+        return true;
+    };
+
+    if (resetAll) {
+        std::unordered_set<std::string> keys;
+        for (const auto& group : package->runtime.settingsSchema.groups) {
+            for (const auto& entry : group.entries) {
+                keys.insert(entry.key);
+            }
+        }
+        for (const auto& [storedKey, _] : package->runtime.settingsGlobalValues) {
+            keys.insert(storedKey);
+        }
+        for (const auto& [storedKey, _] : package->runtime.settingsSaveValues) {
+            keys.insert(storedKey);
+        }
+        for (const auto& [storedKey, _] : package->runtime.settingsSessionValues) {
+            keys.insert(storedKey);
+        }
+        for (const auto& targetKey : keys) {
+            if (!resetKey(targetKey)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    return resetKey(key);
 }
 
 bool ExternalModManager::TryConsumePendingSceneLoadRequest(int16_t sceneId, ExternalModPendingSceneLoadRequest& outRequest) {
@@ -10701,6 +13982,10 @@ std::string ExternalModManager::BuildBindingCVarName(const std::string& modId, c
     return "gExternalMods.Input." + SanitizeCVarSegment(modId) + "." + SanitizeCVarSegment(bindingId);
 }
 
+std::string ExternalModManager::BuildRenderInspectorOverlayCVarName(const std::string& modId, const std::string& overlayId) {
+    return "gExternalMods.RenderInspector." + SanitizeCVarSegment(modId) + "." + SanitizeCVarSegment(overlayId);
+}
+
 std::string ExternalModManager::BuildCameraHotkeyScancodeCVarName(const std::string& modId,
                                                                    const std::string& hotkeyId) {
     return "gExternalMods.Hotkeys." + SanitizeCVarSegment(modId) + "." + SanitizeCVarSegment(hotkeyId) + ".Scancode";
@@ -10708,6 +13993,84 @@ std::string ExternalModManager::BuildCameraHotkeyScancodeCVarName(const std::str
 
 std::string ExternalModManager::BuildHotkeyScancodeCVarName(const std::string& modId, const std::string& hotkeyId) {
     return "gExternalMods.Hotkeys." + SanitizeCVarSegment(modId) + "." + SanitizeCVarSegment(hotkeyId) + ".Scancode";
+}
+
+bool ExternalModManager::GetRenderInspectorOverlayVisible(const std::string& modId, const std::string& overlayId,
+                                                          bool& outVisible) const {
+    outVisible = false;
+    const auto packageIt =
+        std::find_if(mPackages.begin(), mPackages.end(), [&modId](const ExternalModPackage& package) {
+            return package.manifest.id == modId;
+        });
+    if (packageIt == mPackages.end()) {
+        return false;
+    }
+
+    const auto* definition = FindRenderInspectorDefinitionInPackage(*packageIt, overlayId);
+    if (definition == nullptr) {
+        return false;
+    }
+
+    const auto cvarName = BuildRenderInspectorOverlayCVarName(modId, overlayId);
+    const int32_t persistedValue =
+        CVarGetInteger(cvarName.c_str(), definition->enabledByDefault ? 1 : 0);
+    const auto visibilityIt = packageIt->runtime.debugOverlayVisibility.find(overlayId);
+    const bool runtimeValue =
+        visibilityIt != packageIt->runtime.debugOverlayVisibility.end() ? visibilityIt->second : (persistedValue != 0);
+    outVisible = runtimeValue;
+    return true;
+}
+
+bool ExternalModManager::SetRenderInspectorOverlayVisible(const std::string& modId, const std::string& overlayId, bool visible,
+                                                          std::string& outError) {
+    const auto packageIt =
+        std::find_if(mPackages.begin(), mPackages.end(), [&modId](const ExternalModPackage& package) {
+            return package.manifest.id == modId;
+        });
+    if (packageIt == mPackages.end()) {
+        outError = "mod not found";
+        return false;
+    }
+
+    if (FindRenderInspectorDefinitionInPackage(*packageIt, overlayId) == nullptr) {
+        outError = "render inspector overlay not found";
+        return false;
+    }
+
+    packageIt->runtime.debugOverlayVisibility[overlayId] = visible;
+    const auto cvarName = BuildRenderInspectorOverlayCVarName(modId, overlayId);
+    CVarSetInteger(cvarName.c_str(), visible ? 1 : 0);
+    return true;
+}
+
+bool ExternalModManager::IsRenderInspectorDebugGateActive() const {
+    return mWorldGraphicsRuntime != nullptr && mWorldGraphicsRuntime->IsVolumetricsDebugActive();
+}
+
+bool ExternalModManager::HasVisibleRenderInspectorOverlay() const {
+    if (!IsRenderInspectorDebugGateActive()) {
+        return false;
+    }
+
+    for (const auto& package : mPackages) {
+        if (!package.runtime.enabled) {
+            continue;
+        }
+        for (const auto& inspector : package.runtime.renderInspectorDefinitions) {
+            bool visible = false;
+            if (GetRenderInspectorOverlayVisible(package.manifest.id, inspector.id, visible) && visible) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+std::string ExternalModManager::GetRenderInspectorSummaryText() const {
+    if (mWorldGraphicsRuntime == nullptr) {
+        return {};
+    }
+    return mWorldGraphicsRuntime->BuildInspectorSummary();
 }
 
 void ExternalModManager::ApplyDefaultKeyboardMappingsForPackage(const ExternalModPackage& package) const {
@@ -11235,6 +14598,541 @@ bool ExternalModManager::IsAimOverShoulderEnabled() const {
     return mAimCameraState.overShoulderEnabled;
 }
 
+bool ExternalModManager::ShouldUseAimOverShoulderBattleMovement(::PlayState* play, ::Player* player,
+                                                                int32_t heldItemAction) const {
+    (void)play;
+    (void)player;
+
+    if (!mAimCameraState.overShoulderEnabled) {
+        return false;
+    }
+
+    ExternalModAimCameraContext context = ExternalModAimCameraContext::CUp;
+    if (!TryResolveAimContextFromHeldItemAction(heldItemAction, context)) {
+        return false;
+    }
+
+    const auto* profile = ResolveActiveAimCameraProfile();
+    if (profile == nullptr) {
+        return false;
+    }
+
+    const uint8_t contextMask = AimCameraContextToMask(context);
+    return (profile->contextsMask & contextMask) != 0;
+}
+
+bool ExternalModManager::TryConsumePlayerResourceActionStart(::PlayState* play, ::Player* player,
+                                                             const std::string& actionTag) {
+    if (!mPlayerResourcesRuntime || actionTag.empty()) {
+        return true;
+    }
+
+    const auto resolver = BuildPlayerResourceSettingsResolver(*this);
+    bool allow = true;
+    for (auto& package : mPackages) {
+        if (!package.runtime.enabled || package.runtime.playerResourceDefinitions.empty()) {
+            continue;
+        }
+        if (!mPlayerResourcesRuntime->TryConsumeActionStart(package, play, player, actionTag, resolver)) {
+            allow = false;
+        }
+    }
+    return allow;
+}
+
+bool ExternalModManager::TickPlayerResourceAction(::PlayState* play, ::Player* player, const std::string& actionTag,
+                                                  float deltaSeconds) {
+    if (!mPlayerResourcesRuntime || actionTag.empty()) {
+        return true;
+    }
+
+    const auto resolver = BuildPlayerResourceSettingsResolver(*this);
+    bool allow = true;
+    for (auto& package : mPackages) {
+        if (!package.runtime.enabled || package.runtime.playerResourceDefinitions.empty()) {
+            continue;
+        }
+        if (!mPlayerResourcesRuntime->TickAction(package, play, player, actionTag, deltaSeconds, resolver)) {
+            allow = false;
+        }
+    }
+    return allow;
+}
+
+bool ExternalModManager::IsPlayerResourceActionInputActive(::PlayState* play, ::Player* player, const std::string& actionTag,
+                                                           ExternalModInputTriggerType trigger) const {
+    (void)player;
+    if (!mPlayerResourcesRuntime || play == nullptr || actionTag.empty()) {
+        return false;
+    }
+
+    const uint16_t curButtons = play->state.input[0].cur.button;
+    const uint16_t prevButtons = static_cast<uint16_t>(curButtons & ~play->state.input[0].press.button);
+    for (const auto& package : mPackages) {
+        if (!package.runtime.enabled || package.runtime.playerResourceDefinitions.empty()) {
+            continue;
+        }
+        if (mPlayerResourcesRuntime->IsActionInputActive(package, actionTag, curButtons, prevButtons, trigger)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void SyncInventoryBackedConsumableSlot(ExternalModPackage& package, const ExternalModPlayerConsumableDefinition& definition,
+                                       PlayState* play, Player* player) {
+    const int32_t slot = ResolveConsumableInventorySlot(definition);
+    if (slot < 0) {
+        return;
+    }
+
+    int32_t currentCount = 0;
+    if (const auto it = package.runtime.consumableStackCounts.find(definition.id); it != package.runtime.consumableStackCounts.end()) {
+        currentCount = it->second;
+    }
+
+    const auto ownerIt = package.runtime.customInventoryConsumableBySlot.find(slot);
+    const bool ownedByDefinition =
+        ownerIt != package.runtime.customInventoryConsumableBySlot.end() && ownerIt->second == definition.id;
+    const int32_t slotItem = gSaveContext.inventory.items[slot];
+
+    if (currentCount > 0 && (slotItem == ITEM_NONE || ownedByDefinition)) {
+        if (!ownedByDefinition) {
+            package.runtime.customInventoryConsumableBySlot[slot] = definition.id;
+            PersistInventoryConsumableSlotState(package, slot, &definition.id);
+        }
+        if (slotItem != definition.inventoryPlaceholderItemId) {
+            RefreshEquippedButtonsForSlot(play, player, slot, definition.inventoryPlaceholderItemId);
+        }
+        return;
+    }
+
+    if (!ownedByDefinition) {
+        return;
+    }
+
+    package.runtime.customInventoryConsumableBySlot.erase(slot);
+    PersistInventoryConsumableSlotState(package, slot, nullptr);
+    if (slotItem == definition.inventoryPlaceholderItemId) {
+        RefreshEquippedButtonsForSlot(play, player, slot, ITEM_NONE);
+    }
+}
+
+void SyncInventoryBackedConsumablesForPackage(ExternalModPackage& package, PlayState* play, Player* player) {
+    for (const auto& definition : package.runtime.playerConsumableDefinitions) {
+        if (definition.storageMode != ExternalModPlayerConsumableStorageMode::Stack || definition.inventoryPlaceholderItemId < 0) {
+            continue;
+        }
+        SyncInventoryBackedConsumableSlot(package, definition, play, player);
+    }
+}
+
+bool ExternalModManager::GrantConsumableStack(ExternalModPackage& package, const std::string& consumableId, int32_t amount,
+                                              const char* triggerName) {
+    (void)triggerName;
+    auto* definition = FindPlayerConsumableDefinition(package.runtime, consumableId);
+    if (definition == nullptr || definition->storageMode != ExternalModPlayerConsumableStorageMode::Stack) {
+        return false;
+    }
+    const int32_t clampedAmount = std::max(0, amount);
+    int32_t current = 0;
+    if (const auto it = package.runtime.consumableStackCounts.find(consumableId); it != package.runtime.consumableStackCounts.end()) {
+        current = it->second;
+    }
+    current = std::clamp(current + clampedAmount, 0, std::max(1, definition->maxStack));
+    package.runtime.consumableStackCounts[consumableId] = current;
+    PersistConsumableStackState(package, *definition, current);
+    SyncInventoryBackedConsumableSlot(package, *definition, gPlayState, gPlayState != nullptr ? GET_PLAYER(gPlayState) : nullptr);
+    return true;
+}
+
+bool ExternalModManager::ConsumeConsumableStack(ExternalModPackage& package, const std::string& consumableId, int32_t amount,
+                                                const char* triggerName, bool* outConsumed) {
+    if (outConsumed != nullptr) {
+        *outConsumed = false;
+    }
+    auto* definition = FindPlayerConsumableDefinition(package.runtime, consumableId);
+    if (definition == nullptr || definition->storageMode != ExternalModPlayerConsumableStorageMode::Stack) {
+        return false;
+    }
+    const int32_t clampedAmount = std::max(1, amount);
+    int32_t current = 0;
+    if (const auto it = package.runtime.consumableStackCounts.find(consumableId); it != package.runtime.consumableStackCounts.end()) {
+        current = it->second;
+    }
+    if (current < clampedAmount) {
+        return true;
+    }
+
+    if (!definition->effects.empty()) {
+        if (!mPlayerResourcesRuntime) {
+            return false;
+        }
+        const auto resolver = BuildPlayerResourceSettingsResolver(*this);
+        for (const auto& effect : definition->effects) {
+            if (!mPlayerResourcesRuntime->AddResourceValue(package, effect.resourceId, effect.addValue, resolver, triggerName)) {
+                return false;
+            }
+        }
+    }
+
+    current -= clampedAmount;
+    package.runtime.consumableStackCounts[consumableId] = current;
+    PersistConsumableStackState(package, *definition, current);
+    SyncInventoryBackedConsumableSlot(package, *definition, gPlayState, gPlayState != nullptr ? GET_PLAYER(gPlayState) : nullptr);
+    if (outConsumed != nullptr) {
+        *outConsumed = true;
+    }
+    return true;
+}
+
+float ExternalModManager::GetPlayerResourceMoveSpeedMultiplier(::PlayState* play, ::Player* player) const {
+    if (!mPlayerResourcesRuntime || play == nullptr || player == nullptr) {
+        return 1.0f;
+    }
+    auto isEnabled = [&](const ExternalModPackage& package, const ExternalModPlayerResourceDefinition& definition) {
+        if (definition.enabledSettingKey.empty()) {
+            return true;
+        }
+        std::string rawValue;
+        if (!GetModSettingValue(package.manifest.id, definition.enabledSettingKey, definition.settingsDomain, rawValue)) {
+            return true;
+        }
+        const std::string normalizedValue = ToLower(rawValue);
+        return !(normalizedValue == "0" || normalizedValue == "false" || normalizedValue == "no" || normalizedValue == "off");
+    };
+
+    float multiplier = 1.0f;
+    for (const auto& package : mPackages) {
+        if (!package.runtime.enabled || package.runtime.playerResourceDefinitions.empty()) {
+            continue;
+        }
+        for (const auto& definition : package.runtime.playerResourceDefinitions) {
+            if (!isEnabled(package, definition)) {
+                continue;
+            }
+            const auto stateIt = package.runtime.playerResourceStates.find(definition.id);
+            if (stateIt == package.runtime.playerResourceStates.end() || !stateIt->second.initialized || !stateIt->second.depleted) {
+                continue;
+            }
+            if (definition.depletionEffects.movementMultiplier > 0.0f) {
+                multiplier = std::min(multiplier, definition.depletionEffects.movementMultiplier);
+            }
+        }
+    }
+    return std::clamp(multiplier, 0.1f, 1.0f);
+}
+
+bool ExternalModManager::IsPlayerResourceSprintBlocked(::PlayState* play, ::Player* player) const {
+    if (!mPlayerResourcesRuntime || play == nullptr || player == nullptr) {
+        return false;
+    }
+    auto isEnabled = [&](const ExternalModPackage& package, const ExternalModPlayerResourceDefinition& definition) {
+        if (definition.enabledSettingKey.empty()) {
+            return true;
+        }
+        std::string rawValue;
+        if (!GetModSettingValue(package.manifest.id, definition.enabledSettingKey, definition.settingsDomain, rawValue)) {
+            return true;
+        }
+        const std::string normalizedValue = ToLower(rawValue);
+        return !(normalizedValue == "0" || normalizedValue == "false" || normalizedValue == "no" || normalizedValue == "off");
+    };
+    for (const auto& package : mPackages) {
+        if (!package.runtime.enabled || package.runtime.playerResourceDefinitions.empty()) {
+            continue;
+        }
+        for (const auto& definition : package.runtime.playerResourceDefinitions) {
+            if (!isEnabled(package, definition)) {
+                continue;
+            }
+            const auto stateIt = package.runtime.playerResourceStates.find(definition.id);
+            if (stateIt == package.runtime.playerResourceStates.end() || !stateIt->second.initialized || !stateIt->second.depleted) {
+                continue;
+            }
+            if (definition.depletionEffects.disableSprint) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+int32_t ExternalModManager::GetPlayerResourceRingViewCount(::PlayState* play, ::Player* player) const {
+    (void)play;
+    (void)player;
+    if (!mPlayerResourcesRuntime) {
+        return 0;
+    }
+
+    auto resolver = BuildPlayerResourceSettingsResolver(const_cast<ExternalModManager&>(*this));
+    int32_t count = 0;
+    for (const auto& package : mPackages) {
+        if (!package.runtime.enabled || package.runtime.resourceRingDefinitions.empty()) {
+            continue;
+        }
+        for (const auto& definition : package.runtime.resourceRingDefinitions) {
+            ExternalModsResourceRingView view;
+            if (mPlayerResourcesRuntime->BuildRingView(package, definition, resolver, view)) {
+                ++count;
+            }
+        }
+    }
+    return count;
+}
+
+bool ExternalModManager::GetPlayerResourceRingView(::PlayState* play, ::Player* player, int32_t index,
+                                                   ExternalModsResourceRingView& outView) const {
+    (void)play;
+    (void)player;
+    if (!mPlayerResourcesRuntime || index < 0) {
+        return false;
+    }
+
+    auto resolver = BuildPlayerResourceSettingsResolver(const_cast<ExternalModManager&>(*this));
+    int32_t currentIndex = 0;
+    for (const auto& package : mPackages) {
+        if (!package.runtime.enabled || package.runtime.resourceRingDefinitions.empty()) {
+            continue;
+        }
+        for (const auto& definition : package.runtime.resourceRingDefinitions) {
+            ExternalModsResourceRingView view;
+            if (!mPlayerResourcesRuntime->BuildRingView(package, definition, resolver, view)) {
+                continue;
+            }
+            if (currentIndex == index) {
+                outView = view;
+                return true;
+            }
+            ++currentIndex;
+        }
+    }
+    return false;
+}
+
+bool ExternalModManager::TryFillBottleFromWater(::PlayState* play, ::Player* player, int32_t& outPlaceholderItemId) {
+    outPlaceholderItemId = ITEM_MILK_BOTTLE;
+    if (play == nullptr || player == nullptr || !IsPlayerInWaterBox(play, player)) {
+        return false;
+    }
+    if ((player->stateFlags1 & (PLAYER_STATE1_IN_CUTSCENE | PLAYER_STATE1_ON_HORSE | PLAYER_STATE1_CLIMBING_LADDER)) != 0) {
+        return false;
+    }
+    if (player->heldItemButton <= 0 || player->heldItemButton >= ARRAY_COUNT(gSaveContext.equips.buttonItems)) {
+        return false;
+    }
+    if (gSaveContext.equips.buttonItems[player->heldItemButton] != ITEM_BOTTLE) {
+        return false;
+    }
+    const int32_t bottleSlot = ResolveHeldBottleSlot(player);
+    if (bottleSlot < 0) {
+        return false;
+    }
+
+    ExternalModPackage* selectedPackage = nullptr;
+    ExternalModPlayerConsumableDefinition* selectedDefinition = nullptr;
+    for (auto& package : mPackages) {
+        if (!package.runtime.enabled) {
+            continue;
+        }
+        for (auto& definition : package.runtime.playerConsumableDefinitions) {
+            if (definition.storageMode != ExternalModPlayerConsumableStorageMode::BottleContent ||
+                ToLower(definition.fillSource) != "water") {
+                continue;
+            }
+            if (selectedPackage == nullptr || package.manifest.loadPriority > selectedPackage->manifest.loadPriority ||
+                (package.manifest.loadPriority == selectedPackage->manifest.loadPriority &&
+                 package.manifest.id < selectedPackage->manifest.id)) {
+                selectedPackage = &package;
+                selectedDefinition = &definition;
+            }
+        }
+    }
+
+    if (selectedPackage == nullptr || selectedDefinition == nullptr) {
+        return false;
+    }
+
+    for (auto& package : mPackages) {
+        package.runtime.customBottleContentBySlot.erase(bottleSlot);
+        PersistBottleContentState(package, bottleSlot, nullptr);
+    }
+
+    ExternalModBottleContentState contentState;
+    contentState.consumableId = selectedDefinition->id;
+    contentState.remainingUses = std::max(1, selectedDefinition->usesPerFill);
+    selectedPackage->runtime.customBottleContentBySlot[bottleSlot] = contentState;
+    PersistBottleContentState(*selectedPackage, bottleSlot, &contentState);
+    outPlaceholderItemId = ResolveBottlePlaceholderItemId(*selectedDefinition, contentState.remainingUses);
+    return true;
+}
+
+bool ExternalModManager::IsHeldBottleCustomContentActive(::PlayState* play, ::Player* player) const {
+    (void)play;
+    const int32_t bottleSlot = ResolveHeldBottleSlot(player);
+    if (bottleSlot < 0) {
+        return false;
+    }
+    for (const auto& package : mPackages) {
+        if (!package.runtime.enabled) {
+            continue;
+        }
+        if (package.runtime.customBottleContentBySlot.find(bottleSlot) != package.runtime.customBottleContentBySlot.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ExternalModManager::ConsumeHeldBottleCustomContent(::PlayState* play, ::Player* player) {
+    const int32_t bottleSlot = ResolveHeldBottleSlot(player);
+    if (play == nullptr || player == nullptr || bottleSlot < 0) {
+        return false;
+    }
+
+    for (auto& package : mPackages) {
+        if (!package.runtime.enabled) {
+            continue;
+        }
+        const auto contentIt = package.runtime.customBottleContentBySlot.find(bottleSlot);
+        if (contentIt == package.runtime.customBottleContentBySlot.end()) {
+            continue;
+        }
+        auto* definition = FindPlayerConsumableDefinition(package.runtime, contentIt->second.consumableId);
+        if (definition == nullptr) {
+            return false;
+        }
+        if (!definition->effects.empty()) {
+            if (!mPlayerResourcesRuntime) {
+                return false;
+            }
+            const auto resolver = BuildPlayerResourceSettingsResolver(*this);
+            for (const auto& effect : definition->effects) {
+                if (!mPlayerResourcesRuntime->AddResourceValue(package, effect.resourceId, effect.addValue, resolver,
+                                                               "consumeHeldBottleCustomContent")) {
+                    return false;
+                }
+            }
+        }
+
+        ExternalModBottleContentState updatedState = contentIt->second;
+        updatedState.remainingUses = std::max(0, updatedState.remainingUses - 1);
+
+        if (updatedState.remainingUses > 0) {
+            contentIt->second.remainingUses = updatedState.remainingUses;
+            PersistBottleContentState(package, bottleSlot, &contentIt->second);
+            const int32_t placeholderItemId = ResolveBottlePlaceholderItemId(*definition, updatedState.remainingUses);
+            UpdateHeldBottleItemDirect(play, player, placeholderItemId,
+                                       ResolveBottlePlaceholderActionParam(placeholderItemId));
+        } else {
+            const int32_t returnItemId = definition->returnItemId >= 0 ? definition->returnItemId : ITEM_BOTTLE;
+            package.runtime.customBottleContentBySlot.erase(contentIt);
+            PersistBottleContentState(package, bottleSlot, nullptr);
+            UpdateHeldBottleItemDirect(play, player, returnItemId, PLAYER_IA_BOTTLE);
+        }
+        return true;
+    }
+    return false;
+}
+
+bool ExternalModManager::IsHeldInventoryConsumableActive(::PlayState* play, ::Player* player) const {
+    (void)play;
+    const int32_t slot = ResolveHeldEquippedSlot(player);
+    if (slot < 0) {
+        return false;
+    }
+
+    for (const auto& package : mPackages) {
+        if (!package.runtime.enabled) {
+            continue;
+        }
+        const auto mappingIt = package.runtime.customInventoryConsumableBySlot.find(slot);
+        if (mappingIt == package.runtime.customInventoryConsumableBySlot.end()) {
+            continue;
+        }
+        const auto* definition = FindPlayerConsumableDefinition(package.runtime, mappingIt->second);
+        if (definition == nullptr || definition->storageMode != ExternalModPlayerConsumableStorageMode::Stack ||
+            definition->inventoryPlaceholderItemId < 0 ||
+            definition->useAnimation != ExternalModPlayerConsumableUseAnimation::DrinkDemo) {
+            continue;
+        }
+        if (gSaveContext.inventory.items[slot] != definition->inventoryPlaceholderItemId) {
+            continue;
+        }
+        if (player == nullptr) {
+            continue;
+        }
+        if (const auto countIt = package.runtime.consumableStackCounts.find(definition->id);
+            countIt != package.runtime.consumableStackCounts.end() && countIt->second > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ExternalModManager::ConsumeHeldInventoryConsumable(::PlayState* play, ::Player* player) {
+    const int32_t slot = ResolveHeldEquippedSlot(player);
+    if (play == nullptr || player == nullptr || slot < 0) {
+        return false;
+    }
+
+    for (auto& package : mPackages) {
+        if (!package.runtime.enabled) {
+            continue;
+        }
+        const auto mappingIt = package.runtime.customInventoryConsumableBySlot.find(slot);
+        if (mappingIt == package.runtime.customInventoryConsumableBySlot.end()) {
+            continue;
+        }
+
+        auto* definition = FindPlayerConsumableDefinition(package.runtime, mappingIt->second);
+        if (definition == nullptr || definition->storageMode != ExternalModPlayerConsumableStorageMode::Stack ||
+            definition->inventoryPlaceholderItemId < 0 ||
+            definition->useAnimation != ExternalModPlayerConsumableUseAnimation::DrinkDemo) {
+            return false;
+        }
+
+        bool consumed = false;
+        if (!ConsumeConsumableStack(package, definition->id, 1, "consumeHeldInventoryConsumable", &consumed)) {
+            return false;
+        }
+        if (!consumed) {
+            return false;
+        }
+
+        SyncInventoryBackedConsumableSlot(package, *definition, play, player);
+        return true;
+    }
+
+    return false;
+}
+
+bool ExternalModManager::TryHandleGrassDrop(::PlayState* play, float x, float y, float z, int32_t grassType, int32_t dropParams) {
+    (void)x;
+    (void)y;
+    (void)z;
+    (void)grassType;
+    (void)dropParams;
+    for (auto& package : mPackages) {
+        if (!package.runtime.enabled || package.runtime.worldForageDefinitions.empty()) {
+            continue;
+        }
+        for (const auto& definition : package.runtime.worldForageDefinitions) {
+            if (definition.source != "tall_grass.cut") {
+                continue;
+            }
+            if (definition.chance > 0.0f && Rand_ZeroOne() > definition.chance) {
+                continue;
+            }
+            if (!definition.actions.empty()) {
+                ExecuteActions(package, definition.actions, "world.forage.tall_grass.cut");
+            }
+            return definition.replaceVanillaDrop;
+        }
+    }
+    return false;
+}
+
 bool ExternalModManager::DrawAimReticleIfActive(::PlayState* play, ::Player* player,
                                                 ExternalModAimCameraContext context) const {
     if (play == nullptr || player == nullptr) {
@@ -11577,6 +15475,34 @@ bool ExternalModManager::TryDrawButtonOverrideIcon(PlayState* play, int32_t butt
         return false;
     }
 
+    const int32_t cButtonSlotIndex = buttonIndex - 1;
+    if (cButtonSlotIndex >= 0 && cButtonSlotIndex < static_cast<int32_t>(ARRAY_COUNT(gSaveContext.equips.cButtonSlots))) {
+        const int32_t inventorySlot = gSaveContext.equips.cButtonSlots[cButtonSlotIndex];
+        if (inventorySlot >= SLOT_BOTTLE_1 && inventorySlot <= SLOT_BOTTLE_4) {
+            for (const auto& package : mPackages) {
+                if (!package.runtime.enabled) {
+                    continue;
+                }
+                const auto contentIt = package.runtime.customBottleContentBySlot.find(inventorySlot);
+                if (contentIt == package.runtime.customBottleContentBySlot.end()) {
+                    continue;
+                }
+                const auto* definition =
+                    FindPlayerConsumableDefinition(package.runtime, contentIt->second.consumableId);
+                if (definition == nullptr) {
+                    break;
+                }
+                const uint8_t* iconTexture =
+                    ResolveBottlePlaceholderIconTexture(*definition, contentIt->second.remainingUses);
+                if (iconTexture != nullptr) {
+                    Interface_DrawItemIconTexture(play, const_cast<uint8_t*>(iconTexture), static_cast<s16>(buttonIndex));
+                    return true;
+                }
+                break;
+            }
+        }
+    }
+
     const auto& assignment = mActionButtonAssignments[buttonIndex];
     if (assignment.source != ActionButtonSource::Mod || assignment.modId.empty() || assignment.itemId.empty()) {
         return false;
@@ -11692,6 +15618,191 @@ bool ExternalModManager::DrawSurfBoardIfActive(PlayState* play, Player* player) 
     return drewBoard;
 }
 
+void ExternalModManager::DrawPrefabVisuals(PlayState* play) {
+    if (play == nullptr) {
+        return;
+    }
+
+    auto* player = GET_PLAYER(play);
+    if (player == nullptr) {
+        return;
+    }
+
+    constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
+    const int16_t sceneId = static_cast<int16_t>(play->sceneNum);
+    const int16_t roomId = play->roomCtx.curRoom.num;
+    const Vec3f playerPos = player->actor.world.pos;
+
+    auto drawPrefabInstance = [&](const std::string& prefabSourceModId, const std::string& rawPrefabId, float posX,
+                                  float posY, float posZ, float rotX, float rotY, float rotZ, float scaleX,
+                                  float scaleY, float scaleZ, float lodDistance) {
+        const std::string resolvedPrefabId = ResolveProfileIdForMod(prefabSourceModId, rawPrefabId);
+        const ExternalModPackage* prefabOwner = nullptr;
+        const auto* prefab = FindDefinitionAcrossPackages<ExternalModPrefabDefinition>(
+            mPackages, resolvedPrefabId,
+            [](const ExternalModRuntime& runtime) -> const std::vector<ExternalModPrefabDefinition>& {
+                return runtime.prefabDefinitions;
+            },
+            &prefabOwner);
+        if (prefab == nullptr) {
+            if (gExternalModMissingPrefabWarnings.insert(prefabSourceModId + "|" + resolvedPrefabId).second) {
+                SPDLOG_WARN("[ExternalMods] Missing prefab definition for {}: {}", prefabSourceModId, resolvedPrefabId);
+            }
+            return;
+        }
+
+        const float dx = playerPos.x - posX;
+        const float dy = playerPos.y - posY;
+        const float dz = playerPos.z - posZ;
+        const float distanceToPlayer = std::sqrt(dx * dx + dy * dy + dz * dz);
+        const float effectiveLodDistance =
+            lodDistance > 0.0f ? std::min(lodDistance, prefab->lodDistance) : prefab->lodDistance;
+        if (distanceToPlayer > std::max(1.0f, effectiveLodDistance)) {
+            return;
+        }
+
+        const std::string resolvedMeshId =
+            ResolveProfileIdForMod(prefabOwner != nullptr ? prefabOwner->manifest.id : prefab->sourceModId, prefab->meshId);
+        const ExternalModPackage* meshOwner = nullptr;
+        const auto* mesh = FindDefinitionAcrossPackages<ExternalModMeshDefinition>(
+            mPackages, resolvedMeshId,
+            [](const ExternalModRuntime& runtime) -> const std::vector<ExternalModMeshDefinition>& {
+                return runtime.meshDefinitions;
+            },
+            &meshOwner);
+        if (mesh == nullptr || !HasCustomMeshModel(*mesh)) {
+            const std::string warningKey =
+                (meshOwner != nullptr ? meshOwner->manifest.id : prefabSourceModId) + "|" + resolvedMeshId;
+            if (gExternalModMissingMeshWarnings.insert(warningKey).second) {
+                SPDLOG_WARN("[ExternalMods] Missing or empty mesh definition for {}: {}", prefabSourceModId,
+                            resolvedMeshId);
+            }
+            return;
+        }
+
+        Matrix_Push();
+        Matrix_Translate(posX + prefab->offsetX, posY + prefab->offsetY, posZ + prefab->offsetZ, MTXMODE_NEW);
+        if (prefab->billboard) {
+            Matrix_ReplaceRotation(&play->billboardMtxF);
+            if (std::abs(prefab->rotOffsetZ) > 0.0001f) {
+                Matrix_RotateZ(prefab->rotOffsetZ * kDegToRad, MTXMODE_APPLY);
+            }
+        } else {
+            Matrix_RotateX((rotX + prefab->rotOffsetX) * kDegToRad, MTXMODE_APPLY);
+            Matrix_RotateY((rotY + prefab->rotOffsetY) * kDegToRad, MTXMODE_APPLY);
+            Matrix_RotateZ((rotZ + prefab->rotOffsetZ) * kDegToRad, MTXMODE_APPLY);
+        }
+        Matrix_Scale(scaleX * prefab->scaleX, scaleY * prefab->scaleY, scaleZ * prefab->scaleZ, MTXMODE_APPLY);
+        DrawCustomMeshDefinitionModel(play, *mesh, true);
+        Matrix_Pop();
+    };
+
+    for (const auto& package : mPackages) {
+        if (!package.valid || !package.runtime.enabled) {
+            continue;
+        }
+
+        for (const auto& instance : package.runtime.worldInstanceDefinitions) {
+            if (instance.sceneId != sceneId) {
+                continue;
+            }
+            if (instance.hasRoomId && instance.roomId != roomId) {
+                continue;
+            }
+            drawPrefabInstance(package.manifest.id, instance.prefabId, instance.posX, instance.posY, instance.posZ,
+                               instance.rotX, instance.rotY, instance.rotZ, instance.scaleX, instance.scaleY,
+                               instance.scaleZ, -1.0f);
+        }
+
+        for (const auto& authoring : package.runtime.worldAuthoringDefinitions) {
+            const ExternalModPackage* placementOwner = nullptr;
+            const ExternalModEditorPlacementDefinition* placement = nullptr;
+            if (!authoring.placementId.empty()) {
+                const std::string resolvedPlacementId =
+                    ResolveProfileIdForMod(package.manifest.id, authoring.placementId);
+                placement = FindDefinitionAcrossPackages<ExternalModEditorPlacementDefinition>(
+                    mPackages, resolvedPlacementId,
+                    [](const ExternalModRuntime& runtime) -> const std::vector<ExternalModEditorPlacementDefinition>& {
+                        return runtime.editorPlacementDefinitions;
+                    },
+                    &placementOwner);
+                if (placement == nullptr) {
+                    const std::string warningKey = package.manifest.id + "|" + resolvedPlacementId;
+                    if (gExternalModMissingPlacementWarnings.insert(warningKey).second) {
+                        SPDLOG_WARN("[ExternalMods] Missing editor placement definition for {}: {}", package.manifest.id,
+                                    resolvedPlacementId);
+                    }
+                    continue;
+                }
+            }
+
+            const int16_t effectiveSceneId =
+                authoring.hasSceneId ? authoring.sceneId :
+                (placement != nullptr && placement->hasSceneId ? placement->sceneId : static_cast<int16_t>(-1));
+            if (effectiveSceneId < 0) {
+                const std::string warningKey = package.manifest.id + "|" + authoring.id + "|scene";
+                if (gExternalModMissingPlacementWarnings.insert(warningKey).second) {
+                    SPDLOG_WARN("[ExternalMods] World authoring entry requires scene or placement scene: {}", authoring.id);
+                }
+                continue;
+            }
+            if (effectiveSceneId != sceneId) {
+                continue;
+            }
+
+            const bool effectiveHasRoomId = authoring.hasRoomId || (placement != nullptr && placement->hasRoomId);
+            const int16_t effectiveRoomId =
+                authoring.hasRoomId ? authoring.roomId : (placement != nullptr ? placement->roomId : static_cast<int16_t>(-1));
+            if (effectiveHasRoomId && effectiveRoomId != roomId) {
+                continue;
+            }
+
+            std::string effectivePrefabId = authoring.prefabId;
+            std::string effectivePrefabSourceModId = package.manifest.id;
+            if (effectivePrefabId.empty() && placement != nullptr) {
+                effectivePrefabId = placement->prefabId;
+                effectivePrefabSourceModId =
+                    placementOwner != nullptr ? placementOwner->manifest.id : placement->sourceModId;
+            }
+            if (effectivePrefabId.empty()) {
+                const std::string warningKey = package.manifest.id + "|" + authoring.id + "|prefab";
+                if (gExternalModMissingPlacementWarnings.insert(warningKey).second) {
+                    SPDLOG_WARN("[ExternalMods] World authoring entry requires prefabId or placement-backed prefab: {}",
+                                authoring.id);
+                }
+                continue;
+            }
+
+            const float effectiveRotX = authoring.hasRotation ? authoring.rotX : (placement != nullptr ? placement->rotX : 0.0f);
+            const float effectiveRotY = authoring.hasRotation ? authoring.rotY : (placement != nullptr ? placement->rotY : 0.0f);
+            const float effectiveRotZ = authoring.hasRotation ? authoring.rotZ : (placement != nullptr ? placement->rotZ : 0.0f);
+            const float effectiveScaleX =
+                authoring.hasScale ? authoring.scaleX : (placement != nullptr ? placement->scaleX : 1.0f);
+            const float effectiveScaleY =
+                authoring.hasScale ? authoring.scaleY : (placement != nullptr ? placement->scaleY : 1.0f);
+            const float effectiveScaleZ =
+                authoring.hasScale ? authoring.scaleZ : (placement != nullptr ? placement->scaleZ : 1.0f);
+
+            drawPrefabInstance(effectivePrefabSourceModId, effectivePrefabId, authoring.posX, authoring.posY,
+                               authoring.posZ, effectiveRotX, effectiveRotY, effectiveRotZ, effectiveScaleX,
+                               effectiveScaleY, effectiveScaleZ, -1.0f);
+        }
+
+        for (const auto& instance : package.runtime.actorInstances) {
+            if (!instance.active || instance.sceneId != sceneId) {
+                continue;
+            }
+            const auto* actorDefinition = FindActorDefinition(package.runtime, instance.definitionId);
+            if (actorDefinition == nullptr || actorDefinition->prefabId.empty()) {
+                continue;
+            }
+            drawPrefabInstance(package.manifest.id, actorDefinition->prefabId, instance.posX, instance.posY,
+                               instance.posZ, instance.rotX, instance.rotY, instance.rotZ, 1.0f, 1.0f, 1.0f,
+                               actorDefinition->lodDistance);
+        }
+    }
+}
+
 void ExternalModManager::LoadPersistentInventoryState() {
     mExtraInventoryCells.clear();
     mExtraInventoryPage = 0;
@@ -11793,6 +15904,489 @@ void ExternalModManager::SavePersistentInventoryState() const {
             saveManager->SaveData("itemId", assignment.itemId);
         });
     });
+}
+
+bool ExternalModManager::QueryPublicModJson(const std::string& requesterModId, const std::string& requestJson,
+                                            std::string& outJson, std::string& outError) const {
+    outJson.clear();
+    outError.clear();
+
+    nlohmann::json request = nlohmann::json::object();
+    if (!requestJson.empty()) {
+        request = nlohmann::json::parse(requestJson, nullptr, false);
+        if (request.is_discarded() || !request.is_object()) {
+            outError = "queryPublicJson requires a JSON object request";
+            return false;
+        }
+    }
+
+    std::string targetModId = requesterModId;
+    if (request.contains("targetModId") && request["targetModId"].is_string()) {
+        targetModId = request["targetModId"].get<std::string>();
+    }
+    if (targetModId.empty()) {
+        outError = "queryPublicJson requires targetModId";
+        return false;
+    }
+
+    const ExternalModPackage* targetPackage = FindPackageByModId(targetModId);
+    if (targetPackage == nullptr || !targetPackage->valid) {
+        outError = "Target mod package not found";
+        return false;
+    }
+
+    const std::string kind = ToLower(request.value("kind", std::string("summary")));
+    const std::string filterId = request.value("id", std::string());
+    const std::string filterNamespace = request.value("namespace", std::string());
+    const std::string filterCategory = ToLower(request.value("category", std::string()));
+    const bool includeRaw = request.value("includeRaw", false);
+
+    const auto isExportVisible = [&](const ExternalModManifest::ExportDefinition& definition) {
+        return IsShareAccessAllowed(targetPackage->manifest.id, requesterModId, definition.visibility, definition.friends,
+                                    definition.denyMods, targetPackage->manifest.sharePolicy.read);
+    };
+    const auto isServiceVisible = [&](const ExternalModManifest::ServiceEndpointDefinition& definition) {
+        return IsShareAccessAllowed(targetPackage->manifest.id, requesterModId, definition.visibility, definition.friends,
+                                    definition.denyMods, targetPackage->manifest.sharePolicy.nativeService);
+    };
+    const auto isDslVisible = [&](const ExternalModDslDocument& document) {
+        return IsShareAccessAllowed(targetPackage->manifest.id, requesterModId, document.visibility, document.friends,
+                                    document.denyMods, targetPackage->manifest.sharePolicy.read);
+    };
+    const bool isRuntimeStateVisible =
+        IsShareAccessAllowed(targetPackage->manifest.id, requesterModId, targetPackage->manifest.sharePolicy.read,
+                             targetPackage->manifest.sharePolicy.friends, targetPackage->manifest.sharePolicy.denyMods,
+                             "private");
+    const auto requireRuntimeVisibility = [&]() {
+        if (!isRuntimeStateVisible) {
+            outError = "Target mod state is not visible to requester";
+            return false;
+        }
+        return true;
+    };
+
+    nlohmann::json response = nlohmann::json::object();
+    response["schemaVersion"] = "host.query.result.v1";
+    response["ok"] = true;
+    response["kind"] = kind;
+    response["requesterModId"] = requesterModId;
+    response["targetModId"] = targetPackage->manifest.id;
+
+    if (kind == "summary") {
+        response["type"] = targetPackage->manifest.type;
+        response["runtimeType"] = targetPackage->manifest.runtimeType;
+        response["provides"] = targetPackage->manifest.provides;
+        response["uses"] = targetPackage->manifest.uses;
+        response["sharePolicy"] = SerializeManifestSharePolicy(targetPackage->manifest.sharePolicy);
+
+        nlohmann::json exports = nlohmann::json::array();
+        for (const auto& definition : targetPackage->manifest.exports) {
+            if (isExportVisible(definition)) {
+                exports.push_back(SerializeExportDefinition(definition));
+            }
+        }
+        response["exports"] = std::move(exports);
+
+        nlohmann::json services = nlohmann::json::array();
+        for (const auto& definition : targetPackage->manifest.serviceEndpoints) {
+            if (isServiceVisible(definition)) {
+                services.push_back(SerializeServiceEndpointDefinition(definition));
+            }
+        }
+        response["services"] = std::move(services);
+
+        nlohmann::json documents = nlohmann::json::array();
+        for (const auto& document : targetPackage->runtime.dslDocuments) {
+            if (isDslVisible(document)) {
+                documents.push_back(SerializeDslDocument(document, false));
+            }
+        }
+        response["dslDocuments"] = std::move(documents);
+    } else if (kind == "exports") {
+        nlohmann::json exports = nlohmann::json::array();
+        for (const auto& definition : targetPackage->manifest.exports) {
+            if (!isExportVisible(definition)) {
+                continue;
+            }
+            if (!filterId.empty() && definition.id != filterId) {
+                continue;
+            }
+            if (!filterNamespace.empty() && definition.namespaceId != filterNamespace) {
+                continue;
+            }
+            exports.push_back(SerializeExportDefinition(definition));
+        }
+        response["exports"] = std::move(exports);
+    } else if (kind == "services") {
+        nlohmann::json services = nlohmann::json::array();
+        for (const auto& definition : targetPackage->manifest.serviceEndpoints) {
+            if (!isServiceVisible(definition)) {
+                continue;
+            }
+            if (!filterId.empty() && definition.id != filterId) {
+                continue;
+            }
+            services.push_back(SerializeServiceEndpointDefinition(definition));
+        }
+        response["services"] = std::move(services);
+    } else if (kind == "dsl") {
+        nlohmann::json documents = nlohmann::json::array();
+        for (const auto& document : targetPackage->runtime.dslDocuments) {
+            if (!isDslVisible(document)) {
+                continue;
+            }
+            if (!filterId.empty() && document.id != filterId) {
+                continue;
+            }
+            if (!filterCategory.empty() && document.category != filterCategory) {
+                continue;
+            }
+            documents.push_back(SerializeDslDocument(document, includeRaw));
+        }
+        response["documents"] = std::move(documents);
+    } else if (kind == "runtime") {
+        if (!requireRuntimeVisibility()) {
+            return false;
+        }
+
+        nlohmann::json runtime = nlohmann::json::object();
+        runtime["enabled"] = targetPackage->runtime.enabled;
+        runtime["settingsSchema"] = {
+            { "valid", targetPackage->runtime.settingsSchema.valid },
+            { "version", targetPackage->runtime.settingsSchema.version },
+            { "groupCount", targetPackage->runtime.settingsSchema.groups.size() },
+        };
+        runtime["counts"] = {
+            { "items", targetPackage->runtime.itemDefinitions.size() },
+            { "actors", targetPackage->runtime.actorDefinitions.size() },
+            { "actorInstances", targetPackage->runtime.actorInstances.size() },
+            { "behaviors", targetPackage->runtime.behaviorDefinitions.size() },
+            { "scenes", targetPackage->runtime.sceneDefinitions.size() },
+            { "statuses", targetPackage->runtime.statusDefinitions.size() },
+            { "assets", targetPackage->runtime.assetSourceDefinitions.size() },
+            { "meshes", targetPackage->runtime.meshDefinitions.size() },
+            { "prefabs", targetPackage->runtime.prefabDefinitions.size() },
+            { "worldInstances", targetPackage->runtime.worldInstanceDefinitions.size() },
+            { "worldAuthoring", targetPackage->runtime.worldAuthoringDefinitions.size() },
+            { "worldSpawnProfiles", targetPackage->runtime.worldSpawnProfiles.size() },
+            { "narrativeQuests", targetPackage->runtime.narrativeQuestDefinitions.size() },
+            { "narrativeDialogues", targetPackage->runtime.narrativeDialogueDefinitions.size() },
+            { "narrativeTimelines", targetPackage->runtime.narrativeTimelineDefinitions.size() },
+            { "dslDocuments", targetPackage->runtime.dslDocuments.size() },
+            { "services", targetPackage->manifest.serviceEndpoints.size() },
+        };
+        runtime["active"] = {
+            { "openUiScreens", SerializeStringSet(targetPackage->runtime.openUiScreens) },
+            { "debugOverlayVisibility", SerializeBoolMap(targetPackage->runtime.debugOverlayVisibility) },
+            { "activeSceneProfileId", targetPackage->runtime.activeSceneProfileId },
+            { "activeRoomProfileId", targetPackage->runtime.activeRoomProfileId },
+            { "activePostFxPresetId", targetPackage->runtime.activePostFxPresetId },
+            { "activeSkylightProfileId", targetPackage->runtime.activeSkylightProfileId },
+            { "activeDialogueId", targetPackage->runtime.activeDialogueId },
+            { "activeDialogueNodeId", targetPackage->runtime.activeDialogueNodeId },
+        };
+        runtime["budgets"] = {
+            { "frameBudgetMs", targetPackage->runtime.frameBudgetMs },
+            { "maxHookCallsPerFrame", targetPackage->runtime.maxHookCallsPerFrame },
+            { "sandboxMaxCallMs", targetPackage->runtime.sandboxMaxCallMs },
+            { "sandboxMaxFrameBudgetMs", targetPackage->runtime.sandboxMaxFrameBudgetMs },
+            { "sandboxMaxHookCallsPerFrame", targetPackage->runtime.sandboxMaxHookCallsPerFrame },
+            { "behaviorMaxStepsPerActorPerFrame", targetPackage->runtime.behaviorMaxStepsPerActorPerFrame },
+        };
+        runtime["sandbox"] = {
+            { "deterministicMode", targetPackage->runtime.sandboxDeterministicMode },
+            { "allowedSurfaces", SerializeStringSet(targetPackage->runtime.sandboxAllowedSurfaces) },
+        };
+        runtime["permissions"] = SerializeBoolMap(targetPackage->runtime.permissionGrants);
+        runtime["globalBlackboard"] = SerializeStringMap(targetPackage->runtime.globalBlackboard);
+        runtime["cooldowns"] = SerializeIntMap(targetPackage->runtime.spellCooldownsById);
+        response["runtime"] = std::move(runtime);
+    } else if (kind == "settings") {
+        if (!requireRuntimeVisibility()) {
+            return false;
+        }
+
+        nlohmann::json settings = nlohmann::json::object();
+        settings["schema"] = {
+            { "valid", targetPackage->runtime.settingsSchema.valid },
+            { "version", targetPackage->runtime.settingsSchema.version },
+            { "groupCount", targetPackage->runtime.settingsSchema.groups.size() },
+        };
+        settings["global"] = SerializeStringMap(targetPackage->runtime.settingsGlobalValues);
+        settings["save"] = SerializeStringMap(targetPackage->runtime.settingsSaveValues);
+        settings["session"] = SerializeStringMap(targetPackage->runtime.settingsSessionValues);
+        settings["pendingSceneReload"] = SerializeStringMap(targetPackage->runtime.pendingSceneReloadSettings);
+        settings["pendingRestart"] = SerializeStringMap(targetPackage->runtime.pendingRestartSettings);
+        settings["globalDirty"] = targetPackage->runtime.settingsGlobalDirty;
+        settings["saveDirty"] = targetPackage->runtime.settingsSaveDirty;
+        response["settings"] = std::move(settings);
+    } else if (kind == "world") {
+        if (!requireRuntimeVisibility()) {
+            return false;
+        }
+
+        nlohmann::json world = nlohmann::json::object();
+        world["timeSegment"] = targetPackage->runtime.worldTimeSegment;
+        world["weatherState"] = targetPackage->runtime.worldWeatherState;
+        world["seed"] = targetPackage->runtime.worldSeed;
+        world["sceneProfileId"] = targetPackage->runtime.activeSceneProfileId;
+        world["roomProfileId"] = targetPackage->runtime.activeRoomProfileId;
+        world["postFxPresetId"] = targetPackage->runtime.activePostFxPresetId;
+        world["skylightProfileId"] = targetPackage->runtime.activeSkylightProfileId;
+        world["counts"] = {
+            { "meshes", targetPackage->runtime.meshDefinitions.size() },
+            { "prefabs", targetPackage->runtime.prefabDefinitions.size() },
+            { "instances", targetPackage->runtime.worldInstanceDefinitions.size() },
+            { "authoring", targetPackage->runtime.worldAuthoringDefinitions.size() },
+            { "storageDefinitions", targetPackage->runtime.worldStorageDefinitions.size() },
+            { "spawnProfiles", targetPackage->runtime.worldSpawnProfiles.size() },
+            { "timeWeatherDefinitions", targetPackage->runtime.worldTimeWeatherDefinitions.size() },
+            { "seedingDefinitions", targetPackage->runtime.worldSeedingDefinitions.size() },
+            { "migrationDefinitions", targetPackage->runtime.worldMigrationDefinitions.size() },
+            { "editorPlacements", targetPackage->runtime.editorPlacementDefinitions.size() },
+        };
+        world["globalBlackboard"] = SerializeStringMap(targetPackage->runtime.globalBlackboard);
+        response["world"] = std::move(world);
+    } else if (kind == "narrative") {
+        if (!requireRuntimeVisibility()) {
+            return false;
+        }
+
+        nlohmann::json narrative = nlohmann::json::object();
+        narrative["activeDialogueId"] = targetPackage->runtime.activeDialogueId;
+        narrative["activeDialogueNodeId"] = targetPackage->runtime.activeDialogueNodeId;
+        narrative["flags"] = SerializeStringMap(targetPackage->runtime.narrativeFlags);
+        narrative["quests"] = SerializeNarrativeQuestStates(targetPackage->runtime.narrativeQuests);
+        narrative["activeTimelines"] = SerializeNarrativeTimelineStates(targetPackage->runtime.activeTimelines);
+        narrative["counts"] = {
+            { "flagDefinitions", targetPackage->runtime.narrativeFlagDefinitions.size() },
+            { "dialogueDefinitions", targetPackage->runtime.narrativeDialogueDefinitions.size() },
+            { "questDefinitions", targetPackage->runtime.narrativeQuestDefinitions.size() },
+            { "timelineDefinitions", targetPackage->runtime.narrativeTimelineDefinitions.size() },
+        };
+        response["narrative"] = std::move(narrative);
+    } else if (kind == "storage") {
+        if (!requireRuntimeVisibility()) {
+            return false;
+        }
+
+        nlohmann::json storage = nlohmann::json::object();
+        storage["persistentDomains"] = SerializeNestedStringMap(targetPackage->runtime.persistentDomains);
+        storage["persistentEntities"] = SerializePersistentEntities(targetPackage->runtime.persistentEntities);
+        storage["counts"] = {
+            { "persistentDomains", targetPackage->runtime.persistentDomains.size() },
+            { "persistentEntities", targetPackage->runtime.persistentEntities.size() },
+            { "worldPersistenceDefinitions", targetPackage->runtime.worldPersistenceDefinitions.size() },
+            { "worldStorageDefinitions", targetPackage->runtime.worldStorageDefinitions.size() },
+        };
+        response["storage"] = std::move(storage);
+    } else if (kind == "inventory") {
+        if (!requireRuntimeVisibility()) {
+            return false;
+        }
+
+        nlohmann::json inventory = nlohmann::json::object();
+        nlohmann::json itemIds = nlohmann::json::array();
+        for (const auto& definition : targetPackage->runtime.itemDefinitions) {
+            itemIds.push_back(definition.id);
+        }
+
+        nlohmann::json extraCells = nlohmann::json::array();
+        for (size_t i = 0; i < mExtraInventoryCells.size(); ++i) {
+            const auto& cell = mExtraInventoryCells[i];
+            if (cell.modId != targetPackage->manifest.id) {
+                continue;
+            }
+            extraCells.push_back({
+                { "absoluteIndex", i },
+                { "itemId", cell.itemId },
+            });
+        }
+
+        nlohmann::json pages = nlohmann::json::array();
+        for (const auto& page : targetPackage->runtime.inventoryExtPages) {
+            pages.push_back({
+                { "pageId", page.pageId },
+                { "slotCount", page.slotCount },
+                { "slots", page.slots },
+            });
+        }
+
+        nlohmann::json assignedButtons = nlohmann::json::array();
+        for (size_t i = 1; i < mActionButtonAssignments.size(); ++i) {
+            const auto& assignment = mActionButtonAssignments[i];
+            if (assignment.source != ActionButtonSource::Mod || assignment.modId != targetPackage->manifest.id) {
+                continue;
+            }
+            assignedButtons.push_back({
+                { "buttonIndex", static_cast<int32_t>(i) },
+                { "itemId", assignment.itemId },
+            });
+        }
+
+        inventory["itemIds"] = std::move(itemIds);
+        inventory["extraCells"] = std::move(extraCells);
+        inventory["pages"] = std::move(pages);
+        inventory["assignedButtons"] = std::move(assignedButtons);
+        inventory["consumableStacks"] = SerializeIntMap(targetPackage->runtime.consumableStackCounts);
+        inventory["customInventoryConsumables"] = SerializeIndexedStringMap(targetPackage->runtime.customInventoryConsumableBySlot);
+        response["inventory"] = std::move(inventory);
+    } else {
+        outError = "queryPublicJson kind must be summary, exports, services, dsl, runtime, settings, world, narrative, storage or inventory";
+        return false;
+    }
+
+    outJson = response.dump();
+    return true;
+}
+
+bool ExternalModManager::CallPublicService(const std::string& requesterModId, const std::string& targetModId,
+                                           const std::string& serviceId, const std::string& requestJson,
+                                           std::string& outJson, std::string& outError) const {
+    outJson.clear();
+    outError.clear();
+
+    if (targetModId.empty() || serviceId.empty()) {
+        outError = "callService requires targetModId and serviceId";
+        return false;
+    }
+
+    const ExternalModPackage* targetPackage = FindPackageByModId(targetModId);
+    if (targetPackage == nullptr || !targetPackage->valid) {
+        outError = "Target mod package not found";
+        return false;
+    }
+
+    const auto endpointIt = std::find_if(
+        targetPackage->manifest.serviceEndpoints.begin(), targetPackage->manifest.serviceEndpoints.end(),
+        [&serviceId](const ExternalModManifest::ServiceEndpointDefinition& definition) { return definition.id == serviceId; });
+    if (endpointIt == targetPackage->manifest.serviceEndpoints.end()) {
+        outError = "Service endpoint not found";
+        return false;
+    }
+
+    if (!IsShareAccessAllowed(targetPackage->manifest.id, requesterModId, endpointIt->visibility, endpointIt->friends,
+                              endpointIt->denyMods, targetPackage->manifest.sharePolicy.nativeService)) {
+        outError = "Service endpoint is not visible to requester";
+        return false;
+    }
+
+    nlohmann::json request = nlohmann::json::object();
+    if (!requestJson.empty()) {
+        request = nlohmann::json::parse(requestJson, nullptr, false);
+        if (request.is_discarded() || !request.is_object()) {
+            outError = "callService requires a JSON object request";
+            return false;
+        }
+    }
+
+    nlohmann::json response = nlohmann::json::object();
+    response["schemaVersion"] = "host.service.result.v1";
+    response["ok"] = true;
+    response["requesterModId"] = requesterModId;
+    response["targetModId"] = targetPackage->manifest.id;
+    response["service"] = SerializeServiceEndpointDefinition(*endpointIt);
+
+    const ExternalModDslDocument* entryDocument = FindDslDocumentByEntry(targetPackage->runtime, endpointIt->entry);
+    if (entryDocument != nullptr &&
+        IsShareAccessAllowed(targetPackage->manifest.id, requesterModId, entryDocument->visibility, entryDocument->friends,
+                             entryDocument->denyMods, targetPackage->manifest.sharePolicy.read)) {
+        response["entryDocument"] = SerializeDslDocument(*entryDocument, request.value("includeEntryRaw", false));
+    }
+
+    if (ToLower(endpointIt->kind) == "query") {
+        request["targetModId"] = targetPackage->manifest.id;
+        if (!request.contains("kind")) {
+            request["kind"] = "summary";
+        }
+
+        std::string queryResult;
+        if (!QueryPublicModJson(requesterModId, request.dump(), queryResult, outError)) {
+            return false;
+        }
+        response["response"] = TryParseEmbeddedJson(queryResult);
+    } else {
+        response["request"] = request;
+    }
+
+    outJson = response.dump();
+    return true;
+}
+
+bool ExternalModManager::InvokeOwnActionJson(const std::string& modId, const std::string& actionJson, std::string& outJson,
+                                             std::string& outError) {
+    outJson.clear();
+    outError.clear();
+
+    if (modId.empty()) {
+        outError = "invokeActionJson requires modId";
+        return false;
+    }
+    if (actionJson.empty()) {
+        outError = "invokeActionJson requires a JSON action payload";
+        return false;
+    }
+
+    auto* package = FindPackageByModId(modId);
+    if (package == nullptr || !package->valid || !package->runtime.enabled) {
+        outError = "Mod package is not enabled";
+        return false;
+    }
+
+    nlohmann::json request = nlohmann::json::parse(actionJson, nullptr, false);
+    if (request.is_discarded()) {
+        outError = "invokeActionJson requires valid JSON";
+        return false;
+    }
+
+    std::string triggerName = "host.invokeActionJson";
+    const nlohmann::json* actionPayload = &request;
+    if (request.is_object()) {
+        if (request.contains("triggerName") && request["triggerName"].is_string()) {
+            triggerName = request["triggerName"].get<std::string>();
+        }
+        if (request.contains("actions")) {
+            actionPayload = &request["actions"];
+        }
+    }
+
+    std::vector<ExternalModAction> actions;
+    if (actionPayload->is_array()) {
+        for (size_t i = 0; i < actionPayload->size(); ++i) {
+            ExternalModAction action;
+            if (!ParseAction((*actionPayload)[i], package->manifest.apiVersion, action, outError)) {
+                outError = "actions[" + std::to_string(i) + "]: " + outError;
+                return false;
+            }
+            actions.push_back(std::move(action));
+        }
+    } else if (actionPayload->is_object()) {
+        ExternalModAction action;
+        if (!ParseAction(*actionPayload, package->manifest.apiVersion, action, outError)) {
+            return false;
+        }
+        actions.push_back(std::move(action));
+    } else {
+        outError = "invokeActionJson payload must be an action object, an actions array, or an object containing actions";
+        return false;
+    }
+
+    if (actions.empty()) {
+        outError = "invokeActionJson requires at least one action";
+        return false;
+    }
+
+    ExecuteActionsPublic(*package, actions, triggerName.c_str());
+
+    nlohmann::json response = nlohmann::json::object();
+    response["schemaVersion"] = "host.action.result.v1";
+    response["ok"] = true;
+    response["modId"] = package->manifest.id;
+    response["triggerName"] = triggerName;
+    response["actionCount"] = actions.size();
+    response["runtimeEnabled"] = package->runtime.enabled;
+    outJson = response.dump();
+    return true;
 }
 
 const ExternalModPackage* ExternalModManager::FindPackageByModId(const std::string& modId) const {
@@ -12211,6 +16805,61 @@ int32_t ExternalModManager::WasmHostRaycastAll(const std::string& modId, const s
     return static_cast<int32_t>(outHits.size());
 }
 
+int32_t ExternalModManager::WasmHostQueryPublicJson(const std::string& modId, const std::string& requestJson,
+                                                    std::string& outJson) {
+    outJson.clear();
+    const auto* package = FindPackageByModId(modId);
+    if (package == nullptr || !package->runtime.enabled) {
+        return -1;
+    }
+
+    std::string error;
+    if (!QueryPublicModJson(modId, requestJson, outJson, error)) {
+        if (!error.empty()) {
+            SPDLOG_WARN("[ExternalMods][wasm:{}] host_queryPublicJson failed: {}", modId, error);
+        }
+        return -1;
+    }
+    return 0;
+}
+
+int32_t ExternalModManager::WasmHostCallService(const std::string& modId, const std::string& targetModId,
+                                                const std::string& serviceId, const std::string& requestJson,
+                                                std::string& outJson) {
+    outJson.clear();
+    const auto* package = FindPackageByModId(modId);
+    if (package == nullptr || !package->runtime.enabled) {
+        return -1;
+    }
+
+    std::string error;
+    if (!CallPublicService(modId, targetModId, serviceId, requestJson, outJson, error)) {
+        if (!error.empty()) {
+            SPDLOG_WARN("[ExternalMods][wasm:{}] host_callService failed: {}", modId, error);
+        }
+        return -1;
+    }
+    return 0;
+}
+
+int32_t ExternalModManager::WasmHostInvokeActionJson(const std::string& modId, const std::string& actionJson,
+                                                     std::string& outJson) {
+    outJson.clear();
+    const auto* package = FindPackageByModId(modId);
+    if (package == nullptr || !package->runtime.enabled) {
+        return -1;
+    }
+
+    std::string error;
+    if (!InvokeOwnActionJson(modId, actionJson, outJson, error)) {
+        if (!error.empty()) {
+            SPDLOG_WARN("[ExternalMods][wasm:{}] host_invokeActionJson failed: {}", modId, error);
+        }
+        return -1;
+    }
+    return 0;
+}
+
 const ExternalModItemDefinition* ExternalModManager::FindItemByAssignment(const ActionButtonAssignment& assignment) const {
     if (assignment.modId.empty() || assignment.itemId.empty()) {
         return nullptr;
@@ -12612,6 +17261,10 @@ void ExternalModManager::Shutdown() {
     }
     Player* player = gPlayState != nullptr ? GET_PLAYER(gPlayState) : nullptr;
     for (auto& package : mPackages) {
+        if (package.runtime.persistentStateDirty && RuntimeHasPersistentState(package.runtime)) {
+            PersistRuntimeStateForPackage(package);
+            package.runtime.persistentStateDirty = false;
+        }
         ClearStatusEffects(package.runtime, gPlayState, false);
         package.runtime.activeAoEs.clear();
         package.runtime.activeStates.clear();
@@ -12654,6 +17307,7 @@ void ExternalModManager::Shutdown() {
         package.runtime.moduleCompileTimeMs = 0;
         package.runtime.moduleCompileDiagnostics.clear();
         package.runtime.wasmRuntime.reset();
+        package.runtime.nativeRuntime.reset();
     }
 
     mPackages.clear();
@@ -12692,48 +17346,195 @@ bool ExternalModManager::ReloadPackages(std::string& outError) {
 void ExternalModManager::DiscoverPackages() {
     mPackages.clear();
     const auto modsPath = std::filesystem::path(Ship::Context::LocateFileAcrossAppDirs("mods", "soh"));
-    if (!std::filesystem::exists(modsPath)) {
-        SPDLOG_INFO("[ExternalMods] Mods path does not exist: {}", modsPath.string());
+    const auto modsDataPath = std::filesystem::path(Ship::Context::LocateFileAcrossAppDirs("mods_data", "soh"));
+    const auto modsRuntimePath = std::filesystem::path(Ship::Context::LocateFileAcrossAppDirs("mods_runtime", "soh"));
+
+    struct PackageCandidate {
+        std::filesystem::path sourcePath;
+        bool isZip = false;
+        bool usesSplitRoots = false;
+        std::filesystem::path runtimeRootPath;
+    };
+
+    std::vector<PackageCandidate> packageEntries;
+    packageEntries.reserve(96);
+    const auto appendCandidatesFromRoot = [&](const std::filesystem::path& root, bool skipReservedNames) {
+        if (!std::filesystem::exists(root) || !std::filesystem::is_directory(root)) {
+            return;
+        }
+
+        for (const auto& entry : std::filesystem::directory_iterator(root)) {
+            if (!entry.is_directory() && !entry.is_regular_file()) {
+                continue;
+            }
+
+            const auto entryName = entry.path().filename().generic_string();
+            if (!entryName.empty() && entryName[0] == '.') {
+                continue;
+            }
+            if (skipReservedNames &&
+                (entryName == "frameworks" || entryName == "resourcepacks" || entryName == "mods")) {
+                continue;
+            }
+            if (entry.is_regular_file() && ToLower(entry.path().extension().string()) != ".zip") {
+                continue;
+            }
+
+            packageEntries.push_back(PackageCandidate{
+                entry.path(),
+                entry.is_regular_file() && ToLower(entry.path().extension().string()) == ".zip",
+                false,
+                {},
+            });
+        }
+    };
+
+    const auto appendSplitCandidates = [&](const std::filesystem::path& dataRoot, const std::filesystem::path& runtimeRoot) {
+        if (!std::filesystem::exists(dataRoot) || !std::filesystem::is_directory(dataRoot)) {
+            return;
+        }
+
+        for (const auto& entry : std::filesystem::directory_iterator(dataRoot)) {
+            if (!entry.is_directory()) {
+                continue;
+            }
+
+            const auto entryName = entry.path().filename().generic_string();
+            if (!entryName.empty() && entryName[0] == '.') {
+                continue;
+            }
+
+            if (!std::filesystem::exists(entry.path() / "mod.json")) {
+                continue;
+            }
+
+            const auto runtimePath = runtimeRoot / entry.path().filename();
+            packageEntries.push_back(PackageCandidate{
+                entry.path(),
+                false,
+                true,
+                std::filesystem::exists(runtimePath) && std::filesystem::is_directory(runtimePath) ? runtimePath
+                                                                                                    : std::filesystem::path{},
+            });
+        }
+    };
+
+    if (std::filesystem::exists(modsPath) && std::filesystem::is_directory(modsPath)) {
+        appendCandidatesFromRoot(modsPath / "frameworks", false);
+        appendCandidatesFromRoot(modsPath / "mods", false);
+        appendCandidatesFromRoot(modsPath, true);
+    } else {
+        SPDLOG_INFO("[ExternalMods] Legacy mods path does not exist: {}", modsPath.string());
+    }
+
+    appendSplitCandidates(modsDataPath, modsRuntimePath);
+
+    if (packageEntries.empty()) {
+        SPDLOG_INFO("[ExternalMods] No external mod packages discovered under {}, {} or {}", modsPath.string(),
+                    modsDataPath.string(), modsRuntimePath.string());
         return;
     }
 
     std::unordered_set<std::string> seenIds;
-    for (const auto& entry : std::filesystem::directory_iterator(modsPath)) {
-        if (!entry.is_directory() && !entry.is_regular_file()) {
-            continue;
-        }
-        const auto entryName = entry.path().filename().generic_string();
-        if (!entryName.empty() && entryName[0] == '.') {
-            continue;
-        }
+    for (const auto& entry : packageEntries) {
 
         ExternalModPackage package;
-        package.sourcePath = entry.path();
-        package.isZip = entry.is_regular_file() && ToLower(entry.path().extension().string()) == ".zip";
-
-        if (entry.is_regular_file() && !package.isZip) {
-            continue;
-        }
+        package.sourcePath = entry.sourcePath;
+        package.isZip = entry.isZip;
+        package.isSplitLayout = entry.usesSplitRoots;
+        package.runtimeRootPath = entry.runtimeRootPath;
 
         std::string manifestContent;
+        std::filesystem::path manifestRelativePath;
         std::string manifestError;
-        bool manifestRead = entry.is_directory() ? ReadManifestFromDirectory(entry.path(), manifestContent, manifestError)
-                                                 : (package.isZip
-                                                        ? ReadManifestFromZip(entry.path(), manifestContent, manifestError)
-                                                        : false);
+        bool manifestRead = package.isZip
+                                ? ReadManifestFromZip(entry.sourcePath, manifestContent, manifestRelativePath, manifestError)
+                                : ReadManifestFromDirectory(entry.sourcePath, manifestContent, manifestRelativePath,
+                                                            manifestError);
         if (!manifestRead) {
             package.valid = false;
             package.error = manifestError.empty() ? "Manifest not found" : manifestError;
+            AddPackageIssue(package, ExternalModIssueSeverity::Fatal, "DISCOVER_MANIFEST_READ_FAILED", package.error,
+                            "mod.json", "", "", "Provide a valid mod.json at the package root.");
             SPDLOG_WARN("[ExternalMods] Skipping package {}: {}", package.sourcePath.string(), package.error);
             mPackages.push_back(std::move(package));
             continue;
+        }
+
+        if (package.isZip) {
+            package.manifestPath = manifestRelativePath;
+            if (ToLower(manifestRelativePath.parent_path().generic_string()) == "data") {
+                package.isSplitLayout = true;
+                package.zipDataPrefix = "data";
+                package.zipRuntimePrefix = "runtime";
+            }
+        } else if (entry.usesSplitRoots) {
+            package.dataRootPath = entry.sourcePath;
+            package.manifestPath = entry.sourcePath / manifestRelativePath;
+        } else if (ToLower(manifestRelativePath.parent_path().generic_string()) == "data") {
+            package.isSplitLayout = true;
+            package.dataRootPath = entry.sourcePath / manifestRelativePath.parent_path();
+            const auto embeddedRuntimeRoot = entry.sourcePath / "runtime";
+            if (std::filesystem::exists(embeddedRuntimeRoot) && std::filesystem::is_directory(embeddedRuntimeRoot)) {
+                package.runtimeRootPath = embeddedRuntimeRoot;
+            }
+            package.manifestPath = entry.sourcePath / manifestRelativePath;
+        } else {
+            package.dataRootPath = entry.sourcePath;
+            if (package.runtimeRootPath.empty()) {
+                package.runtimeRootPath = entry.sourcePath;
+            }
+            package.manifestPath = entry.sourcePath / manifestRelativePath;
         }
 
         std::string parseError;
         if (!TryParseManifest(manifestContent, package.manifest, parseError)) {
             package.valid = false;
             package.error = parseError;
+            AddPackageIssue(package, ExternalModIssueSeverity::Fatal, "DISCOVER_MANIFEST_PARSE_FAILED", package.error,
+                            "mod.json", "", "", "Fix the manifest schema/path fields and retry.");
             SPDLOG_WARN("[ExternalMods] Invalid manifest in {}: {}", package.sourcePath.string(), package.error);
+            mPackages.push_back(std::move(package));
+            continue;
+        }
+
+        if (!ApplyManifestConventionsForPackage(package, parseError)) {
+            package.valid = false;
+            package.error = parseError;
+            AddPackageIssue(package, ExternalModIssueSeverity::Fatal, "DISCOVER_MANIFEST_CONVENTIONS_FAILED",
+                            package.error, package.manifestPath.generic_string(), "", "",
+                            "Fix the v3 runtime conventions or declare explicit bindings in mod.json.");
+            SPDLOG_WARN("[ExternalMods] Manifest conventions failed in {}: {}", package.sourcePath.string(), package.error);
+            mPackages.push_back(std::move(package));
+            continue;
+        }
+
+        const auto nonStableIt = std::find_if(package.manifest.releaseChannels.begin(),
+                                               package.manifest.releaseChannels.end(),
+                                               [](const std::string& channel) {
+                                                   return !IsReleaseChannelAllowedInModloaderUi(channel);
+                                               });
+        if (nonStableIt != package.manifest.releaseChannels.end()) {
+            package.valid = false;
+            package.error =
+                "release channel '" + *nonStableIt + "' is gated in modloader UI until v1.0 (stable only)";
+            AddPackageIssue(package, ExternalModIssueSeverity::Fatal, "DISCOVER_RELEASE_CHANNEL_GATED", package.error,
+                            "mod.json", "", *nonStableIt, "Use stable for in-game loading before v1.0.");
+            SPDLOG_WARN("[ExternalMods] Skipping package {}: {}", package.sourcePath.string(), package.error);
+            mPackages.push_back(std::move(package));
+            continue;
+        }
+
+        const auto quarantineRecord = LoadRuntimeQuarantineRecord(package.manifest.id);
+        if (quarantineRecord.quarantined) {
+            package.valid = false;
+            package.error = "Quarantined after runtime failures (" + std::to_string(quarantineRecord.failureCount) + "): " +
+                            (quarantineRecord.lastReason.empty() ? "unspecified runtime error"
+                                                                 : quarantineRecord.lastReason) +
+                            ". Use Clear Quarantine in External Mods UI to retry.";
+            AddPackageIssue(package, ExternalModIssueSeverity::Fatal, "DISCOVER_QUARANTINED", package.error,
+                            "runtime", "", "", "Clear quarantine and reload after fixing the runtime blocker.");
+            SPDLOG_WARN("[ExternalMods] Skipping package {}: {}", package.sourcePath.string(), package.error);
             mPackages.push_back(std::move(package));
             continue;
         }
@@ -12741,6 +17542,8 @@ void ExternalModManager::DiscoverPackages() {
         if (seenIds.contains(package.manifest.id)) {
             package.valid = false;
             package.error = "Duplicate mod id detected: " + package.manifest.id;
+            AddPackageIssue(package, ExternalModIssueSeverity::Fatal, "DISCOVER_DUPLICATE_MOD_ID", package.error,
+                            "mod.json", "", package.manifest.id, "Rename the mod id or remove the duplicate package.");
             SPDLOG_WARN("[ExternalMods] Skipping package {}: {}", package.sourcePath.string(), package.error);
             mPackages.push_back(std::move(package));
             continue;
@@ -12764,6 +17567,11 @@ void ExternalModManager::Initialize() {
         mWorldGraphicsRuntime = std::make_unique<ExternalModWorldGraphicsRuntime>();
     } else {
         mWorldGraphicsRuntime->Reset(gPlayState);
+    }
+    if (!mPlayerResourcesRuntime) {
+        mPlayerResourcesRuntime = std::make_unique<ExternalModPlayerResourcesRuntime>();
+    } else {
+        mPlayerResourcesRuntime->Reset(gPlayState);
     }
     mAimCameraState.overShoulderEnabled =
         CVarGetInteger(kAimCameraOverShoulderCVar, mAimCameraState.overShoulderEnabled ? 1 : 0) != 0;
@@ -12854,6 +17662,9 @@ void ExternalModManager::Initialize() {
         if (providerIt != providerIndexById.end() && providerIt->second != index) {
             package.valid = false;
             package.error = "Duplicate mod id resolved to higher-priority provider: " + package.manifest.id;
+            AddPackageIssue(package, ExternalModIssueSeverity::Fatal, "INIT_DUPLICATE_PROVIDER", package.error,
+                            "mod.json", "", package.manifest.id,
+                            "Keep only one active provider for this mod id or change priorities.");
             SPDLOG_WARN("[ExternalMods] Runtime disabled for {}: {}", package.sourcePath.string(), package.error);
             continue;
         }
@@ -12863,6 +17674,8 @@ void ExternalModManager::Initialize() {
             if (dependency.modId == package.manifest.id) {
                 package.valid = false;
                 package.error = "Dependency cycle: mod depends on itself (" + dependency.modId + ")";
+                AddPackageIssue(package, ExternalModIssueSeverity::Fatal, "INIT_DEPENDENCY_SELF_CYCLE", package.error,
+                                "mod.json", "", dependency.modId, "Remove the self-dependency.");
                 dependencyError = true;
                 break;
             }
@@ -12871,6 +17684,8 @@ void ExternalModManager::Initialize() {
             if (dependencyProviderIt == providerIndexById.end()) {
                 package.valid = false;
                 package.error = "Missing dependency: " + dependency.modId;
+                AddPackageIssue(package, ExternalModIssueSeverity::Fatal, "INIT_DEPENDENCY_MISSING", package.error,
+                                "mod.json", "", dependency.modId, "Install or enable the required dependency.");
                 dependencyError = true;
                 break;
             }
@@ -12880,6 +17695,9 @@ void ExternalModManager::Initialize() {
                 package.valid = false;
                 package.error = "Dependency version mismatch: " + dependency.modId + " version " +
                                 dependencyManifest.version + " does not satisfy range '" + dependency.versionRange + "'";
+                AddPackageIssue(package, ExternalModIssueSeverity::Fatal, "INIT_DEPENDENCY_VERSION_MISMATCH",
+                                package.error, "mod.json", "", dependency.modId,
+                                "Update the dependency or relax the versionRange.");
                 dependencyError = true;
                 break;
             }
@@ -12925,6 +17743,9 @@ void ExternalModManager::Initialize() {
                 auto& blockedPackage = mPackages[blockedIndex];
                 blockedPackage.valid = false;
                 blockedPackage.error = "Dependency cycle or unresolved dependency graph";
+                AddPackageIssue(blockedPackage, ExternalModIssueSeverity::Fatal, "INIT_DEPENDENCY_GRAPH_UNRESOLVED",
+                                blockedPackage.error, "mod.json", "", "",
+                                "Review dependency graph for cycles or missing providers.");
                 SPDLOG_WARN("[ExternalMods] Runtime disabled for {}: {}", blockedPackage.sourcePath.string(),
                             blockedPackage.error);
             }
@@ -12944,6 +17765,8 @@ void ExternalModManager::Initialize() {
         if (!LoadRuntimeForPackage(package, error)) {
             package.valid = false;
             package.error = error;
+            AddPackageIssue(package, ExternalModIssueSeverity::Fatal, "INIT_RUNTIME_LOAD_FAILED", package.error,
+                            "runtime", "", "", "Fix the referenced file/schema/runtime error and reload.");
             SPDLOG_WARN("[ExternalMods] Runtime disabled for {}: {}", package.sourcePath.string(), package.error);
             continue;
         }
@@ -12951,6 +17774,8 @@ void ExternalModManager::Initialize() {
         if (!MountAssetsForPackage(package, error)) {
             package.valid = false;
             package.error = error;
+            AddPackageIssue(package, ExternalModIssueSeverity::Fatal, "INIT_ASSET_MOUNT_FAILED", package.error,
+                            "assets", "", "", "Fix asset archive paths or contents and reload.");
             SPDLOG_WARN("[ExternalMods] Asset mount failed for {}: {}", package.sourcePath.string(), package.error);
             continue;
         }
@@ -13030,19 +17855,53 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
         return false;
     }
 
+    if (json.contains("schemaVersion")) {
+        if (!json["schemaVersion"].is_string()) {
+            outError = "Invalid field: schemaVersion must be string";
+            return false;
+        }
+        outManifest.schemaVersion = ToLower(json["schemaVersion"].get<std::string>());
+        if (outManifest.schemaVersion != "mod.manifest.v2" && outManifest.schemaVersion != "mod.manifest.v3") {
+            outError = "Unsupported schemaVersion: " + outManifest.schemaVersion;
+            return false;
+        }
+    }
+    const bool usesManifestV3 = outManifest.schemaVersion == "mod.manifest.v3";
+
     if (!ValidateRequiredString(json, "id", outManifest.id, outError) ||
         !ValidateRequiredString(json, "name", outManifest.name, outError) ||
-        !ValidateRequiredString(json, "version", outManifest.version, outError) ||
-        !ValidateRequiredString(json, "entryScript", outManifest.entryScript, outError)) {
+        !ValidateRequiredString(json, "version", outManifest.version, outError)) {
         return false;
     }
 
-    std::filesystem::path normalizedEntryScript;
-    if (!IsSafePackageRelativePath(outManifest.entryScript, normalizedEntryScript, outError)) {
-        outError = "Invalid entryScript: " + outError;
-        return false;
+    if (json.contains("type")) {
+        if (!json["type"].is_string()) {
+            outError = "Invalid field: type must be string";
+            return false;
+        }
+        const auto normalizedType = ToLower(json["type"].get<std::string>());
+        if (!kSupportedManifestTypes.contains(normalizedType)) {
+            outError = "Invalid field: type must be framework|content|tools";
+            return false;
+        }
+        outManifest.type = normalizedType;
     }
-    outManifest.entryScript = normalizedEntryScript.generic_string();
+
+    if (json.contains("entryScript")) {
+        if (!json["entryScript"].is_string()) {
+            outError = "Invalid field: entryScript must be string";
+            return false;
+        }
+        outManifest.entryScript = json["entryScript"].get<std::string>();
+        if (!outManifest.entryScript.empty()) {
+            std::filesystem::path normalizedEntryScript;
+            if (!IsSafePackageRelativePath(outManifest.entryScript, normalizedEntryScript, outError)) {
+                outError = "Invalid entryScript: " + outError;
+                return false;
+            }
+            outManifest.entryScript = normalizedEntryScript.generic_string();
+        }
+    }
 
     if (!json.contains("apiVersion") || !json["apiVersion"].is_number_integer()) {
         outError = "Missing or invalid field: apiVersion";
@@ -13177,6 +18036,46 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
         }
     }
 
+    if (json.contains("releaseChannels")) {
+        if (!json["releaseChannels"].is_array()) {
+            outError = "Invalid field: releaseChannels must be an array";
+            return false;
+        }
+        for (size_t i = 0; i < json["releaseChannels"].size(); ++i) {
+            const auto& channelValue = json["releaseChannels"][i];
+            if (!channelValue.is_string()) {
+                outError = "Invalid releaseChannels[" + std::to_string(i) + "]: expected string";
+                return false;
+            }
+            const auto normalizedChannel = ToLower(channelValue.get<std::string>());
+            if (!kSupportedReleaseChannels.contains(normalizedChannel)) {
+                outError = "Unsupported releaseChannels[" + std::to_string(i) + "]: " + normalizedChannel;
+                return false;
+            }
+            if (std::find(outManifest.releaseChannels.begin(), outManifest.releaseChannels.end(), normalizedChannel) ==
+                outManifest.releaseChannels.end()) {
+                outManifest.releaseChannels.push_back(normalizedChannel);
+            }
+        }
+    }
+    if (outManifest.releaseChannels.empty()) {
+        outManifest.releaseChannels.push_back("stable");
+    }
+
+    if (json.contains("capabilityRationales")) {
+        if (!json["capabilityRationales"].is_object()) {
+            outError = "Invalid field: capabilityRationales must be object";
+            return false;
+        }
+        for (auto it = json["capabilityRationales"].begin(); it != json["capabilityRationales"].end(); ++it) {
+            if (!it.value().is_string()) {
+                outError = "Invalid capabilityRationales." + it.key() + ": expected string";
+                return false;
+            }
+            outManifest.capabilityRationales[ToLower(it.key())] = it.value().get<std::string>();
+        }
+    }
+
     if (json.contains("permissions")) {
         if (!json["permissions"].is_array()) {
             outError = "Invalid field: permissions must be an array";
@@ -13197,6 +18096,343 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
                 outManifest.permissions.end()) {
                 outManifest.permissions.push_back(normalizedPermission);
             }
+        }
+    }
+
+    if (json.contains("permissionRationales")) {
+        if (!json["permissionRationales"].is_object()) {
+            outError = "Invalid field: permissionRationales must be object";
+            return false;
+        }
+        for (auto it = json["permissionRationales"].begin(); it != json["permissionRationales"].end(); ++it) {
+            if (!it.value().is_string()) {
+                outError = "Invalid permissionRationales." + it.key() + ": expected string";
+                return false;
+            }
+            const auto normalizedPermission = ToLower(it.key());
+            if (!kSupportedRuntimePermissions.contains(normalizedPermission)) {
+                outError = "Invalid permissionRationales." + it.key() + ": unknown permission key";
+                return false;
+            }
+            outManifest.permissionRationales[normalizedPermission] = it.value().get<std::string>();
+        }
+    }
+
+    auto parseStringArrayField = [&](const char* fieldName, std::vector<std::string>& outValues,
+                                     bool normalizeToLower) -> bool {
+        if (!json.contains(fieldName)) {
+            return true;
+        }
+        if (!json[fieldName].is_array()) {
+            outError = std::string("Invalid field: ") + fieldName + " must be an array";
+            return false;
+        }
+        std::unordered_set<std::string> seen;
+        for (size_t i = 0; i < json[fieldName].size(); ++i) {
+            const auto& entry = json[fieldName][i];
+            if (!entry.is_string()) {
+                outError = std::string("Invalid ") + fieldName + "[" + std::to_string(i) + "]: expected string";
+                return false;
+            }
+            std::string value = entry.get<std::string>();
+            if (normalizeToLower) {
+                value = ToLower(value);
+            }
+            if (value.empty()) {
+                outError = std::string("Invalid ") + fieldName + "[" + std::to_string(i) + "]: empty string";
+                return false;
+            }
+            if (seen.insert(value).second) {
+                outValues.push_back(std::move(value));
+            }
+        }
+        return true;
+    };
+
+    if (!parseStringArrayField("provides", outManifest.provides, true) ||
+        !parseStringArrayField("uses", outManifest.uses, true)) {
+        return false;
+    }
+
+    if (json.contains("sharePolicy")) {
+        if (!TryParseSharePolicyObject(json["sharePolicy"], outManifest.sharePolicy, outError)) {
+            return false;
+        }
+    }
+
+    if (json.contains("imports")) {
+        if (!json["imports"].is_array()) {
+            outError = "Invalid field: imports must be an array";
+            return false;
+        }
+        for (size_t i = 0; i < json["imports"].size(); ++i) {
+            const auto& entry = json["imports"][i];
+            ExternalModManifest::ImportDefinition importDefinition;
+            if (entry.is_string()) {
+                importDefinition.modId = entry.get<std::string>();
+                importDefinition.namespaceId = "*";
+            } else if (entry.is_object()) {
+                if (!ValidateRequiredString(entry, "modId", importDefinition.modId, outError) &&
+                    !ValidateRequiredString(entry, "id", importDefinition.modId, outError)) {
+                    outError = "imports[" + std::to_string(i) + "] requires modId or id";
+                    return false;
+                }
+                if (entry.contains("namespace")) {
+                    if (!entry["namespace"].is_string()) {
+                        outError = "imports[" + std::to_string(i) + "].namespace must be string";
+                        return false;
+                    }
+                    importDefinition.namespaceId = entry["namespace"].get<std::string>();
+                } else if (entry.contains("namespaceId")) {
+                    if (!entry["namespaceId"].is_string()) {
+                        outError = "imports[" + std::to_string(i) + "].namespaceId must be string";
+                        return false;
+                    }
+                    importDefinition.namespaceId = entry["namespaceId"].get<std::string>();
+                } else {
+                    importDefinition.namespaceId = "*";
+                }
+                if (entry.contains("access")) {
+                    if (!entry["access"].is_string()) {
+                        outError = "imports[" + std::to_string(i) + "].access must be string";
+                        return false;
+                    }
+                    importDefinition.access = ToLower(entry["access"].get<std::string>());
+                }
+                if (entry.contains("optional")) {
+                    if (!entry["optional"].is_boolean()) {
+                        outError = "imports[" + std::to_string(i) + "].optional must be bool";
+                        return false;
+                    }
+                    importDefinition.optional = entry["optional"].get<bool>();
+                }
+            } else {
+                outError = "imports[" + std::to_string(i) + "] must be string or object";
+                return false;
+            }
+            outManifest.imports.push_back(std::move(importDefinition));
+        }
+    }
+
+    if (json.contains("exports")) {
+        if (json["exports"].is_object()) {
+            for (auto it = json["exports"].begin(); it != json["exports"].end(); ++it) {
+                const std::string namespaceId = ToLower(it.key());
+                if (it.value().is_array()) {
+                    size_t exportIndex = 0;
+                    for (const auto& value : it.value()) {
+                        ExternalModManifest::ExportDefinition exportDefinition;
+                        exportDefinition.namespaceId = namespaceId;
+                        exportDefinition.kind = namespaceId;
+                        exportDefinition.visibility = outManifest.sharePolicy.read;
+                        exportDefinition.mutableBy = outManifest.sharePolicy.write;
+                        exportDefinition.friends = outManifest.sharePolicy.friends;
+                        exportDefinition.denyMods = outManifest.sharePolicy.denyMods;
+                        if (value.is_string()) {
+                            exportDefinition.source = value.get<std::string>();
+                            exportDefinition.id = namespaceId + ":" + exportDefinition.source;
+                        } else if (value.is_object()) {
+                            if (value.contains("id") && value["id"].is_string()) {
+                                exportDefinition.id = value["id"].get<std::string>();
+                            } else {
+                                exportDefinition.id = namespaceId + ":" + std::to_string(exportIndex);
+                            }
+                            if (value.contains("source") && value["source"].is_string()) {
+                                exportDefinition.source = value["source"].get<std::string>();
+                            } else if (value.contains("value") && value["value"].is_string()) {
+                                exportDefinition.source = value["value"].get<std::string>();
+                            }
+                            if (value.contains("visibility") && value["visibility"].is_string()) {
+                                exportDefinition.visibility = ToLower(value["visibility"].get<std::string>());
+                            }
+                            if (value.contains("mutableBy") && value["mutableBy"].is_string()) {
+                                exportDefinition.mutableBy = ToLower(value["mutableBy"].get<std::string>());
+                            }
+                            if (!TryParseShareList(value, "friends", exportDefinition.friends, outError) ||
+                                !TryParseShareList(value, "denyMods", exportDefinition.denyMods, outError)) {
+                                return false;
+                            }
+                        } else {
+                            outError = "exports." + namespaceId + "[" + std::to_string(exportIndex) +
+                                       "] must be string or object";
+                            return false;
+                        }
+                        outManifest.exports.push_back(std::move(exportDefinition));
+                        ++exportIndex;
+                    }
+                } else if (it.value().is_string()) {
+                    ExternalModManifest::ExportDefinition exportDefinition;
+                    exportDefinition.namespaceId = namespaceId;
+                    exportDefinition.kind = namespaceId;
+                    exportDefinition.source = it.value().get<std::string>();
+                    exportDefinition.id = namespaceId + ":" + exportDefinition.source;
+                    exportDefinition.visibility = outManifest.sharePolicy.read;
+                    exportDefinition.mutableBy = outManifest.sharePolicy.write;
+                    exportDefinition.friends = outManifest.sharePolicy.friends;
+                    exportDefinition.denyMods = outManifest.sharePolicy.denyMods;
+                    outManifest.exports.push_back(std::move(exportDefinition));
+                } else {
+                    outError = "exports." + namespaceId + " must be string or array";
+                    return false;
+                }
+            }
+        } else if (json["exports"].is_array()) {
+            for (size_t i = 0; i < json["exports"].size(); ++i) {
+                const auto& entry = json["exports"][i];
+                if (!entry.is_object()) {
+                    outError = "exports[" + std::to_string(i) + "] must be object";
+                    return false;
+                }
+                ExternalModManifest::ExportDefinition exportDefinition;
+                if (!ValidateRequiredString(entry, "id", exportDefinition.id, outError)) {
+                    outError = "exports[" + std::to_string(i) + "] requires id";
+                    return false;
+                }
+                if (!ValidateRequiredString(entry, "kind", exportDefinition.kind, outError)) {
+                    outError = "exports[" + std::to_string(i) + "] requires kind";
+                    return false;
+                }
+                if (entry.contains("namespace") && entry["namespace"].is_string()) {
+                    exportDefinition.namespaceId = ToLower(entry["namespace"].get<std::string>());
+                } else if (entry.contains("namespaceId") && entry["namespaceId"].is_string()) {
+                    exportDefinition.namespaceId = ToLower(entry["namespaceId"].get<std::string>());
+                }
+                if (entry.contains("source") && entry["source"].is_string()) {
+                    exportDefinition.source = entry["source"].get<std::string>();
+                }
+                if (entry.contains("visibility") && entry["visibility"].is_string()) {
+                    exportDefinition.visibility = ToLower(entry["visibility"].get<std::string>());
+                } else {
+                    exportDefinition.visibility = outManifest.sharePolicy.read;
+                }
+                if (entry.contains("mutableBy") && entry["mutableBy"].is_string()) {
+                    exportDefinition.mutableBy = ToLower(entry["mutableBy"].get<std::string>());
+                } else {
+                    exportDefinition.mutableBy = outManifest.sharePolicy.write;
+                }
+                if (!TryParseShareList(entry, "friends", exportDefinition.friends, outError) ||
+                    !TryParseShareList(entry, "denyMods", exportDefinition.denyMods, outError)) {
+                    return false;
+                }
+                outManifest.exports.push_back(std::move(exportDefinition));
+            }
+        } else {
+            outError = "Invalid field: exports must be object or array";
+            return false;
+        }
+    }
+
+    if (json.contains("serviceEndpoints")) {
+        if (!json["serviceEndpoints"].is_array()) {
+            outError = "Invalid field: serviceEndpoints must be an array";
+            return false;
+        }
+        for (size_t i = 0; i < json["serviceEndpoints"].size(); ++i) {
+            const auto& entry = json["serviceEndpoints"][i];
+            if (!entry.is_object()) {
+                outError = "serviceEndpoints[" + std::to_string(i) + "] must be object";
+                return false;
+            }
+            ExternalModManifest::ServiceEndpointDefinition endpoint;
+            if (!ValidateRequiredString(entry, "id", endpoint.id, outError) ||
+                !ValidateRequiredString(entry, "kind", endpoint.kind, outError) ||
+                !ValidateRequiredString(entry, "entry", endpoint.entry, outError)) {
+                outError = "serviceEndpoints[" + std::to_string(i) + "] requires id, kind and entry";
+                return false;
+            }
+            if (entry.contains("visibility")) {
+                if (!entry["visibility"].is_string()) {
+                    outError = "serviceEndpoints[" + std::to_string(i) + "].visibility must be string";
+                    return false;
+                }
+                endpoint.visibility = ToLower(entry["visibility"].get<std::string>());
+            }
+            if (entry.contains("mutableBy")) {
+                if (!entry["mutableBy"].is_string()) {
+                    outError = "serviceEndpoints[" + std::to_string(i) + "].mutableBy must be string";
+                    return false;
+                }
+                endpoint.mutableBy = ToLower(entry["mutableBy"].get<std::string>());
+            }
+            if (!TryParseShareList(entry, "friends", endpoint.friends, outError) ||
+                !TryParseShareList(entry, "denyMods", endpoint.denyMods, outError)) {
+                return false;
+            }
+            outManifest.serviceEndpoints.push_back(std::move(endpoint));
+        }
+    }
+
+    if (json.contains("files")) {
+        if (!json["files"].is_object()) {
+            outError = "Invalid field: files must be object";
+            return false;
+        }
+        const auto& files = json["files"];
+        if (files.contains("optional")) {
+            if (!files["optional"].is_array()) {
+                outError = "Invalid field: files.optional must be an array";
+                return false;
+            }
+            for (size_t i = 0; i < files["optional"].size(); ++i) {
+                const auto& value = files["optional"][i];
+                if (!value.is_string()) {
+                    outError = "Invalid files.optional[" + std::to_string(i) + "]: expected string";
+                    return false;
+                }
+                std::filesystem::path normalizedPath;
+                if (!IsSafePackageRelativePath(value.get<std::string>(), normalizedPath, outError)) {
+                    outError = "Invalid files.optional[" + std::to_string(i) + "]: " + outError;
+                    return false;
+                }
+                outManifest.files.optional.push_back(normalizedPath.generic_string());
+            }
+        }
+    }
+
+    if (json.contains("settings")) {
+        if (!json["settings"].is_object()) {
+            outError = "Invalid field: settings must be object";
+            return false;
+        }
+        const auto& settings = json["settings"];
+        outManifest.settings.enabled = true;
+        if (settings.contains("schemaVersion")) {
+            if (!settings["schemaVersion"].is_number_integer()) {
+                outError = "settings.schemaVersion must be integer";
+                return false;
+            }
+            outManifest.settings.schemaVersion = settings["schemaVersion"].get<int32_t>();
+            if (outManifest.settings.schemaVersion != 1) {
+                outError = "settings.schemaVersion must be 1";
+                return false;
+            }
+        } else {
+            outManifest.settings.schemaVersion = 1;
+        }
+        if (settings.contains("schemaFile")) {
+            if (!settings["schemaFile"].is_string()) {
+                outError = "settings.schemaFile must be string";
+                return false;
+            }
+            std::filesystem::path normalizedPath;
+            if (!IsSafePackageRelativePath(settings["schemaFile"].get<std::string>(), normalizedPath, outError)) {
+                outError = "Invalid settings.schemaFile: " + outError;
+                return false;
+            }
+            outManifest.settings.schemaFile = normalizedPath.generic_string();
+        }
+        if (settings.contains("defaultDomain")) {
+            if (!settings["defaultDomain"].is_string()) {
+                outError = "settings.defaultDomain must be string";
+                return false;
+            }
+            const std::string normalizedDomain = NormalizeSettingDomainToken(settings["defaultDomain"].get<std::string>());
+            if (normalizedDomain != ToLower(settings["defaultDomain"].get<std::string>()) &&
+                ToLower(settings["defaultDomain"].get<std::string>()) != "global") {
+                outError = "settings.defaultDomain must be global|save|session";
+                return false;
+            }
+            outManifest.settings.defaultDomain = normalizedDomain;
         }
     }
 
@@ -13259,6 +18495,26 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
         }
     }
 
+    if (!outManifest.capabilities.empty()) {
+        for (const auto& capability : outManifest.capabilities) {
+            const auto rationaleIt = outManifest.capabilityRationales.find(capability);
+            if (rationaleIt == outManifest.capabilityRationales.end() || rationaleIt->second.empty()) {
+                SPDLOG_WARN("[ExternalMods] Manifest {} missing capability rationale for {}",
+                            outManifest.id.empty() ? "<unknown>" : outManifest.id, capability);
+            }
+        }
+    }
+
+    if (!outManifest.permissions.empty()) {
+        for (const auto& permission : outManifest.permissions) {
+            const auto rationaleIt = outManifest.permissionRationales.find(permission);
+            if (rationaleIt == outManifest.permissionRationales.end() || rationaleIt->second.empty()) {
+                SPDLOG_WARN("[ExternalMods] Manifest {} missing permission rationale for {}",
+                            outManifest.id.empty() ? "<unknown>" : outManifest.id, permission);
+            }
+        }
+    }
+
     if (outManifest.apiVersion >= kExternalModApiVersionV4) {
         if (!json.contains("runtime") || !json["runtime"].is_object()) {
             outError = "Missing or invalid field: runtime";
@@ -13270,21 +18526,125 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
             outError = "Invalid runtime.type: " + outError;
             return false;
         }
-        if (!ValidateRequiredString(runtime, "module", outManifest.runtimeModule, outError)) {
-            outError = "Invalid runtime.module: " + outError;
+        outManifest.runtimeType = ToLower(outManifest.runtimeType);
+        if (IsDataOnlyRuntimeType(outManifest.runtimeType)) {
+            outManifest.runtimeType = "data-only";
+        } else if (IsWasmRuntimeType(outManifest.runtimeType)) {
+            outManifest.runtimeType = "wasm3-v1";
+        } else if (IsNativeRuntimeType(outManifest.runtimeType)) {
+            outManifest.runtimeType = "native-cpp-v1";
+        } else if (IsHybridRuntimeType(outManifest.runtimeType)) {
+            outManifest.runtimeType = "hybrid-v1";
+        } else {
+            outError = "Invalid runtime.type: expected data-only|wasm|native|hybrid or wasm3-v1|native-cpp-v1|hybrid-v1";
             return false;
         }
 
-        std::filesystem::path normalizedRuntimeModule;
-        if (!IsSafePackageRelativePath(outManifest.runtimeModule, normalizedRuntimeModule, outError)) {
-            outError = "Invalid runtime.module: " + outError;
+        if (runtime.contains("module")) {
+            if (!runtime["module"].is_string()) {
+                outError = "Invalid runtime.module: expected string";
+                return false;
+            }
+            outManifest.runtimeModule = runtime["module"].get<std::string>();
+        }
+        if (runtime.contains("entryLibrary")) {
+            if (!runtime["entryLibrary"].is_string()) {
+                outError = "Invalid runtime.entryLibrary: expected string";
+                return false;
+            }
+            outManifest.entryLibrary = runtime["entryLibrary"].get<std::string>();
+        }
+        if (runtime.contains("abiVersion")) {
+            if (!runtime["abiVersion"].is_number_integer()) {
+                outError = "runtime.abiVersion must be integer";
+                return false;
+            }
+            outManifest.runtimeAbiVersion = runtime["abiVersion"].get<int32_t>();
+        }
+        if (runtime.contains("nativeMode")) {
+            if (!runtime["nativeMode"].is_string()) {
+                outError = "runtime.nativeMode must be string";
+                return false;
+            }
+            outManifest.runtimeNativeMode = ToLower(runtime["nativeMode"].get<std::string>());
+        }
+        if (runtime.contains("reloadPolicy")) {
+            if (!runtime["reloadPolicy"].is_string()) {
+                outError = "runtime.reloadPolicy must be string";
+                return false;
+            }
+            outManifest.runtimeReloadPolicy = ToLower(runtime["reloadPolicy"].get<std::string>());
+        }
+        if (runtime.contains("buildIdPolicy")) {
+            if (!runtime["buildIdPolicy"].is_string()) {
+                outError = "runtime.buildIdPolicy must be string";
+                return false;
+            }
+            outManifest.runtimeBuildIdPolicy = ToLower(runtime["buildIdPolicy"].get<std::string>());
+        }
+        if (runtime.contains("threadModel")) {
+            if (!runtime["threadModel"].is_string()) {
+                outError = "runtime.threadModel must be string";
+                return false;
+            }
+            outManifest.runtimeThreadModel = ToLower(runtime["threadModel"].get<std::string>());
+        }
+
+        if (IsWasmRuntimeType(outManifest.runtimeType) || IsHybridRuntimeType(outManifest.runtimeType)) {
+            if (outManifest.runtimeModule.empty() && !usesManifestV3) {
+                outError = "runtime.module is required for wasm3-v1 and hybrid-v1";
+                return false;
+            }
+            if (!outManifest.runtimeModule.empty()) {
+                std::filesystem::path normalizedRuntimeModule;
+                if (!IsSafePackageRelativePath(outManifest.runtimeModule, normalizedRuntimeModule, outError)) {
+                    outError = "Invalid runtime.module: " + outError;
+                    return false;
+                }
+                if (!IsSupportedRuntimeModuleExtension(normalizedRuntimeModule)) {
+                    outError = "Invalid runtime.module: extension must be .wasm or .wat";
+                    return false;
+                }
+                outManifest.runtimeModule = normalizedRuntimeModule.generic_string();
+            }
+        } else {
+            outManifest.runtimeModule.clear();
+        }
+
+        if (IsNativeRuntimeType(outManifest.runtimeType) || IsHybridRuntimeType(outManifest.runtimeType)) {
+            if (outManifest.entryLibrary.empty() && !usesManifestV3) {
+                outError = "runtime.entryLibrary is required for native-cpp-v1 and hybrid-v1";
+                return false;
+            }
+            if (!outManifest.entryLibrary.empty()) {
+                std::filesystem::path normalizedEntryLibrary;
+                if (!IsSafePackageRelativePath(outManifest.entryLibrary, normalizedEntryLibrary, outError)) {
+                    outError = "Invalid runtime.entryLibrary: " + outError;
+                    return false;
+                }
+                if (!IsSupportedNativeLibraryExtension(normalizedEntryLibrary)) {
+                    outError = "Invalid runtime.entryLibrary: extension must be .dll";
+                    return false;
+                }
+                outManifest.entryLibrary = normalizedEntryLibrary.generic_string();
+            }
+            if (ResolveNativeModeToken(outManifest.runtimeNativeMode) == ExternalModNativeMode::None) {
+                outError = "runtime.nativeMode must be sdk|raw";
+                return false;
+            }
+            if (outManifest.runtimeAbiVersion < 1 || outManifest.runtimeAbiVersion > 16) {
+                outError = "runtime.abiVersion must be in [1, 16]";
+                return false;
+            }
+        } else {
+            outManifest.entryLibrary.clear();
+        }
+
+        if (outManifest.entryScript.empty() && !usesManifestV3 &&
+            (IsWasmRuntimeType(outManifest.runtimeType) || IsHybridRuntimeType(outManifest.runtimeType))) {
+            outError = "entryScript is required for wasm3-v1 and hybrid-v1";
             return false;
         }
-        if (!IsSupportedRuntimeModuleExtension(normalizedRuntimeModule)) {
-            outError = "Invalid runtime.module: extension must be .wasm or .wat";
-            return false;
-        }
-        outManifest.runtimeModule = normalizedRuntimeModule.generic_string();
 
         outManifest.runtimeMaxMemoryKb = kDefaultRuntimeMemoryKb;
         outManifest.runtimeMaxCallMs = kDefaultRuntimeCallMs;
@@ -13361,28 +18721,28 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
             return false;
         }
 
-        if (!ValidateRequiredString(json, "itemDefinitions", outManifest.itemDefinitions, outError)) {
-            outError = "Missing or invalid field: itemDefinitions";
-            return false;
-        }
-        if (!ValidateRequiredString(json, "inputDefinitions", outManifest.inputDefinitions, outError)) {
-            outError = "Missing or invalid field: inputDefinitions";
-            return false;
-        }
+        auto parseOptionalPathField = [&](const char* fieldName, std::string& outPathValue) -> bool {
+            if (!json.contains(fieldName)) {
+                outPathValue.clear();
+                return true;
+            }
+            if (!json[fieldName].is_string()) {
+                outError = std::string("Invalid field: ") + fieldName + " must be string";
+                return false;
+            }
+            std::filesystem::path normalizedPath;
+            if (!IsSafePackageRelativePath(json[fieldName].get<std::string>(), normalizedPath, outError)) {
+                outError = std::string("Invalid ") + fieldName + ": " + outError;
+                return false;
+            }
+            outPathValue = normalizedPath.generic_string();
+            return true;
+        };
 
-        std::filesystem::path normalizedItemsPath;
-        if (!IsSafePackageRelativePath(outManifest.itemDefinitions, normalizedItemsPath, outError)) {
-            outError = "Invalid itemDefinitions: " + outError;
+        if (!parseOptionalPathField("itemDefinitions", outManifest.itemDefinitions) ||
+            !parseOptionalPathField("inputDefinitions", outManifest.inputDefinitions)) {
             return false;
         }
-        outManifest.itemDefinitions = normalizedItemsPath.generic_string();
-
-        std::filesystem::path normalizedInputPath;
-        if (!IsSafePackageRelativePath(outManifest.inputDefinitions, normalizedInputPath, outError)) {
-            outError = "Invalid inputDefinitions: " + outError;
-            return false;
-        }
-        outManifest.inputDefinitions = normalizedInputPath.generic_string();
 
         const bool hasExtendedHooksCapability = ManifestHasCapability(outManifest, "hooks.extended.v1");
         const bool hasActorVmCapability = ManifestHasCapability(outManifest, "actors.vm.v1");
@@ -13400,6 +18760,9 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
         const bool hasVanillaPatchesCapability = ManifestHasCapability(outManifest, "patches.vanilla_items.v1");
         const bool hasUiRuntimeCapability = ManifestHasCapability(outManifest, "ui.runtime.v1");
         const bool hasUiHudCapability = ManifestHasCapability(outManifest, "ui.hud.v1");
+        const bool hasPlayerResourcesCapability = ManifestHasCapability(outManifest, "player.resources.v1");
+        const bool hasResourceRingsCapability = ManifestHasCapability(outManifest, "ui.resource_rings.v1");
+        const bool hasPlayerConsumablesCapability = ManifestHasCapability(outManifest, "player.consumables.v1");
         const bool hasUiInventoryExtCapability = ManifestHasCapability(outManifest, "ui.inventory_ext.v1");
         const bool hasContainersCapability = ManifestHasCapability(outManifest, "containers.v1");
         const bool hasRecipesCapability = ManifestHasCapability(outManifest, "recipes.processing.v1");
@@ -13434,6 +18797,10 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
         const bool hasWorldScenesCapability = ManifestHasCapability(outManifest, "world.scenes.v1");
         const bool hasWorldRoomsCapability = ManifestHasCapability(outManifest, "world.rooms.v1");
         const bool hasAssetPacksCapability = ManifestHasCapability(outManifest, "assets.packs.v2");
+        const bool hasAssetRawCapability = ManifestHasCapability(outManifest, "assets.raw.v1");
+        const bool hasRenderMeshesCapability = ManifestHasCapability(outManifest, "render.meshes.v1");
+        const bool hasActorPrefabsCapability = ManifestHasCapability(outManifest, "actors.prefabs.v1");
+        const bool hasWorldInstancesCapability = ManifestHasCapability(outManifest, "world.instances.v1");
         const bool hasRenderInspectorCapability = ManifestHasCapability(outManifest, "debug.render_inspector.v1");
         const bool hasEditorRuntimeCapability = ManifestHasCapability(outManifest, "editor.runtime.v1");
         const bool hasEditorUiCapability = ManifestHasCapability(outManifest, "editor.ui.v1");
@@ -13447,6 +18814,24 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
         const bool hasCollisionAuthoringCapability =
             ManifestHasCapability(outManifest, "world.collision_authoring.v1");
         const bool hasEditorInspectorCapability = ManifestHasCapability(outManifest, "debug.editor_inspector.v1");
+        const bool hasWorldPersistenceCapability = ManifestHasCapability(outManifest, "world.persistence.v1");
+        const bool hasWorldStorageCapability = ManifestHasCapability(outManifest, "world.storage.v1");
+        const bool hasWorldSpawnProfilesCapability = ManifestHasCapability(outManifest, "world.spawn_profiles.v1");
+        const bool hasWorldForageCapability = ManifestHasCapability(outManifest, "world.forage.v1");
+        const bool hasWorldTimeWeatherCapability = ManifestHasCapability(outManifest, "world.time_weather.v1");
+        const bool hasWorldSeedingCapability = ManifestHasCapability(outManifest, "world.seeding.v1");
+        const bool hasWorldMigrationsCapability = ManifestHasCapability(outManifest, "world.migrations.v1");
+        const bool hasPersistenceInspectorCapability = ManifestHasCapability(outManifest, "debug.persistence_inspector.v1");
+        const bool hasNarrativeTimelineCapability = ManifestHasCapability(outManifest, "narrative.timeline.v1");
+        const bool hasNarrativeDialogueCapability = ManifestHasCapability(outManifest, "narrative.dialogue.v1");
+        const bool hasNarrativeQuestsCapability = ManifestHasCapability(outManifest, "narrative.quests.v1");
+        const bool hasNarrativeFlagsCapability = ManifestHasCapability(outManifest, "narrative.flags.v1");
+        const bool hasNarrativeInspectorCapability = ManifestHasCapability(outManifest, "debug.narrative_inspector.v1");
+        const bool hasDevHotReloadCapability = ManifestHasCapability(outManifest, "dev.hot_reload.v1");
+        const bool hasDevConsoleCapability = ManifestHasCapability(outManifest, "dev.console.v1");
+        const bool hasDevWatchersCapability = ManifestHasCapability(outManifest, "dev.watchers.v1");
+        const bool hasWasmSandboxV2Capability = ManifestHasCapability(outManifest, "wasm.sandbox.v2");
+        const bool hasReloadInspectorCapability = ManifestHasCapability(outManifest, "debug.reload_inspector.v1");
 
         if (outManifest.apiVersion >= 4 && hasAimCameraCatalogCapability) {
             outError = "camera.aim_profiles.v1 is legacy; use camera.aim_profiles.v2";
@@ -13553,7 +18938,7 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
                 return true;
             }
 
-            if (hasCapability) {
+            if (hasCapability && !usesManifestV3) {
                 outError = std::string("Missing required field for ") + capability + ": " + fieldName;
                 return false;
             }
@@ -13580,6 +18965,12 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
                                  outManifest.uiScreenDefinitions) ||
             !parseCapabilityPath("uiHudDefinitions", "ui.hud.v1", hasUiHudCapability,
                                  outManifest.uiHudDefinitions) ||
+            !parseCapabilityPath("playerResourceDefinitions", "player.resources.v1", hasPlayerResourcesCapability,
+                                 outManifest.playerResourceDefinitions) ||
+            !parseCapabilityPath("resourceRingDefinitions", "ui.resource_rings.v1", hasResourceRingsCapability,
+                                 outManifest.resourceRingDefinitions) ||
+            !parseCapabilityPath("playerConsumableDefinitions", "player.consumables.v1", hasPlayerConsumablesCapability,
+                                 outManifest.playerConsumableDefinitions) ||
             !parseCapabilityPath("inventoryExtensionDefinitions", "ui.inventory_ext.v1", hasUiInventoryExtCapability,
                                  outManifest.inventoryExtensionDefinitions) ||
             !parseCapabilityPath("containerDefinitions", "containers.v1", hasContainersCapability,
@@ -13646,6 +19037,14 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
                                  outManifest.roomProfileDefinitions) ||
             !parseCapabilityPath("assetPackDefinitions", "assets.packs.v2", hasAssetPacksCapability,
                                  outManifest.assetPackDefinitions) ||
+            !parseCapabilityPath("assetSourceDefinitions", "assets.raw.v1", hasAssetRawCapability,
+                                 outManifest.assetSourceDefinitions) ||
+            !parseCapabilityPath("meshDefinitions", "render.meshes.v1", hasRenderMeshesCapability,
+                                 outManifest.meshDefinitions) ||
+            !parseCapabilityPath("prefabDefinitions", "actors.prefabs.v1", hasActorPrefabsCapability,
+                                 outManifest.prefabDefinitions) ||
+            !parseCapabilityPath("worldInstanceDefinitions", "world.instances.v1", hasWorldInstancesCapability,
+                                 outManifest.worldInstanceDefinitions) ||
             !parseCapabilityPath("renderInspectorDefinitions", "debug.render_inspector.v1", hasRenderInspectorCapability,
                                  outManifest.renderInspectorDefinitions) ||
             !parseCapabilityPath("editorRuntimeDefinitions", "editor.runtime.v1", hasEditorRuntimeCapability,
@@ -13669,7 +19068,43 @@ bool ExternalModManager::TryParseManifest(const std::string& content, ExternalMo
             !parseCapabilityPath("collisionAuthoringDefinitions", "world.collision_authoring.v1",
                                  hasCollisionAuthoringCapability, outManifest.collisionAuthoringDefinitions) ||
             !parseCapabilityPath("editorInspectorDefinitions", "debug.editor_inspector.v1", hasEditorInspectorCapability,
-                                 outManifest.editorInspectorDefinitions)) {
+                                 outManifest.editorInspectorDefinitions) ||
+            !parseCapabilityPath("worldPersistenceDefinitions", "world.persistence.v1", hasWorldPersistenceCapability,
+                                 outManifest.worldPersistenceDefinitions) ||
+            !parseCapabilityPath("worldStorageDefinitions", "world.storage.v1", hasWorldStorageCapability,
+                                 outManifest.worldStorageDefinitions) ||
+            !parseCapabilityPath("worldSpawnProfileDefinitions", "world.spawn_profiles.v1",
+                                 hasWorldSpawnProfilesCapability, outManifest.worldSpawnProfileDefinitions) ||
+            !parseCapabilityPath("worldForageDefinitions", "world.forage.v1", hasWorldForageCapability,
+                                 outManifest.worldForageDefinitions) ||
+            !parseCapabilityPath("worldTimeWeatherDefinitions", "world.time_weather.v1", hasWorldTimeWeatherCapability,
+                                 outManifest.worldTimeWeatherDefinitions) ||
+            !parseCapabilityPath("worldSeedingDefinitions", "world.seeding.v1", hasWorldSeedingCapability,
+                                 outManifest.worldSeedingDefinitions) ||
+            !parseCapabilityPath("worldMigrationDefinitions", "world.migrations.v1", hasWorldMigrationsCapability,
+                                 outManifest.worldMigrationDefinitions) ||
+            !parseCapabilityPath("persistenceInspectorDefinitions", "debug.persistence_inspector.v1",
+                                 hasPersistenceInspectorCapability, outManifest.persistenceInspectorDefinitions) ||
+            !parseCapabilityPath("narrativeTimelineDefinitions", "narrative.timeline.v1", hasNarrativeTimelineCapability,
+                                 outManifest.narrativeTimelineDefinitions) ||
+            !parseCapabilityPath("narrativeDialogueDefinitions", "narrative.dialogue.v1", hasNarrativeDialogueCapability,
+                                 outManifest.narrativeDialogueDefinitions) ||
+            !parseCapabilityPath("narrativeQuestDefinitions", "narrative.quests.v1", hasNarrativeQuestsCapability,
+                                 outManifest.narrativeQuestDefinitions) ||
+            !parseCapabilityPath("narrativeFlagDefinitions", "narrative.flags.v1", hasNarrativeFlagsCapability,
+                                 outManifest.narrativeFlagDefinitions) ||
+            !parseCapabilityPath("narrativeInspectorDefinitions", "debug.narrative_inspector.v1",
+                                 hasNarrativeInspectorCapability, outManifest.narrativeInspectorDefinitions) ||
+            !parseCapabilityPath("devHotReloadDefinitions", "dev.hot_reload.v1", hasDevHotReloadCapability,
+                                 outManifest.devHotReloadDefinitions) ||
+            !parseCapabilityPath("devConsoleDefinitions", "dev.console.v1", hasDevConsoleCapability,
+                                 outManifest.devConsoleDefinitions) ||
+            !parseCapabilityPath("devWatcherDefinitions", "dev.watchers.v1", hasDevWatchersCapability,
+                                 outManifest.devWatcherDefinitions) ||
+            !parseCapabilityPath("wasmSandboxDefinitions", "wasm.sandbox.v2", hasWasmSandboxV2Capability,
+                                 outManifest.wasmSandboxDefinitions) ||
+            !parseCapabilityPath("reloadInspectorDefinitions", "debug.reload_inspector.v1", hasReloadInspectorCapability,
+                                 outManifest.reloadInspectorDefinitions)) {
             return false;
         }
     }
@@ -15027,6 +20462,15 @@ bool ExternalModManager::TryParseActorDefinitions(const std::string& content, in
                 return false;
             }
             definition.behaviorId = actor["behaviorId"].get<std::string>();
+        }
+
+        if (actor.contains("prefabId") || actor.contains("prefab")) {
+            const char* prefabField = actor.contains("prefabId") ? "prefabId" : "prefab";
+            if (!actor[prefabField].is_string()) {
+                outError = "actors[" + std::to_string(i) + "]." + prefabField + " must be string";
+                return false;
+            }
+            definition.prefabId = actor[prefabField].get<std::string>();
         }
 
         if (actor.contains("components")) {
@@ -17292,6 +22736,770 @@ bool ExternalModManager::TryParseUiHudDefinitions(const std::string& content, in
     return true;
 }
 
+bool ExternalModManager::TryParsePlayerResourceDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModPlayerResourceDefinition>& outDefinitions,
+    std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "playerResourceDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("player_resources.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "player_resources.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("resources") || !json["resources"].is_array()) {
+        outError = "player_resources.json must contain resources[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto parseStringField = [&](const nlohmann::json& object, const char* key, std::string& outValue) {
+        if (object.contains(key) && object[key].is_string()) {
+            outValue = object[key].get<std::string>();
+        }
+    };
+    const auto parseFloatField = [&](const nlohmann::json& object, const char* key, float& outValue) -> bool {
+        if (!object.contains(key)) {
+            return true;
+        }
+        if (!object[key].is_number()) {
+            outError = std::string(key) + " must be number";
+            return false;
+        }
+        outValue = object[key].get<float>();
+        return true;
+    };
+    const auto parseIntField = [&](const nlohmann::json& object, const char* key, int32_t& outValue) -> bool {
+        if (!object.contains(key)) {
+            return true;
+        }
+        if (!object[key].is_number_integer()) {
+            outError = std::string(key) + " must be integer";
+            return false;
+        }
+        outValue = object[key].get<int32_t>();
+        return true;
+    };
+    const auto parseBoolField = [&](const nlohmann::json& object, const char* key, bool& outValue) -> bool {
+        if (!object.contains(key)) {
+            return true;
+        }
+        if (!object[key].is_boolean()) {
+            outError = std::string(key) + " must be boolean";
+            return false;
+        }
+        outValue = object[key].get<bool>();
+        return true;
+    };
+
+    const auto& resources = json["resources"];
+    for (size_t i = 0; i < resources.size(); ++i) {
+        const auto& resourceJson = resources[i];
+        if (!resourceJson.is_object()) {
+            outError = "resources[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModPlayerResourceDefinition definition;
+        if (!ValidateRequiredString(resourceJson, "id", definition.id, outError)) {
+            outError = "resources[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "resources[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate player resource id: " + definition.id;
+            return false;
+        }
+
+        parseStringField(resourceJson, "kind", definition.kind);
+        parseStringField(resourceJson, "displayName", definition.displayName);
+        parseStringField(resourceJson, "settingsDomain", definition.settingsDomain);
+        parseStringField(resourceJson, "storageDomainId", definition.storageDomainId);
+        parseStringField(resourceJson, "capacityStorageKey", definition.capacityStorageKey);
+        parseStringField(resourceJson, "currentStorageKey", definition.currentStorageKey);
+        parseStringField(resourceJson, "enabledSettingKey", definition.enabledSettingKey);
+        parseStringField(resourceJson, "drainMultiplierSettingKey", definition.drainMultiplierSettingKey);
+        parseStringField(resourceJson, "regenMultiplierSettingKey", definition.regenMultiplierSettingKey);
+        if (!parseFloatField(resourceJson, "baseCapacity", definition.baseCapacity) ||
+            !parseFloatField(resourceJson, "wheelCapacity", definition.wheelCapacity) ||
+            !parseFloatField(resourceJson, "initialValue", definition.initialValue) ||
+            !parseFloatField(resourceJson, "regenRatePerSecond", definition.regenRatePerSecond) ||
+            !parseFloatField(resourceJson, "lowPercent", definition.lowPercent) ||
+            !parseFloatField(resourceJson, "lowThresholdPercent", definition.lowThresholdPercent) ||
+            !parseIntField(resourceJson, "segmentCount", definition.segmentCount) ||
+            !parseIntField(resourceJson, "regenDelayMs", definition.regenDelayMs) ||
+            !parseIntField(resourceJson, "depletedRegenDelayMs", definition.depletedRegenDelayMs) ||
+            !parseBoolField(resourceJson, "persistCurrentValue", definition.persistCurrentValue) ||
+            !parseBoolField(resourceJson, "refillOnLoad", definition.refillOnLoad) ||
+            !parseBoolField(resourceJson, "refillOnSceneEnter", definition.refillOnSceneEnter)) {
+            outError = "resources[" + std::to_string(i) + "]." + outError;
+            return false;
+        }
+
+        definition.baseCapacity = std::max(1.0f, definition.baseCapacity);
+        definition.wheelCapacity = std::max(1.0f, definition.wheelCapacity);
+        definition.segmentCount = std::max(1, definition.segmentCount);
+        definition.regenDelayMs = std::max(0, definition.regenDelayMs);
+        definition.depletedRegenDelayMs = std::max(definition.regenDelayMs, definition.depletedRegenDelayMs);
+        definition.lowPercent = std::clamp(definition.lowPercent, 0.0f, 1.0f);
+
+        if (resourceJson.contains("actionRules")) {
+            if (!resourceJson["actionRules"].is_array()) {
+                outError = "resources[" + std::to_string(i) + "].actionRules must be array";
+                return false;
+            }
+            std::unordered_set<std::string> seenTags;
+            for (size_t ruleIndex = 0; ruleIndex < resourceJson["actionRules"].size(); ++ruleIndex) {
+                const auto& ruleJson = resourceJson["actionRules"][ruleIndex];
+                if (!ruleJson.is_object()) {
+                    outError = "resources[" + std::to_string(i) + "].actionRules[" + std::to_string(ruleIndex) +
+                               "] must be object";
+                    return false;
+                }
+
+                ExternalModPlayerResourceActionRule rule;
+                if (!ValidateRequiredString(ruleJson, "tag", rule.tag, outError)) {
+                    outError = "resources[" + std::to_string(i) + "].actionRules[" + std::to_string(ruleIndex) +
+                               "].tag: " + outError;
+                    return false;
+                }
+                if (!seenTags.insert(rule.tag).second) {
+                    outError = "Duplicate actionRules tag on resource " + definition.id + ": " + rule.tag;
+                    return false;
+                }
+                parseStringField(ruleJson, "depletedResponse", rule.depletedResponse);
+                parseStringField(ruleJson, "inputBindingId", rule.inputBindingId);
+                if (!parseFloatField(ruleJson, "startCost", rule.startCost) ||
+                    !parseFloatField(ruleJson, "costPerSecond", rule.costPerSecond) ||
+                    !parseBoolField(ruleJson, "blockWhenInsufficient", rule.blockWhenInsufficient) ||
+                    !parseBoolField(ruleJson, "cancelOnDepleted", rule.cancelOnDepleted)) {
+                    outError = "resources[" + std::to_string(i) + "].actionRules[" + std::to_string(ruleIndex) +
+                               "]." + outError;
+                    return false;
+                }
+                rule.startCost = std::max(0.0f, rule.startCost);
+                rule.costPerSecond = std::max(0.0f, rule.costPerSecond);
+                definition.actionRules.push_back(std::move(rule));
+            }
+        }
+
+        if (resourceJson.contains("tickRules")) {
+            if (!resourceJson["tickRules"].is_array()) {
+                outError = "resources[" + std::to_string(i) + "].tickRules must be array";
+                return false;
+            }
+            for (size_t ruleIndex = 0; ruleIndex < resourceJson["tickRules"].size(); ++ruleIndex) {
+                const auto& ruleJson = resourceJson["tickRules"][ruleIndex];
+                if (!ruleJson.is_object()) {
+                    outError = "resources[" + std::to_string(i) + "].tickRules[" + std::to_string(ruleIndex) +
+                               "] must be object";
+                    return false;
+                }
+                ExternalModPlayerResourceTickRule rule;
+                parseStringField(ruleJson, "id", rule.id);
+                if (!parseFloatField(ruleJson, "drainPerSecond", rule.drainPerSecond) ||
+                    !parseFloatField(ruleJson, "movingMultiplier", rule.movingMultiplier) ||
+                    !parseFloatField(ruleJson, "sprintMultiplier", rule.sprintMultiplier) ||
+                    !parseFloatField(ruleJson, "climbMultiplier", rule.climbMultiplier) ||
+                    !parseFloatField(ruleJson, "swimMultiplier", rule.swimMultiplier) ||
+                    !parseBoolField(ruleJson, "manualGameplayOnly", rule.manualGameplayOnly)) {
+                    outError = "resources[" + std::to_string(i) + "].tickRules[" + std::to_string(ruleIndex) + "]." +
+                               outError;
+                    return false;
+                }
+                rule.drainPerSecond = std::max(0.0f, rule.drainPerSecond);
+                definition.tickRules.push_back(std::move(rule));
+            }
+        }
+
+        if (resourceJson.contains("depletionEffects")) {
+            if (!resourceJson["depletionEffects"].is_object()) {
+                outError = "resources[" + std::to_string(i) + "].depletionEffects must be object";
+                return false;
+            }
+            const auto& effectsJson = resourceJson["depletionEffects"];
+            if (!parseBoolField(effectsJson, "disableSprint", definition.depletionEffects.disableSprint) ||
+                !parseFloatField(effectsJson, "movementMultiplier", definition.depletionEffects.movementMultiplier) ||
+                !parseFloatField(effectsJson, "periodicDamageHearts", definition.depletionEffects.periodicDamageHearts) ||
+                !parseIntField(effectsJson, "periodicDamageIntervalMs",
+                               definition.depletionEffects.periodicDamageIntervalMs)) {
+                outError = "resources[" + std::to_string(i) + "].depletionEffects." + outError;
+                return false;
+            }
+            definition.depletionEffects.movementMultiplier =
+                std::clamp(definition.depletionEffects.movementMultiplier, 0.1f, 1.0f);
+            definition.depletionEffects.periodicDamageHearts = std::max(0.0f, definition.depletionEffects.periodicDamageHearts);
+            definition.depletionEffects.periodicDamageIntervalMs =
+                std::max(0, definition.depletionEffects.periodicDamageIntervalMs);
+        }
+
+        if (resourceJson.contains("resourceLinks")) {
+            if (!resourceJson["resourceLinks"].is_array()) {
+                outError = "resources[" + std::to_string(i) + "].resourceLinks must be array";
+                return false;
+            }
+            for (size_t linkIndex = 0; linkIndex < resourceJson["resourceLinks"].size(); ++linkIndex) {
+                const auto& linkJson = resourceJson["resourceLinks"][linkIndex];
+                if (!linkJson.is_object()) {
+                    outError = "resources[" + std::to_string(i) + "].resourceLinks[" + std::to_string(linkIndex) +
+                               "] must be object";
+                    return false;
+                }
+                ExternalModPlayerResourceLink link;
+                if (!ValidateRequiredString(linkJson, "targetResourceId", link.targetResourceId, outError)) {
+                    outError = "resources[" + std::to_string(i) + "].resourceLinks[" + std::to_string(linkIndex) +
+                               "].targetResourceId: " + outError;
+                    return false;
+                }
+                if (!IsNamespacedCatalogId(link.targetResourceId)) {
+                    outError = "resources[" + std::to_string(i) + "].resourceLinks[" + std::to_string(linkIndex) +
+                               "].targetResourceId must be namespaced";
+                    return false;
+                }
+                if (!parseFloatField(linkJson, "onDepletedRegenMultiplier", link.onDepletedRegenMultiplier)) {
+                    outError = "resources[" + std::to_string(i) + "].resourceLinks[" + std::to_string(linkIndex) +
+                               "]." + outError;
+                    return false;
+                }
+                link.onDepletedRegenMultiplier = std::clamp(link.onDepletedRegenMultiplier, 0.0f, 1.0f);
+                definition.resourceLinks.push_back(std::move(link));
+            }
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseResourceRingDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModResourceRingDefinition>& outDefinitions,
+    std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "resourceRingDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("resource_rings.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "resource_rings.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("rings") || !json["rings"].is_array()) {
+        outError = "resource_rings.json must contain rings[]";
+        return false;
+    }
+
+    auto parseColor = [&](const nlohmann::json& object, const char* key, ExternalModColorRgba& outColor) -> bool {
+        if (!object.contains(key)) {
+            return true;
+        }
+        const auto& colorJson = object[key];
+        std::array<int32_t, 4> values = { outColor.r, outColor.g, outColor.b, outColor.a };
+        if (colorJson.is_array()) {
+            if (colorJson.size() < 3 || colorJson.size() > 4) {
+                outError = std::string(key) + " must have 3 or 4 numeric entries";
+                return false;
+            }
+            for (size_t index = 0; index < colorJson.size(); ++index) {
+                if (!colorJson[index].is_number_integer()) {
+                    outError = std::string(key) + "[" + std::to_string(index) + "] must be integer";
+                    return false;
+                }
+                values[index] = std::clamp(colorJson[index].get<int32_t>(), 0, 255);
+            }
+        } else if (colorJson.is_object()) {
+            const std::array<const char*, 4> names = { "r", "g", "b", "a" };
+            for (size_t index = 0; index < names.size(); ++index) {
+                if (colorJson.contains(names[index])) {
+                    if (!colorJson[names[index]].is_number_integer()) {
+                        outError = std::string(key) + "." + names[index] + " must be integer";
+                        return false;
+                    }
+                    values[index] = std::clamp(colorJson[names[index]].get<int32_t>(), 0, 255);
+                }
+            }
+        } else {
+            outError = std::string(key) + " must be color object or array";
+            return false;
+        }
+        outColor = ExternalModColorRgba{ static_cast<uint8_t>(values[0]), static_cast<uint8_t>(values[1]),
+                                         static_cast<uint8_t>(values[2]), static_cast<uint8_t>(values[3]) };
+        return true;
+    };
+
+    std::unordered_set<std::string> seenIds;
+    const auto& rings = json["rings"];
+    for (size_t i = 0; i < rings.size(); ++i) {
+        const auto& ringJson = rings[i];
+        if (!ringJson.is_object()) {
+            outError = "rings[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModResourceRingDefinition definition;
+        if (!ValidateRequiredString(ringJson, "id", definition.id, outError)) {
+            outError = "rings[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!ValidateRequiredString(ringJson, "resourceId", definition.resourceId, outError)) {
+            outError = "rings[" + std::to_string(i) + "].resourceId: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id) || !IsNamespacedCatalogId(definition.resourceId)) {
+            outError = "rings[" + std::to_string(i) + "] ids must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate resource ring id: " + definition.id;
+            return false;
+        }
+
+        if (ringJson.contains("style") && ringJson["style"].is_string()) {
+            definition.style = ringJson["style"].get<std::string>();
+        }
+        if (ringJson.contains("settingsDomain") && ringJson["settingsDomain"].is_string()) {
+            definition.settingsDomain = ringJson["settingsDomain"].get<std::string>();
+        }
+        if (ringJson.contains("anchorMode")) {
+            if (!ringJson["anchorMode"].is_string()) {
+                outError = "rings[" + std::to_string(i) + "].anchorMode must be string";
+                return false;
+            }
+            const auto mode = ToLower(ringJson["anchorMode"].get<std::string>());
+            if (mode == "contextual") {
+                definition.anchorMode = ExternalModResourceRingAnchorMode::Contextual;
+            } else if (mode == "fixed") {
+                definition.anchorMode = ExternalModResourceRingAnchorMode::Fixed;
+            } else if (mode == "both") {
+                definition.anchorMode = ExternalModResourceRingAnchorMode::Both;
+            } else {
+                outError = "rings[" + std::to_string(i) + "].anchorMode must be contextual|fixed|both";
+                return false;
+            }
+        }
+        if (ringJson.contains("fixedAnchor")) {
+            if (!ringJson["fixedAnchor"].is_string()) {
+                outError = "rings[" + std::to_string(i) + "].fixedAnchor must be string";
+                return false;
+            }
+            const auto anchor = ToLower(ringJson["fixedAnchor"].get<std::string>());
+            if (anchor == "left") {
+                definition.fixedAnchor = ExternalModResourceRingFixedAnchor::Left;
+            } else if (anchor == "right") {
+                definition.fixedAnchor = ExternalModResourceRingFixedAnchor::Right;
+            } else if (anchor == "none") {
+                definition.fixedAnchor = ExternalModResourceRingFixedAnchor::None;
+            } else if (anchor == "magic_bar_stack") {
+                definition.fixedAnchor = ExternalModResourceRingFixedAnchor::Left;
+                definition.fixedStackGroup = "magic_bar_stack";
+            } else {
+                outError = "rings[" + std::to_string(i) + "].fixedAnchor must be left|right|none|magic_bar_stack";
+                return false;
+            }
+        }
+
+        const auto parseFloatField = [&](const char* key, float& outValue) -> bool {
+            if (!ringJson.contains(key)) {
+                return true;
+            }
+            if (!ringJson[key].is_number()) {
+                outError = "rings[" + std::to_string(i) + "]." + key + " must be number";
+                return false;
+            }
+            outValue = ringJson[key].get<float>();
+            return true;
+        };
+        const auto parseIntField = [&](const char* key, int32_t& outValue) -> bool {
+            if (!ringJson.contains(key)) {
+                return true;
+            }
+            if (!ringJson[key].is_number_integer()) {
+                outError = "rings[" + std::to_string(i) + "]." + key + " must be integer";
+                return false;
+            }
+            outValue = ringJson[key].get<int32_t>();
+            return true;
+        };
+        const auto parseBoolField = [&](const char* key, bool& outValue) -> bool {
+            if (!ringJson.contains(key)) {
+                return true;
+            }
+            if (!ringJson[key].is_boolean()) {
+                outError = "rings[" + std::to_string(i) + "]." + key + " must be boolean";
+                return false;
+            }
+            outValue = ringJson[key].get<bool>();
+            return true;
+        };
+        const auto parseStringField = [&](const char* key, std::string& outValue) {
+            if (ringJson.contains(key) && ringJson[key].is_string()) {
+                outValue = ringJson[key].get<std::string>();
+            }
+        };
+
+        parseStringField("contextualEnabledSettingKey", definition.contextualEnabledSettingKey);
+        parseStringField("fixedEnabledSettingKey", definition.fixedEnabledSettingKey);
+        parseStringField("scaleSettingKey", definition.scaleSettingKey);
+        parseStringField("opacitySettingKey", definition.opacitySettingKey);
+        parseStringField("fixedStackGroup", definition.fixedStackGroup);
+        parseStringField("companionIconAsset", definition.companionIconAsset);
+        parseStringField("companionCounterSource", definition.companionCounterSource);
+
+        if (!parseFloatField("screenOffsetX", definition.screenOffsetX) ||
+            !parseFloatField("screenOffsetY", definition.screenOffsetY) ||
+            !parseFloatField("worldOffsetX", definition.worldOffsetX) ||
+            !parseFloatField("worldOffsetY", definition.worldOffsetY) ||
+            !parseFloatField("worldOffsetZ", definition.worldOffsetZ) ||
+            !parseFloatField("scale", definition.scale) ||
+            !parseFloatField("opacity", definition.opacity) ||
+            !parseFloatField("thickness", definition.thickness) ||
+            !parseFloatField("ringSpacing", definition.ringSpacing) ||
+            !parseFloatField("fixedStackSpacing", definition.fixedStackSpacing) ||
+            !parseIntField("hideDelayMs", definition.hideDelayMs) ||
+            !parseIntField("fixedStackOrder", definition.fixedStackOrder) ||
+            !parseIntField("companionVanillaItemId", definition.companionVanillaItemId) ||
+            !parseBoolField("lowPulse", definition.lowPulse) ||
+            !parseBoolField("showWhenFull", definition.showWhenFull) ||
+            !parseColor(ringJson, "normalColor", definition.normalColor) ||
+            !parseColor(ringJson, "lowColor", definition.lowColor) ||
+            !parseColor(ringJson, "exhaustedColor", definition.exhaustedColor) ||
+            !parseColor(ringJson, "backgroundColor", definition.backgroundColor) ||
+            !parseColor(ringJson, "segmentColor", definition.segmentColor)) {
+            return false;
+        }
+
+        definition.scale = std::max(0.1f, definition.scale);
+        definition.opacity = std::clamp(definition.opacity, 0.0f, 1.0f);
+        definition.thickness = std::max(1.0f, definition.thickness);
+        definition.ringSpacing = std::max(0.0f, definition.ringSpacing);
+        definition.hideDelayMs = std::max(0, definition.hideDelayMs);
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParsePlayerConsumableDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModPlayerConsumableDefinition>& outDefinitions,
+    std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "playerConsumableDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("player_consumables.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "player_consumables.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("consumables") || !json["consumables"].is_array()) {
+        outError = "player_consumables.json must contain consumables[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    for (size_t i = 0; i < json["consumables"].size(); ++i) {
+        const auto& consumableJson = json["consumables"][i];
+        if (!consumableJson.is_object()) {
+            outError = "consumables[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModPlayerConsumableDefinition definition;
+        if (!ValidateRequiredString(consumableJson, "id", definition.id, outError)) {
+            outError = "consumables[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "consumables[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate player consumable id: " + definition.id;
+            return false;
+        }
+
+        if (consumableJson.contains("displayName") && consumableJson["displayName"].is_string()) {
+            definition.displayName = consumableJson["displayName"].get<std::string>();
+        }
+        if (consumableJson.contains("settingsDomain") && consumableJson["settingsDomain"].is_string()) {
+            definition.settingsDomain = consumableJson["settingsDomain"].get<std::string>();
+        }
+        if (consumableJson.contains("storageDomainId") && consumableJson["storageDomainId"].is_string()) {
+            definition.storageDomainId = consumableJson["storageDomainId"].get<std::string>();
+        }
+        if (consumableJson.contains("countStorageKey") && consumableJson["countStorageKey"].is_string()) {
+            definition.countStorageKey = consumableJson["countStorageKey"].get<std::string>();
+        }
+        if (consumableJson.contains("fillSource") && consumableJson["fillSource"].is_string()) {
+            definition.fillSource = ToLower(consumableJson["fillSource"].get<std::string>());
+        }
+        if (consumableJson.contains("companionIconAsset") && consumableJson["companionIconAsset"].is_string()) {
+            definition.companionIconAsset = consumableJson["companionIconAsset"].get<std::string>();
+        }
+        if (consumableJson.contains("consumeAnimation")) {
+            if (!consumableJson["consumeAnimation"].is_string()) {
+                outError = "consumables[" + std::to_string(i) + "].consumeAnimation must be string";
+                return false;
+            }
+            const auto animation = ToLower(consumableJson["consumeAnimation"].get<std::string>());
+            if (animation == "none" || animation == "instant") {
+                definition.useAnimation = ExternalModPlayerConsumableUseAnimation::None;
+            } else if (animation == "drinkdemo" || animation == "drink_demo") {
+                definition.useAnimation = ExternalModPlayerConsumableUseAnimation::DrinkDemo;
+            } else {
+                outError = "consumables[" + std::to_string(i) + "].consumeAnimation must be none|drinkDemo";
+                return false;
+            }
+        }
+        if (consumableJson.contains("placeholderItemId") && consumableJson["placeholderItemId"].is_number_integer()) {
+            definition.placeholderItemId = consumableJson["placeholderItemId"].get<int32_t>();
+        }
+        if (consumableJson.contains("placeholderPartialItemId")) {
+            if (!consumableJson["placeholderPartialItemId"].is_number_integer()) {
+                outError = "consumables[" + std::to_string(i) + "].placeholderPartialItemId must be integer";
+                return false;
+            }
+            definition.placeholderPartialItemId = consumableJson["placeholderPartialItemId"].get<int32_t>();
+        }
+        if (consumableJson.contains("placeholderIconAsset")) {
+            if (!consumableJson["placeholderIconAsset"].is_string()) {
+                outError = "consumables[" + std::to_string(i) + "].placeholderIconAsset must be string";
+                return false;
+            }
+            definition.placeholderIconAsset = consumableJson["placeholderIconAsset"].get<std::string>();
+        }
+        if (consumableJson.contains("placeholderPartialIconAsset")) {
+            if (!consumableJson["placeholderPartialIconAsset"].is_string()) {
+                outError = "consumables[" + std::to_string(i) + "].placeholderPartialIconAsset must be string";
+                return false;
+            }
+            definition.placeholderPartialIconAsset = consumableJson["placeholderPartialIconAsset"].get<std::string>();
+        }
+        if (consumableJson.contains("returnItemId") && consumableJson["returnItemId"].is_number_integer()) {
+            definition.returnItemId = consumableJson["returnItemId"].get<int32_t>();
+        }
+        if (consumableJson.contains("inventoryPlaceholderItemId")) {
+            if (!consumableJson["inventoryPlaceholderItemId"].is_number_integer()) {
+                outError = "consumables[" + std::to_string(i) + "].inventoryPlaceholderItemId must be integer";
+                return false;
+            }
+            definition.inventoryPlaceholderItemId = consumableJson["inventoryPlaceholderItemId"].get<int32_t>();
+        }
+        if (consumableJson.contains("companionVanillaItemId") &&
+            consumableJson["companionVanillaItemId"].is_number_integer()) {
+            definition.companionVanillaItemId = consumableJson["companionVanillaItemId"].get<int32_t>();
+        }
+        if (consumableJson.contains("maxStack")) {
+            if (!consumableJson["maxStack"].is_number_integer()) {
+                outError = "consumables[" + std::to_string(i) + "].maxStack must be integer";
+                return false;
+            }
+            definition.maxStack = std::max(1, consumableJson["maxStack"].get<int32_t>());
+        }
+        if (consumableJson.contains("usesPerFill")) {
+            if (!consumableJson["usesPerFill"].is_number_integer()) {
+                outError = "consumables[" + std::to_string(i) + "].usesPerFill must be integer";
+                return false;
+            }
+            definition.usesPerFill = std::clamp(consumableJson["usesPerFill"].get<int32_t>(), 1, 8);
+        }
+        if (consumableJson.contains("storageMode")) {
+            if (!consumableJson["storageMode"].is_string()) {
+                outError = "consumables[" + std::to_string(i) + "].storageMode must be string";
+                return false;
+            }
+            const auto mode = ToLower(consumableJson["storageMode"].get<std::string>());
+            if (mode == "stack") {
+                definition.storageMode = ExternalModPlayerConsumableStorageMode::Stack;
+            } else if (mode == "bottlecontent" || mode == "bottle_content") {
+                definition.storageMode = ExternalModPlayerConsumableStorageMode::BottleContent;
+            } else {
+                outError = "consumables[" + std::to_string(i) + "].storageMode must be stack|bottleContent";
+                return false;
+            }
+        }
+
+        if (consumableJson.contains("effects")) {
+            if (!consumableJson["effects"].is_array()) {
+                outError = "consumables[" + std::to_string(i) + "].effects must be array";
+                return false;
+            }
+            for (size_t effectIndex = 0; effectIndex < consumableJson["effects"].size(); ++effectIndex) {
+                const auto& effectJson = consumableJson["effects"][effectIndex];
+                if (!effectJson.is_object()) {
+                    outError = "consumables[" + std::to_string(i) + "].effects[" + std::to_string(effectIndex) +
+                               "] must be object";
+                    return false;
+                }
+                ExternalModPlayerConsumableEffect effect;
+                if (!ValidateRequiredString(effectJson, "resourceId", effect.resourceId, outError)) {
+                    outError = "consumables[" + std::to_string(i) + "].effects[" + std::to_string(effectIndex) +
+                               "].resourceId: " + outError;
+                    return false;
+                }
+                if (!IsNamespacedCatalogId(effect.resourceId)) {
+                    outError = "consumables[" + std::to_string(i) + "].effects[" + std::to_string(effectIndex) +
+                               "].resourceId must be namespaced";
+                    return false;
+                }
+                if (!effectJson.contains("addValue") || !effectJson["addValue"].is_number()) {
+                    outError = "consumables[" + std::to_string(i) + "].effects[" + std::to_string(effectIndex) +
+                               "].addValue must be number";
+                    return false;
+                }
+                effect.addValue = effectJson["addValue"].get<float>();
+                definition.effects.push_back(std::move(effect));
+            }
+        }
+
+        if (definition.storageMode == ExternalModPlayerConsumableStorageMode::BottleContent && definition.usesPerFill > 1 &&
+            definition.placeholderPartialItemId < 0) {
+            definition.placeholderPartialItemId = definition.placeholderItemId;
+        }
+        if (definition.storageMode == ExternalModPlayerConsumableStorageMode::BottleContent && definition.usesPerFill > 1 &&
+            definition.placeholderPartialIconAsset.empty()) {
+            definition.placeholderPartialIconAsset = definition.placeholderIconAsset;
+        }
+        if ((!definition.placeholderIconAsset.empty() || !definition.placeholderPartialIconAsset.empty()) &&
+            definition.storageMode != ExternalModPlayerConsumableStorageMode::BottleContent) {
+            outError = "consumables[" + std::to_string(i) +
+                       "].placeholderIconAsset/placeholderPartialIconAsset are only supported for bottleContent";
+            return false;
+        }
+        if (definition.inventoryPlaceholderItemId >= 0) {
+            if (definition.storageMode != ExternalModPlayerConsumableStorageMode::Stack) {
+                outError = "consumables[" + std::to_string(i) +
+                           "].inventoryPlaceholderItemId is only supported for stack consumables";
+                return false;
+            }
+            if (definition.inventoryPlaceholderItemId >= static_cast<int32_t>(ARRAY_COUNT(gItemSlots))) {
+                outError = "consumables[" + std::to_string(i) + "].inventoryPlaceholderItemId is out of range";
+                return false;
+            }
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseWorldForageDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModWorldForageRuleDefinition>& outDefinitions,
+    std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "worldForageDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("forage.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "forage.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("rules") || !json["rules"].is_array()) {
+        outError = "forage.json must contain rules[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    for (size_t i = 0; i < json["rules"].size(); ++i) {
+        const auto& ruleJson = json["rules"][i];
+        if (!ruleJson.is_object()) {
+            outError = "rules[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+        ExternalModWorldForageRuleDefinition definition;
+        if (!ValidateRequiredString(ruleJson, "id", definition.id, outError)) {
+            outError = "rules[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "rules[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate forage rule id: " + definition.id;
+            return false;
+        }
+        if (!ValidateRequiredString(ruleJson, "source", definition.source, outError)) {
+            outError = "rules[" + std::to_string(i) + "].source: " + outError;
+            return false;
+        }
+        definition.source = ToLower(definition.source);
+        if (definition.source != "tall_grass.cut") {
+            outError = "rules[" + std::to_string(i) + "].source must be tall_grass.cut";
+            return false;
+        }
+        if (ruleJson.contains("chance")) {
+            if (!ruleJson["chance"].is_number()) {
+                outError = "rules[" + std::to_string(i) + "].chance must be number";
+                return false;
+            }
+            definition.chance = std::clamp(ruleJson["chance"].get<float>(), 0.0f, 1.0f);
+        }
+        if (ruleJson.contains("replaceVanillaDrop")) {
+            if (!ruleJson["replaceVanillaDrop"].is_boolean()) {
+                outError = "rules[" + std::to_string(i) + "].replaceVanillaDrop must be boolean";
+                return false;
+            }
+            definition.replaceVanillaDrop = ruleJson["replaceVanillaDrop"].get<bool>();
+        }
+        if (ruleJson.contains("actions") &&
+            !ParseActionArray(ruleJson["actions"], apiVersion, "actions", definition.actions, outError)) {
+            outError = "rules[" + std::to_string(i) + "].actions: " + outError;
+            return false;
+        }
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
 bool ExternalModManager::TryParseInventoryExtensionDefinitions(
     const std::string& content, int32_t apiVersion, std::vector<ExternalModInventoryPageDefinition>& outDefinitions,
     std::string& outError) {
@@ -18647,6 +24855,41 @@ bool ExternalModManager::TryParseLightingDefinitions(const std::string& content,
             }
             definition.castShadows = profile["castShadows"].get<bool>();
         }
+        if (profile.contains("shadowResolution")) {
+            if (!profile["shadowResolution"].is_number_integer()) {
+                outError = "profiles[" + std::to_string(i) + "].shadowResolution must be integer";
+                return false;
+            }
+            definition.shadowResolution = std::clamp(profile["shadowResolution"].get<int32_t>(), 64, 4096);
+        }
+        if (profile.contains("shadowBias")) {
+            if (!profile["shadowBias"].is_number()) {
+                outError = "profiles[" + std::to_string(i) + "].shadowBias must be numeric";
+                return false;
+            }
+            definition.shadowBias = std::clamp(profile["shadowBias"].get<float>(), 0.0f, 1.0f);
+        }
+        if (profile.contains("shadowNormalBias")) {
+            if (!profile["shadowNormalBias"].is_number()) {
+                outError = "profiles[" + std::to_string(i) + "].shadowNormalBias must be numeric";
+                return false;
+            }
+            definition.shadowNormalBias = std::clamp(profile["shadowNormalBias"].get<float>(), 0.0f, 2.0f);
+        }
+        if (profile.contains("shadowRange")) {
+            if (!profile["shadowRange"].is_number()) {
+                outError = "profiles[" + std::to_string(i) + "].shadowRange must be numeric";
+                return false;
+            }
+            definition.shadowRange = std::clamp(profile["shadowRange"].get<float>(), 0.0f, 20000.0f);
+        }
+        if (profile.contains("volumetricIntensity")) {
+            if (!profile["volumetricIntensity"].is_number()) {
+                outError = "profiles[" + std::to_string(i) + "].volumetricIntensity must be numeric";
+                return false;
+            }
+            definition.volumetricIntensity = std::clamp(profile["volumetricIntensity"].get<float>(), 0.0f, 8.0f);
+        }
 
         outDefinitions.push_back(std::move(definition));
     }
@@ -18794,6 +25037,143 @@ bool ExternalModManager::TryParsePostFxDefinitions(const std::string& content, i
                 return false;
             }
             definition.forceDepthAwareFog = preset["forceDepthAwareFog"].get<bool>();
+        }
+        if (preset.contains("volumetrics")) {
+            if (!preset["volumetrics"].is_object()) {
+                outError = "presets[" + std::to_string(i) + "].volumetrics must be object";
+                return false;
+            }
+            const auto& volumetrics = preset["volumetrics"];
+            definition.hasVolumetrics = true;
+            if (volumetrics.contains("enabled")) {
+                if (!volumetrics["enabled"].is_boolean()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.enabled must be boolean";
+                    return false;
+                }
+                definition.volumetrics.enabled = volumetrics["enabled"].get<bool>();
+            }
+            if (volumetrics.contains("quality")) {
+                if (!volumetrics["quality"].is_string()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.quality must be string";
+                    return false;
+                }
+                definition.volumetrics.quality = ToLower(volumetrics["quality"].get<std::string>());
+            }
+            if (volumetrics.contains("density")) {
+                if (!volumetrics["density"].is_number()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.density must be numeric";
+                    return false;
+                }
+                definition.volumetrics.density = std::clamp(volumetrics["density"].get<float>(), 0.0f, 2.0f);
+            }
+            if (volumetrics.contains("color")) {
+                if (!volumetrics["color"].is_array() || volumetrics["color"].size() != definition.volumetrics.color.size()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.color must be [r,g,b]";
+                    return false;
+                }
+                for (size_t colorIndex = 0; colorIndex < definition.volumetrics.color.size(); ++colorIndex) {
+                    const auto& colorValue = volumetrics["color"][colorIndex];
+                    if (!colorValue.is_number()) {
+                        outError = "presets[" + std::to_string(i) + "].volumetrics.color[" + std::to_string(colorIndex) +
+                                   "] must be numeric";
+                        return false;
+                    }
+                    definition.volumetrics.color[colorIndex] = std::clamp(colorValue.get<float>(), 0.0f, 16.0f);
+                }
+                definition.volumetrics.hasColor = true;
+            }
+            if (volumetrics.contains("ambientIntensity")) {
+                if (!volumetrics["ambientIntensity"].is_number()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.ambientIntensity must be numeric";
+                    return false;
+                }
+                definition.volumetrics.ambientIntensity =
+                    std::clamp(volumetrics["ambientIntensity"].get<float>(), 0.0f, 8.0f);
+            }
+            if (volumetrics.contains("anisotropy")) {
+                if (!volumetrics["anisotropy"].is_number()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.anisotropy must be numeric";
+                    return false;
+                }
+                definition.volumetrics.anisotropy = std::clamp(volumetrics["anisotropy"].get<float>(), -0.95f, 0.95f);
+            }
+            if (volumetrics.contains("startDistance")) {
+                if (!volumetrics["startDistance"].is_number()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.startDistance must be numeric";
+                    return false;
+                }
+                definition.volumetrics.startDistance =
+                    std::clamp(volumetrics["startDistance"].get<float>(), 0.0f, 4000.0f);
+            }
+            if (volumetrics.contains("maxDistance")) {
+                if (!volumetrics["maxDistance"].is_number()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.maxDistance must be numeric";
+                    return false;
+                }
+                definition.volumetrics.maxDistance =
+                    std::clamp(volumetrics["maxDistance"].get<float>(), 1.0f, 20000.0f);
+            }
+            if (volumetrics.contains("heightFogEnabled")) {
+                if (!volumetrics["heightFogEnabled"].is_boolean()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.heightFogEnabled must be boolean";
+                    return false;
+                }
+                definition.volumetrics.heightFogEnabled = volumetrics["heightFogEnabled"].get<bool>();
+            }
+            if (volumetrics.contains("baseHeight")) {
+                if (!volumetrics["baseHeight"].is_number()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.baseHeight must be numeric";
+                    return false;
+                }
+                definition.volumetrics.baseHeight =
+                    std::clamp(volumetrics["baseHeight"].get<float>(), -20000.0f, 20000.0f);
+            }
+            if (volumetrics.contains("heightFalloff")) {
+                if (!volumetrics["heightFalloff"].is_number()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.heightFalloff must be numeric";
+                    return false;
+                }
+                definition.volumetrics.heightFalloff =
+                    std::clamp(volumetrics["heightFalloff"].get<float>(), 0.0f, 0.05f);
+            }
+            if (volumetrics.contains("lightShaftIntensity")) {
+                if (!volumetrics["lightShaftIntensity"].is_number()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.lightShaftIntensity must be numeric";
+                    return false;
+                }
+                definition.volumetrics.lightShaftIntensity =
+                    std::clamp(volumetrics["lightShaftIntensity"].get<float>(), 0.0f, 8.0f);
+            }
+            if (volumetrics.contains("shadowIntensity")) {
+                if (!volumetrics["shadowIntensity"].is_number()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.shadowIntensity must be numeric";
+                    return false;
+                }
+                definition.volumetrics.shadowIntensity =
+                    std::clamp(volumetrics["shadowIntensity"].get<float>(), 0.0f, 1.0f);
+            }
+            if (volumetrics.contains("temporalBlend")) {
+                if (!volumetrics["temporalBlend"].is_number()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.temporalBlend must be numeric";
+                    return false;
+                }
+                definition.volumetrics.temporalBlend =
+                    std::clamp(volumetrics["temporalBlend"].get<float>(), 0.0f, 0.99f);
+            }
+            if (volumetrics.contains("jitterScale")) {
+                if (!volumetrics["jitterScale"].is_number()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.jitterScale must be numeric";
+                    return false;
+                }
+                definition.volumetrics.jitterScale = std::clamp(volumetrics["jitterScale"].get<float>(), 0.0f, 4.0f);
+            }
+            if (volumetrics.contains("debugView")) {
+                if (!volumetrics["debugView"].is_boolean()) {
+                    outError = "presets[" + std::to_string(i) + "].volumetrics.debugView must be boolean";
+                    return false;
+                }
+                definition.volumetrics.debugView = volumetrics["debugView"].get<bool>();
+            }
         }
 
         outDefinitions.push_back(std::move(definition));
@@ -19042,6 +25422,684 @@ bool ExternalModManager::TryParseAssetPackDefinitions(const std::string& content
     }
 
     return true;
+}
+
+template <typename TDefinitions, typename TBuilder>
+bool ParseSimpleV4Catalog(const std::string& content, int32_t apiVersion, const char* fileName, const char* arrayFieldName,
+                          TDefinitions& outDefinitions, std::string& outError, TBuilder&& builder);
+
+bool ExternalModManager::TryParseAssetSourceDefinitions(const std::string& content, int32_t apiVersion,
+                                                        std::vector<ExternalModAssetSourceDefinition>& outDefinitions,
+                                                        std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "assetSourceDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("sources.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "sources.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("sources") || !json["sources"].is_array()) {
+        outError = "sources.json must contain sources[]";
+        return false;
+    }
+
+    auto isNamespacedId = [](const std::string& id) {
+        const auto separator = id.find(':');
+        return separator != std::string::npos && separator > 0 && separator + 1 < id.size();
+    };
+
+    std::unordered_set<std::string> seenIds;
+    const auto& sources = json["sources"];
+    for (size_t i = 0; i < sources.size(); ++i) {
+        const auto& source = sources[i];
+        if (!source.is_object()) {
+            outError = "sources[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModAssetSourceDefinition definition;
+        if (!ValidateRequiredString(source, "id", definition.id, outError)) {
+            outError = "sources[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!isNamespacedId(definition.id)) {
+            outError = "sources[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate asset source id: " + definition.id;
+            return false;
+        }
+
+        if (!ValidateRequiredString(source, "path", definition.path, outError)) {
+            outError = "sources[" + std::to_string(i) + "].path: " + outError;
+            return false;
+        }
+
+        std::filesystem::path normalizedPath;
+        if (!IsSafePackageRelativePath(definition.path, normalizedPath, outError)) {
+            outError = "sources[" + std::to_string(i) + "].path: " + outError;
+            return false;
+        }
+        definition.path = normalizedPath.generic_string();
+
+        const std::string inferredFormat = InferAssetSourceFormatFromPath(normalizedPath);
+        if (source.contains("format")) {
+            if (!source["format"].is_string()) {
+                outError = "sources[" + std::to_string(i) + "].format must be string";
+                return false;
+            }
+            definition.format = NormalizeAssetSourceFormatToken(source["format"].get<std::string>());
+        } else {
+            definition.format = inferredFormat;
+        }
+        if (definition.format.empty() || !IsSupportedAssetSourceFormat(definition.format)) {
+            outError = "sources[" + std::to_string(i) + "].format is unsupported";
+            return false;
+        }
+        if (!inferredFormat.empty() && definition.format != inferredFormat) {
+            outError = "sources[" + std::to_string(i) + "].format conflicts with file extension";
+            return false;
+        }
+
+        const std::string inferredKind = InferAssetSourceKindFromFormat(definition.format);
+        if (source.contains("kind")) {
+            if (!source["kind"].is_string()) {
+                outError = "sources[" + std::to_string(i) + "].kind must be string";
+                return false;
+            }
+            definition.kind = ToLower(source["kind"].get<std::string>());
+        } else {
+            definition.kind = inferredKind;
+        }
+        if (definition.kind.empty() || !IsSupportedAssetSourceKind(definition.kind)) {
+            outError = "sources[" + std::to_string(i) + "].kind is unsupported";
+            return false;
+        }
+        if (!inferredKind.empty() && definition.kind != inferredKind) {
+            outError = "sources[" + std::to_string(i) + "].kind conflicts with format";
+            return false;
+        }
+
+        if (source.contains("hostAccess")) {
+            if (!source["hostAccess"].is_boolean()) {
+                outError = "sources[" + std::to_string(i) + "].hostAccess must be boolean";
+                return false;
+            }
+            definition.hostAccess = source["hostAccess"].get<bool>();
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseMeshDefinitions(const std::string& content, int32_t apiVersion,
+                                                 std::vector<ExternalModMeshDefinition>& outDefinitions,
+                                                 std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "meshDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("meshes.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "meshes.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("meshes") || !json["meshes"].is_array()) {
+        outError = "meshes.json must contain meshes[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& meshes = json["meshes"];
+    for (size_t i = 0; i < meshes.size(); ++i) {
+        const auto& mesh = meshes[i];
+        if (!mesh.is_object()) {
+            outError = "meshes[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModMeshDefinition definition;
+        if (!ValidateRequiredString(mesh, "id", definition.id, outError)) {
+            outError = "meshes[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "meshes[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate mesh id: " + definition.id;
+            return false;
+        }
+
+        if (mesh.contains("modelAsset")) {
+            if (!mesh["modelAsset"].is_string()) {
+                outError = "meshes[" + std::to_string(i) + "].modelAsset must be string";
+                return false;
+            }
+            definition.modelAsset = mesh["modelAsset"].get<std::string>();
+        }
+        if (mesh.contains("modelTextureAsset")) {
+            if (!mesh["modelTextureAsset"].is_string()) {
+                outError = "meshes[" + std::to_string(i) + "].modelTextureAsset must be string";
+                return false;
+            }
+            definition.modelTextureAsset = mesh["modelTextureAsset"].get<std::string>();
+        }
+        if (mesh.contains("modelDisplayList") || mesh.contains("displayList")) {
+            const char* displayListField = mesh.contains("modelDisplayList") ? "modelDisplayList" : "displayList";
+            if (!mesh[displayListField].is_string()) {
+                outError = "meshes[" + std::to_string(i) + "]." + displayListField + " must be string";
+                return false;
+            }
+            definition.modelDisplayList = mesh[displayListField].get<std::string>();
+        }
+        if (mesh.contains("modelScale")) {
+            if (!mesh["modelScale"].is_number()) {
+                outError = "meshes[" + std::to_string(i) + "].modelScale must be number";
+                return false;
+            }
+            definition.modelScale = mesh["modelScale"].get<float>();
+        }
+        if (mesh.contains("modelUvOrigin")) {
+            if (!ParseModelUvOrigin(mesh["modelUvOrigin"], definition.modelUvOrigin, outError)) {
+                outError = "meshes[" + std::to_string(i) + "].modelUvOrigin " + outError;
+                return false;
+            }
+        }
+        if (mesh.contains("modelTextureFilter")) {
+            if (!ParseModelTextureFilter(mesh["modelTextureFilter"], definition.modelTextureFilter, outError)) {
+                outError = "meshes[" + std::to_string(i) + "].modelTextureFilter " + outError;
+                return false;
+            }
+        }
+        if (mesh.contains("modelTextureWidth")) {
+            if (!mesh["modelTextureWidth"].is_number_integer()) {
+                outError = "meshes[" + std::to_string(i) + "].modelTextureWidth must be integer";
+                return false;
+            }
+            definition.modelTextureTargetWidth = mesh["modelTextureWidth"].get<int32_t>();
+        }
+        if (mesh.contains("modelTextureHeight")) {
+            if (!mesh["modelTextureHeight"].is_number_integer()) {
+                outError = "meshes[" + std::to_string(i) + "].modelTextureHeight must be integer";
+                return false;
+            }
+            definition.modelTextureTargetHeight = mesh["modelTextureHeight"].get<int32_t>();
+        }
+
+        if (definition.modelAsset.empty() && definition.modelDisplayList.empty()) {
+            outError = "meshes[" + std::to_string(i) + "] requires modelAsset or modelDisplayList";
+            return false;
+        }
+        if (definition.modelScale <= 0.0f || definition.modelScale > kMaxDisplayListModelScale) {
+            outError = "meshes[" + std::to_string(i) + "].modelScale must be in (0, 2000]";
+            return false;
+        }
+        if ((definition.modelTextureTargetWidth < 0 || definition.modelTextureTargetHeight < 0) ||
+            ((definition.modelTextureTargetWidth == 0) != (definition.modelTextureTargetHeight == 0))) {
+            outError = "meshes[" + std::to_string(i) + "].modelTextureWidth/modelTextureHeight must both be set or both be omitted";
+            return false;
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParsePrefabDefinitions(const std::string& content, int32_t apiVersion,
+                                                   std::vector<ExternalModPrefabDefinition>& outDefinitions,
+                                                   std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "prefabDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("prefabs.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "prefabs.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("prefabs") || !json["prefabs"].is_array()) {
+        outError = "prefabs.json must contain prefabs[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& prefabs = json["prefabs"];
+    for (size_t i = 0; i < prefabs.size(); ++i) {
+        const auto& prefab = prefabs[i];
+        if (!prefab.is_object()) {
+            outError = "prefabs[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModPrefabDefinition definition;
+        if (!ValidateRequiredString(prefab, "id", definition.id, outError)) {
+            outError = "prefabs[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "prefabs[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate prefab id: " + definition.id;
+            return false;
+        }
+
+        const char* meshField = prefab.contains("meshId") ? "meshId" : (prefab.contains("mesh") ? "mesh" : nullptr);
+        if (meshField == nullptr || !ValidateRequiredString(prefab, meshField, definition.meshId, outError)) {
+            outError = "prefabs[" + std::to_string(i) + "] requires meshId/mesh";
+            return false;
+        }
+
+        if (prefab.contains("transform")) {
+            if (!prefab["transform"].is_object()) {
+                outError = "prefabs[" + std::to_string(i) + "].transform must be object";
+                return false;
+            }
+            const auto& transform = prefab["transform"];
+            if (transform.contains("offset") &&
+                !ParseVec3(transform["offset"], definition.offsetX, definition.offsetY, definition.offsetZ, "transform.offset",
+                           outError)) {
+                outError = "prefabs[" + std::to_string(i) + "].transform.offset: " + outError;
+                return false;
+            }
+            if (transform.contains("rotation") && !ParseVec3(transform["rotation"], definition.rotOffsetX,
+                                                             definition.rotOffsetY, definition.rotOffsetZ,
+                                                             "transform.rotation", outError)) {
+                outError = "prefabs[" + std::to_string(i) + "].transform.rotation: " + outError;
+                return false;
+            }
+            if (transform.contains("scale") &&
+                !ParseVec3(transform["scale"], definition.scaleX, definition.scaleY, definition.scaleZ, "transform.scale",
+                           outError)) {
+                outError = "prefabs[" + std::to_string(i) + "].transform.scale: " + outError;
+                return false;
+            }
+        }
+
+        if (prefab.contains("lodDistance")) {
+            if (!prefab["lodDistance"].is_number()) {
+                outError = "prefabs[" + std::to_string(i) + "].lodDistance must be number";
+                return false;
+            }
+            definition.lodDistance = prefab["lodDistance"].get<float>();
+        }
+        if (prefab.contains("billboard")) {
+            if (!prefab["billboard"].is_boolean()) {
+                outError = "prefabs[" + std::to_string(i) + "].billboard must be boolean";
+                return false;
+            }
+            definition.billboard = prefab["billboard"].get<bool>();
+        }
+
+        if (definition.scaleX == 0.0f || definition.scaleY == 0.0f || definition.scaleZ == 0.0f) {
+            outError = "prefabs[" + std::to_string(i) + "].transform.scale cannot contain zero";
+            return false;
+        }
+        if (definition.lodDistance <= 0.0f || definition.lodDistance > 100000.0f) {
+            outError = "prefabs[" + std::to_string(i) + "].lodDistance must be in (0, 100000]";
+            return false;
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseWorldInstanceDefinitions(const std::string& content, int32_t apiVersion,
+                                                          std::vector<ExternalModWorldInstanceDefinition>& outDefinitions,
+                                                          std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "worldInstanceDefinitions requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("instances.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "instances.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("instances") || !json["instances"].is_array()) {
+        outError = "instances.json must contain instances[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    const auto& instances = json["instances"];
+    for (size_t i = 0; i < instances.size(); ++i) {
+        const auto& instance = instances[i];
+        if (!instance.is_object()) {
+            outError = "instances[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+
+        ExternalModWorldInstanceDefinition definition;
+        if (!ValidateRequiredString(instance, "id", definition.id, outError)) {
+            outError = "instances[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "instances[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = "Duplicate world instance id: " + definition.id;
+            return false;
+        }
+
+        const char* prefabField = instance.contains("prefabId") ? "prefabId" : (instance.contains("prefab") ? "prefab" : nullptr);
+        const char* entityField = instance.contains("entityId") ? "entityId" : (instance.contains("entity") ? "entity" : nullptr);
+        if (prefabField != nullptr) {
+            if (!ValidateRequiredString(instance, prefabField, definition.prefabId, outError)) {
+                outError = "instances[" + std::to_string(i) + "]." + prefabField + ": " + outError;
+                return false;
+            }
+        }
+        if (entityField != nullptr) {
+            if (!ValidateRequiredString(instance, entityField, definition.entityId, outError)) {
+                outError = "instances[" + std::to_string(i) + "]." + entityField + ": " + outError;
+                return false;
+            }
+        }
+        if (definition.prefabId.empty() && definition.entityId.empty()) {
+            outError = "instances[" + std::to_string(i) + "] requires prefabId/prefab or entityId/entity";
+            return false;
+        }
+        if (!instance.contains("scene") ||
+            !ParseAliasedInt16(instance["scene"], kSceneAliases, "scene", definition.sceneId, outError)) {
+            outError = "instances[" + std::to_string(i) + "].scene: " + outError;
+            return false;
+        }
+        if (!instance.contains("position") ||
+            !ParseVec3(instance["position"], definition.posX, definition.posY, definition.posZ, "position", outError)) {
+            outError = "instances[" + std::to_string(i) + "].position: " + outError;
+            return false;
+        }
+        if (instance.contains("rotation") &&
+            !ParseVec3(instance["rotation"], definition.rotX, definition.rotY, definition.rotZ, "rotation", outError)) {
+            outError = "instances[" + std::to_string(i) + "].rotation: " + outError;
+            return false;
+        }
+        if (instance.contains("scale") &&
+            !ParseVec3(instance["scale"], definition.scaleX, definition.scaleY, definition.scaleZ, "scale", outError)) {
+            outError = "instances[" + std::to_string(i) + "].scale: " + outError;
+            return false;
+        }
+        if (instance.contains("room")) {
+            if (!instance["room"].is_number_integer()) {
+                outError = "instances[" + std::to_string(i) + "].room must be integer";
+                return false;
+            }
+            definition.roomId = static_cast<int16_t>(instance["room"].get<int32_t>());
+            definition.hasRoomId = true;
+        }
+        if (definition.scaleX == 0.0f || definition.scaleY == 0.0f || definition.scaleZ == 0.0f) {
+            outError = "instances[" + std::to_string(i) + "].scale cannot contain zero";
+            return false;
+        }
+
+        outDefinitions.push_back(std::move(definition));
+    }
+
+    return true;
+}
+
+bool ExternalModManager::TryParseEditorPlacementDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModEditorPlacementDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "placement.json", "placements", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModEditorPlacementDefinition>& output, std::string& error) {
+                                    ExternalModEditorPlacementDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "placements[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "placements[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate editor placement id: " + definition.id;
+                                        return false;
+                                    }
+
+                                    const char* prefabField =
+                                        definitionJson.contains("prefabId") ? "prefabId" :
+                                        (definitionJson.contains("prefab") ? "prefab" : nullptr);
+                                    const char* entityField =
+                                        definitionJson.contains("entityId") ? "entityId" :
+                                        (definitionJson.contains("entity") ? "entity" : nullptr);
+                                    if (prefabField != nullptr &&
+                                        !ValidateRequiredString(definitionJson, prefabField, definition.prefabId, error)) {
+                                        error = "placements[" + std::to_string(i) + "]." + prefabField + ": " + error;
+                                        return false;
+                                    }
+                                    if (entityField != nullptr &&
+                                        !ValidateRequiredString(definitionJson, entityField, definition.entityId, error)) {
+                                        error = "placements[" + std::to_string(i) + "]." + entityField + ": " + error;
+                                        return false;
+                                    }
+                                    if (definition.prefabId.empty() && definition.entityId.empty()) {
+                                        error = "placements[" + std::to_string(i) + "] requires prefabId/prefab or entityId/entity";
+                                        return false;
+                                    }
+
+                                    if (definitionJson.contains("displayName")) {
+                                        if (!definitionJson["displayName"].is_string()) {
+                                            error = "placements[" + std::to_string(i) + "].displayName must be string";
+                                            return false;
+                                        }
+                                        definition.displayName = definitionJson["displayName"].get<std::string>();
+                                    }
+                                    if (definitionJson.contains("category")) {
+                                        if (!definitionJson["category"].is_string()) {
+                                            error = "placements[" + std::to_string(i) + "].category must be string";
+                                            return false;
+                                        }
+                                        definition.category = definitionJson["category"].get<std::string>();
+                                    }
+                                    if (definitionJson.contains("scene")) {
+                                        if (!ParseAliasedInt16(definitionJson["scene"], kSceneAliases, "scene",
+                                                               definition.sceneId, error)) {
+                                            error = "placements[" + std::to_string(i) + "].scene: " + error;
+                                            return false;
+                                        }
+                                        definition.hasSceneId = true;
+                                    }
+                                    if (definitionJson.contains("room")) {
+                                        if (!definitionJson["room"].is_number_integer()) {
+                                            error = "placements[" + std::to_string(i) + "].room must be integer";
+                                            return false;
+                                        }
+                                        definition.roomId = static_cast<int16_t>(definitionJson["room"].get<int32_t>());
+                                        definition.hasRoomId = true;
+                                    }
+                                    if (definitionJson.contains("transform")) {
+                                        if (!definitionJson["transform"].is_object()) {
+                                            error = "placements[" + std::to_string(i) + "].transform must be object";
+                                            return false;
+                                        }
+                                        const auto& transform = definitionJson["transform"];
+                                        if (transform.contains("rotation") &&
+                                            !ParseVec3(transform["rotation"], definition.rotX, definition.rotY,
+                                                       definition.rotZ, "transform.rotation", error)) {
+                                            error = "placements[" + std::to_string(i) + "].transform.rotation: " + error;
+                                            return false;
+                                        }
+                                        if (transform.contains("scale") &&
+                                            !ParseVec3(transform["scale"], definition.scaleX, definition.scaleY,
+                                                       definition.scaleZ, "transform.scale", error)) {
+                                            error = "placements[" + std::to_string(i) + "].transform.scale: " + error;
+                                            return false;
+                                        }
+                                    }
+                                    if (definition.displayName.empty()) {
+                                        definition.displayName = definition.id;
+                                    }
+                                    if (definition.scaleX == 0.0f || definition.scaleY == 0.0f ||
+                                        definition.scaleZ == 0.0f) {
+                                        error = "placements[" + std::to_string(i) + "].transform.scale cannot contain zero";
+                                        return false;
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseWorldAuthoringDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModWorldAuthoringDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "authoring.json", "placements", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModWorldAuthoringDefinition>& output, std::string& error) {
+                                    ExternalModWorldAuthoringDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "placements[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "placements[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate world authoring id: " + definition.id;
+                                        return false;
+                                    }
+
+                                    if (definitionJson.contains("placementId")) {
+                                        if (!definitionJson["placementId"].is_string()) {
+                                            error = "placements[" + std::to_string(i) + "].placementId must be string";
+                                            return false;
+                                        }
+                                        definition.placementId = definitionJson["placementId"].get<std::string>();
+                                    } else if (definitionJson.contains("placement")) {
+                                        if (!definitionJson["placement"].is_string()) {
+                                            error = "placements[" + std::to_string(i) + "].placement must be string";
+                                            return false;
+                                        }
+                                        definition.placementId = definitionJson["placement"].get<std::string>();
+                                    }
+
+                                    const char* prefabField =
+                                        definitionJson.contains("prefabId") ? "prefabId" :
+                                        (definitionJson.contains("prefab") ? "prefab" : nullptr);
+                                    const char* entityField =
+                                        definitionJson.contains("entityId") ? "entityId" :
+                                        (definitionJson.contains("entity") ? "entity" : nullptr);
+                                    if (prefabField != nullptr) {
+                                        if (!ValidateRequiredString(definitionJson, prefabField, definition.prefabId, error)) {
+                                            error = "placements[" + std::to_string(i) + "]." + prefabField + ": " + error;
+                                            return false;
+                                        }
+                                    }
+                                    if (entityField != nullptr) {
+                                        if (!ValidateRequiredString(definitionJson, entityField, definition.entityId, error)) {
+                                            error = "placements[" + std::to_string(i) + "]." + entityField + ": " + error;
+                                            return false;
+                                        }
+                                    }
+
+                                    if (definition.placementId.empty() && definition.prefabId.empty() && definition.entityId.empty()) {
+                                        error = "placements[" + std::to_string(i) +
+                                                "] requires placementId/placement or prefabId/prefab or entityId/entity";
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("scene")) {
+                                        if (!ParseAliasedInt16(definitionJson["scene"], kSceneAliases, "scene",
+                                                               definition.sceneId, error)) {
+                                            error = "placements[" + std::to_string(i) + "].scene: " + error;
+                                            return false;
+                                        }
+                                        definition.hasSceneId = true;
+                                    }
+                                    if (definitionJson.contains("room")) {
+                                        if (!definitionJson["room"].is_number_integer()) {
+                                            error = "placements[" + std::to_string(i) + "].room must be integer";
+                                            return false;
+                                        }
+                                        definition.roomId = static_cast<int16_t>(definitionJson["room"].get<int32_t>());
+                                        definition.hasRoomId = true;
+                                    }
+                                    if (!definitionJson.contains("position") ||
+                                        !ParseVec3(definitionJson["position"], definition.posX, definition.posY,
+                                                   definition.posZ, "position", error)) {
+                                        error = "placements[" + std::to_string(i) + "].position: " + error;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("rotation")) {
+                                        if (!ParseVec3(definitionJson["rotation"], definition.rotX, definition.rotY,
+                                                       definition.rotZ, "rotation", error)) {
+                                            error = "placements[" + std::to_string(i) + "].rotation: " + error;
+                                            return false;
+                                        }
+                                        definition.hasRotation = true;
+                                    }
+                                    if (definitionJson.contains("scale")) {
+                                        if (!ParseVec3(definitionJson["scale"], definition.scaleX, definition.scaleY,
+                                                       definition.scaleZ, "scale", error)) {
+                                            error = "placements[" + std::to_string(i) + "].scale: " + error;
+                                            return false;
+                                        }
+                                        definition.hasScale = true;
+                                    }
+
+                                    if (definition.hasScale && (definition.scaleX == 0.0f || definition.scaleY == 0.0f ||
+                                                                definition.scaleZ == 0.0f)) {
+                                        error = "placements[" + std::to_string(i) + "].scale cannot contain zero";
+                                        return false;
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
 }
 
 bool ExternalModManager::TryParseRenderInspectorDefinitions(
@@ -19391,19 +26449,1123 @@ bool ExternalModManager::TryParseSpellDefinitions(const std::string& content, in
     return true;
 }
 
+template <typename TDefinitions, typename TBuilder>
+bool ParseSimpleV4Catalog(const std::string& content, int32_t apiVersion, const char* fileName, const char* arrayFieldName,
+                          TDefinitions& outDefinitions, std::string& outError, TBuilder&& builder) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = std::string(fileName) + " requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string(fileName) + " parse error: " + ex.what();
+        return false;
+    }
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = std::string(fileName) + " schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains(arrayFieldName) || !json[arrayFieldName].is_array()) {
+        outError = std::string(fileName) + " must contain " + arrayFieldName + "[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenIds;
+    for (size_t i = 0; i < json[arrayFieldName].size(); ++i) {
+        const auto& definitionJson = json[arrayFieldName][i];
+        if (!definitionJson.is_object()) {
+            outError = std::string(arrayFieldName) + "[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+        if (!builder(definitionJson, i, seenIds, outDefinitions, outError)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ExternalModManager::TryParseWorldPersistenceDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModWorldPersistenceDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "persistence.json", "definitions", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModWorldPersistenceDefinition>& output, std::string& error) {
+                                    ExternalModWorldPersistenceDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "definitions[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "definitions[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate persistence definition id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("scope") && definitionJson["scope"].is_string()) {
+                                        definition.scope = ToLower(definitionJson["scope"].get<std::string>());
+                                    }
+                                    if (definitionJson.contains("autoSaveOnRoomExit") &&
+                                        definitionJson["autoSaveOnRoomExit"].is_boolean()) {
+                                        definition.autoSaveOnRoomExit = definitionJson["autoSaveOnRoomExit"].get<bool>();
+                                    }
+                                    if (definitionJson.contains("autoLoadOnRoomEnter") &&
+                                        definitionJson["autoLoadOnRoomEnter"].is_boolean()) {
+                                        definition.autoLoadOnRoomEnter = definitionJson["autoLoadOnRoomEnter"].get<bool>();
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseWorldStorageDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModWorldStorageDomainDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "storage_domains.json", "domains", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModWorldStorageDomainDefinition>& output, std::string& error) {
+                                    ExternalModWorldStorageDomainDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "domains[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "domains[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate storage domain id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("version") && definitionJson["version"].is_number_integer()) {
+                                        definition.version = std::max(1, definitionJson["version"].get<int32_t>());
+                                    }
+                                    if (definitionJson.contains("file") && definitionJson["file"].is_string()) {
+                                        definition.file = definitionJson["file"].get<std::string>();
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseWorldSpawnProfileDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModWorldSpawnProfileDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "spawn_profiles.json", "profiles", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModWorldSpawnProfileDefinition>& output, std::string& error) {
+                                    ExternalModWorldSpawnProfileDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "profiles[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "profiles[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate spawn profile id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (!ValidateRequiredString(definitionJson, "actorArchetypeId", definition.actorArchetypeId,
+                                                                error) &&
+                                        !ValidateRequiredString(definitionJson, "archetypeId", definition.actorArchetypeId,
+                                                                error)) {
+                                        error = "profiles[" + std::to_string(i) + "].actorArchetypeId: " + error;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("maxActive") && definitionJson["maxActive"].is_number_integer()) {
+                                        definition.maxActive = std::clamp(definitionJson["maxActive"].get<int32_t>(), 1, 2048);
+                                    }
+                                    if (definitionJson.contains("cooldownFrames") &&
+                                        definitionJson["cooldownFrames"].is_number_integer()) {
+                                        definition.cooldownFrames =
+                                            std::clamp(definitionJson["cooldownFrames"].get<int32_t>(), 0, 36000);
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseWorldTimeWeatherDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModWorldTimeWeatherDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "time_weather.json", "profiles", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModWorldTimeWeatherDefinition>& output, std::string& error) {
+                                    ExternalModWorldTimeWeatherDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "profiles[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "profiles[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate time/weather profile id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("defaultTimeSegment") &&
+                                        definitionJson["defaultTimeSegment"].is_string()) {
+                                        definition.defaultTimeSegment =
+                                            ToLower(definitionJson["defaultTimeSegment"].get<std::string>());
+                                    }
+                                    if (definitionJson.contains("defaultWeather") &&
+                                        definitionJson["defaultWeather"].is_string()) {
+                                        definition.defaultWeather = ToLower(definitionJson["defaultWeather"].get<std::string>());
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseWorldSeedingDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModWorldSeedingDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "seeding.json", "definitions", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModWorldSeedingDefinition>& output, std::string& error) {
+                                    ExternalModWorldSeedingDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "definitions[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "definitions[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate seeding definition id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("seedOffset") && definitionJson["seedOffset"].is_number_integer()) {
+                                        definition.seedOffset = definitionJson["seedOffset"].get<int32_t>();
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseWorldMigrationDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModWorldMigrationDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "migrations.json", "migrations", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModWorldMigrationDefinition>& output, std::string& error) {
+                                    ExternalModWorldMigrationDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "migrations[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "migrations[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate migration id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("fromVersion") &&
+                                        definitionJson["fromVersion"].is_number_integer()) {
+                                        definition.fromVersion = std::max(1, definitionJson["fromVersion"].get<int32_t>());
+                                    }
+                                    if (definitionJson.contains("toVersion") && definitionJson["toVersion"].is_number_integer()) {
+                                        definition.toVersion =
+                                            std::max(definition.fromVersion, definitionJson["toVersion"].get<int32_t>());
+                                    }
+                                    if (definitionJson.contains("actions") &&
+                                        !ParseActionArray(definitionJson["actions"], apiVersion, "actions", definition.actions,
+                                                          error)) {
+                                        error = "migrations[" + std::to_string(i) + "].actions: " + error;
+                                        return false;
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParsePersistenceInspectorDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModPersistenceInspectorDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "persistence_inspector.json", "overlays", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModPersistenceInspectorDefinition>& output, std::string& error) {
+                                    ExternalModPersistenceInspectorDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "overlays[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "overlays[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate persistence inspector id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("enabledByDefault") &&
+                                        definitionJson["enabledByDefault"].is_boolean()) {
+                                        definition.enabledByDefault = definitionJson["enabledByDefault"].get<bool>();
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseNarrativeFlagDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModNarrativeFlagDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "flags.json", "flags", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModNarrativeFlagDefinition>& output, std::string& error) {
+                                    ExternalModNarrativeFlagDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "flags[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "flags[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate narrative flag id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("valueType") && definitionJson["valueType"].is_string()) {
+                                        definition.valueType = ToLower(definitionJson["valueType"].get<std::string>());
+                                    }
+                                    if (definitionJson.contains("scope") && definitionJson["scope"].is_string()) {
+                                        definition.scope = ToLower(definitionJson["scope"].get<std::string>());
+                                    }
+                                    if (definitionJson.contains("defaultValue")) {
+                                        if (definitionJson["defaultValue"].is_string()) {
+                                            definition.defaultValue = definitionJson["defaultValue"].get<std::string>();
+                                        } else if (definitionJson["defaultValue"].is_boolean()) {
+                                            definition.defaultValue = definitionJson["defaultValue"].get<bool>() ? "true" : "false";
+                                        } else if (definitionJson["defaultValue"].is_number_integer()) {
+                                            definition.defaultValue =
+                                                std::to_string(definitionJson["defaultValue"].get<long long>());
+                                        } else if (definitionJson["defaultValue"].is_number_float()) {
+                                            definition.defaultValue =
+                                                std::to_string(definitionJson["defaultValue"].get<double>());
+                                        }
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseNarrativeDialogueDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModNarrativeDialogueDefinition>& outDefinitions,
+    std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "narrativeDialogueDefinitions requires apiVersion 4";
+        return false;
+    }
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("dialogues.json parse error: ") + ex.what();
+        return false;
+    }
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1) {
+        outError = "dialogues.json schemaVersion must be 1";
+        return false;
+    }
+    if (!json.contains("dialogues") || !json["dialogues"].is_array()) {
+        outError = "dialogues.json must contain dialogues[]";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenDialogueIds;
+    for (size_t i = 0; i < json["dialogues"].size(); ++i) {
+        const auto& dialogueJson = json["dialogues"][i];
+        if (!dialogueJson.is_object()) {
+            outError = "dialogues[" + std::to_string(i) + "] must be object";
+            return false;
+        }
+        ExternalModNarrativeDialogueDefinition definition;
+        if (!ValidateRequiredString(dialogueJson, "id", definition.id, outError)) {
+            outError = "dialogues[" + std::to_string(i) + "].id: " + outError;
+            return false;
+        }
+        if (!IsNamespacedCatalogId(definition.id)) {
+            outError = "dialogues[" + std::to_string(i) + "].id must be namespaced";
+            return false;
+        }
+        if (!seenDialogueIds.insert(definition.id).second) {
+            outError = "Duplicate dialogue id: " + definition.id;
+            return false;
+        }
+        if (!ValidateRequiredString(dialogueJson, "startNodeId", definition.startNodeId, outError)) {
+            outError = "dialogues[" + std::to_string(i) + "].startNodeId: " + outError;
+            return false;
+        }
+        if (!dialogueJson.contains("nodes") || !dialogueJson["nodes"].is_array()) {
+            outError = "dialogues[" + std::to_string(i) + "].nodes must be array";
+            return false;
+        }
+
+        std::unordered_set<std::string> seenNodeIds;
+        for (size_t nodeIndex = 0; nodeIndex < dialogueJson["nodes"].size(); ++nodeIndex) {
+            const auto& nodeJson = dialogueJson["nodes"][nodeIndex];
+            if (!nodeJson.is_object()) {
+                outError = "dialogues[" + std::to_string(i) + "].nodes[" + std::to_string(nodeIndex) + "] must be object";
+                return false;
+            }
+            ExternalModNarrativeDialogueNodeDefinition nodeDefinition;
+            if (!ValidateRequiredString(nodeJson, "id", nodeDefinition.id, outError)) {
+                outError = "dialogues[" + std::to_string(i) + "].nodes[" + std::to_string(nodeIndex) + "].id: " + outError;
+                return false;
+            }
+            if (!seenNodeIds.insert(nodeDefinition.id).second) {
+                outError = "Duplicate dialogue node id: " + nodeDefinition.id;
+                return false;
+            }
+            if (nodeJson.contains("speaker") && nodeJson["speaker"].is_string()) {
+                nodeDefinition.speaker = nodeJson["speaker"].get<std::string>();
+            }
+            if (nodeJson.contains("line") && nodeJson["line"].is_string()) {
+                nodeDefinition.line = nodeJson["line"].get<std::string>();
+            }
+            if (nodeJson.contains("nextNodeId") && nodeJson["nextNodeId"].is_string()) {
+                nodeDefinition.nextNodeId = nodeJson["nextNodeId"].get<std::string>();
+            }
+            if (nodeJson.contains("onEnter") &&
+                !ParseActionArray(nodeJson["onEnter"], apiVersion, "onEnter", nodeDefinition.onEnter, outError)) {
+                outError = "dialogues[" + std::to_string(i) + "].nodes[" + std::to_string(nodeIndex) + "].onEnter: " + outError;
+                return false;
+            }
+            if (nodeJson.contains("options")) {
+                if (!nodeJson["options"].is_array()) {
+                    outError = "dialogues[" + std::to_string(i) + "].nodes[" + std::to_string(nodeIndex) + "].options must be array";
+                    return false;
+                }
+                std::unordered_set<std::string> seenOptionIds;
+                for (size_t optionIndex = 0; optionIndex < nodeJson["options"].size(); ++optionIndex) {
+                    const auto& optionJson = nodeJson["options"][optionIndex];
+                    if (!optionJson.is_object()) {
+                        outError = "dialogues[" + std::to_string(i) + "].nodes[" + std::to_string(nodeIndex) +
+                                   "].options[" + std::to_string(optionIndex) + "] must be object";
+                        return false;
+                    }
+                    ExternalModNarrativeDialogueOptionDefinition optionDefinition;
+                    if (!ValidateRequiredString(optionJson, "id", optionDefinition.id, outError)) {
+                        outError = "dialogues[" + std::to_string(i) + "].nodes[" + std::to_string(nodeIndex) + "].options[" +
+                                   std::to_string(optionIndex) + "].id: " + outError;
+                        return false;
+                    }
+                    if (!seenOptionIds.insert(optionDefinition.id).second) {
+                        outError = "Duplicate dialogue option id: " + optionDefinition.id;
+                        return false;
+                    }
+                    if (!ValidateRequiredString(optionJson, "text", optionDefinition.text, outError)) {
+                        outError = "dialogues[" + std::to_string(i) + "].nodes[" + std::to_string(nodeIndex) + "].options[" +
+                                   std::to_string(optionIndex) + "].text: " + outError;
+                        return false;
+                    }
+                    if (optionJson.contains("nextNodeId") && optionJson["nextNodeId"].is_string()) {
+                        optionDefinition.nextNodeId = optionJson["nextNodeId"].get<std::string>();
+                    }
+                    if (optionJson.contains("onChoose") &&
+                        !ParseActionArray(optionJson["onChoose"], apiVersion, "onChoose", optionDefinition.onChoose,
+                                          outError)) {
+                        outError = "dialogues[" + std::to_string(i) + "].nodes[" + std::to_string(nodeIndex) +
+                                   "].options[" + std::to_string(optionIndex) + "].onChoose: " + outError;
+                        return false;
+                    }
+                    nodeDefinition.options.push_back(std::move(optionDefinition));
+                }
+            }
+            definition.nodes.push_back(std::move(nodeDefinition));
+        }
+        outDefinitions.push_back(std::move(definition));
+    }
+    return true;
+}
+
+bool ExternalModManager::TryParseNarrativeQuestDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModNarrativeQuestDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "quests.json", "quests", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModNarrativeQuestDefinition>& output, std::string& error) {
+                                    ExternalModNarrativeQuestDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "quests[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "quests[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate narrative quest id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("startState") && definitionJson["startState"].is_string()) {
+                                        definition.startState = ToLower(definitionJson["startState"].get<std::string>());
+                                    }
+                                    if (definitionJson.contains("onStart") &&
+                                        !ParseActionArray(definitionJson["onStart"], apiVersion, "onStart",
+                                                          definition.onStart, error)) {
+                                        error = "quests[" + std::to_string(i) + "].onStart: " + error;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("onComplete") &&
+                                        !ParseActionArray(definitionJson["onComplete"], apiVersion, "onComplete",
+                                                          definition.onComplete, error)) {
+                                        error = "quests[" + std::to_string(i) + "].onComplete: " + error;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("objectives") && definitionJson["objectives"].is_array()) {
+                                        for (size_t objectiveIndex = 0; objectiveIndex < definitionJson["objectives"].size();
+                                             ++objectiveIndex) {
+                                            const auto& objectiveJson = definitionJson["objectives"][objectiveIndex];
+                                            if (!objectiveJson.is_object()) {
+                                                error = "quests[" + std::to_string(i) + "].objectives[" +
+                                                        std::to_string(objectiveIndex) + "] must be object";
+                                                return false;
+                                            }
+                                            ExternalModNarrativeQuestObjectiveDefinition objectiveDefinition;
+                                            if (!ValidateRequiredString(objectiveJson, "id", objectiveDefinition.id, error)) {
+                                                error = "quests[" + std::to_string(i) + "].objectives[" +
+                                                        std::to_string(objectiveIndex) + "].id: " + error;
+                                                return false;
+                                            }
+                                            if (objectiveJson.contains("text") && objectiveJson["text"].is_string()) {
+                                                objectiveDefinition.text = objectiveJson["text"].get<std::string>();
+                                            }
+                                            if (objectiveJson.contains("state") && objectiveJson["state"].is_string()) {
+                                                objectiveDefinition.state = ToLower(objectiveJson["state"].get<std::string>());
+                                            }
+                                            definition.objectives.push_back(std::move(objectiveDefinition));
+                                        }
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseNarrativeTimelineDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModNarrativeTimelineDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "timelines.json", "timelines", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModNarrativeTimelineDefinition>& output, std::string& error) {
+                                    ExternalModNarrativeTimelineDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "timelines[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "timelines[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate timeline id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("durationFrames") &&
+                                        definitionJson["durationFrames"].is_number_integer()) {
+                                        definition.durationFrames =
+                                            std::clamp(definitionJson["durationFrames"].get<int32_t>(), 0, 72000);
+                                    }
+                                    if (definitionJson.contains("skippable") && definitionJson["skippable"].is_boolean()) {
+                                        definition.skippable = definitionJson["skippable"].get<bool>();
+                                    }
+                                    if (definitionJson.contains("onCompleted") &&
+                                        !ParseActionArray(definitionJson["onCompleted"], apiVersion, "onCompleted",
+                                                          definition.onCompleted, error)) {
+                                        error = "timelines[" + std::to_string(i) + "].onCompleted: " + error;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("onSkipped") &&
+                                        !ParseActionArray(definitionJson["onSkipped"], apiVersion, "onSkipped",
+                                                          definition.onSkipped, error)) {
+                                        error = "timelines[" + std::to_string(i) + "].onSkipped: " + error;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("tracks")) {
+                                        if (!definitionJson["tracks"].is_array()) {
+                                            error = "timelines[" + std::to_string(i) + "].tracks must be array";
+                                            return false;
+                                        }
+                                        for (size_t trackIndex = 0; trackIndex < definitionJson["tracks"].size(); ++trackIndex) {
+                                            const auto& trackJson = definitionJson["tracks"][trackIndex];
+                                            if (!trackJson.is_object()) {
+                                                error = "timelines[" + std::to_string(i) + "].tracks[" +
+                                                        std::to_string(trackIndex) + "] must be object";
+                                                return false;
+                                            }
+                                            ExternalModNarrativeTimelineTrackDefinition trackDefinition;
+                                            if (!ValidateRequiredString(trackJson, "id", trackDefinition.id, error)) {
+                                                error = "timelines[" + std::to_string(i) + "].tracks[" +
+                                                        std::to_string(trackIndex) + "].id: " + error;
+                                                return false;
+                                            }
+                                            if (trackJson.contains("type") && trackJson["type"].is_string()) {
+                                                trackDefinition.type = ToLower(trackJson["type"].get<std::string>());
+                                            }
+                                            if (trackJson.contains("atFrame") && trackJson["atFrame"].is_number_integer()) {
+                                                trackDefinition.atFrame =
+                                                    std::max(0, trackJson["atFrame"].get<int32_t>());
+                                            }
+                                            if (trackJson.contains("actions") &&
+                                                !ParseActionArray(trackJson["actions"], apiVersion, "actions",
+                                                                  trackDefinition.actions, error)) {
+                                                error = "timelines[" + std::to_string(i) + "].tracks[" +
+                                                        std::to_string(trackIndex) + "].actions: " + error;
+                                                return false;
+                                            }
+                                            definition.tracks.push_back(std::move(trackDefinition));
+                                        }
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseNarrativeInspectorDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModNarrativeInspectorDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "narrative_inspector.json", "overlays", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModNarrativeInspectorDefinition>& output, std::string& error) {
+                                    ExternalModNarrativeInspectorDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "overlays[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "overlays[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate narrative inspector id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("enabledByDefault") &&
+                                        definitionJson["enabledByDefault"].is_boolean()) {
+                                        definition.enabledByDefault = definitionJson["enabledByDefault"].get<bool>();
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseDevHotReloadDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModDevHotReloadDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "hot_reload.json", "definitions", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModDevHotReloadDefinition>& output, std::string& error) {
+                                    ExternalModDevHotReloadDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "definitions[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "definitions[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate hot reload definition id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("enabled") && definitionJson["enabled"].is_boolean()) {
+                                        definition.enabled = definitionJson["enabled"].get<bool>();
+                                    }
+                                    if (definitionJson.contains("debounceMs") && definitionJson["debounceMs"].is_number_integer()) {
+                                        definition.debounceMs =
+                                            std::clamp(definitionJson["debounceMs"].get<int32_t>(), 0, 60000);
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseDevConsoleDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModDevConsoleCommandDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "console_commands.json", "commands", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModDevConsoleCommandDefinition>& output, std::string& error) {
+                                    ExternalModDevConsoleCommandDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "commands[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "commands[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate console command id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (!ValidateRequiredString(definitionJson, "command", definition.command, error)) {
+                                        error = "commands[" + std::to_string(i) + "].command: " + error;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("actions") &&
+                                        !ParseActionArray(definitionJson["actions"], apiVersion, "actions", definition.actions,
+                                                          error)) {
+                                        error = "commands[" + std::to_string(i) + "].actions: " + error;
+                                        return false;
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseDevWatcherDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModDevWatcherDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "watchers.json", "watchers", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModDevWatcherDefinition>& output, std::string& error) {
+                                    ExternalModDevWatcherDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "watchers[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "watchers[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate watcher id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (!ValidateRequiredString(definitionJson, "path", definition.path, error)) {
+                                        error = "watchers[" + std::to_string(i) + "].path: " + error;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("target") && definitionJson["target"].is_string()) {
+                                        definition.target = ToLower(definitionJson["target"].get<std::string>());
+                                    }
+                                    if (definitionJson.contains("debounceMs") && definitionJson["debounceMs"].is_number_integer()) {
+                                        definition.debounceMs =
+                                            std::clamp(definitionJson["debounceMs"].get<int32_t>(), 0, 60000);
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseWasmSandboxDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModWasmSandboxDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "wasm_sandbox.json", "sandboxes", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModWasmSandboxDefinition>& output, std::string& error) {
+                                    ExternalModWasmSandboxDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "sandboxes[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "sandboxes[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate wasm sandbox id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("maxCallMs") && definitionJson["maxCallMs"].is_number_integer()) {
+                                        definition.maxCallMs = std::clamp(definitionJson["maxCallMs"].get<int32_t>(), 1, 16);
+                                    }
+                                    if (definitionJson.contains("maxFrameBudgetMs") &&
+                                        definitionJson["maxFrameBudgetMs"].is_number_integer()) {
+                                        definition.maxFrameBudgetMs =
+                                            std::clamp(definitionJson["maxFrameBudgetMs"].get<int32_t>(), 1, 33);
+                                    }
+                                    if (definitionJson.contains("maxHookCallsPerFrame") &&
+                                        definitionJson["maxHookCallsPerFrame"].is_number_integer()) {
+                                        definition.maxHookCallsPerFrame =
+                                            std::clamp(definitionJson["maxHookCallsPerFrame"].get<int32_t>(), 1, 4096);
+                                    }
+                                    if (definitionJson.contains("deterministicMode") &&
+                                        definitionJson["deterministicMode"].is_boolean()) {
+                                        definition.deterministicMode = definitionJson["deterministicMode"].get<bool>();
+                                    }
+                                    if (definitionJson.contains("allowedSurfaces")) {
+                                        if (!definitionJson["allowedSurfaces"].is_array()) {
+                                            error = "sandboxes[" + std::to_string(i) + "].allowedSurfaces must be array";
+                                            return false;
+                                        }
+                                        for (size_t surfaceIndex = 0; surfaceIndex < definitionJson["allowedSurfaces"].size();
+                                             ++surfaceIndex) {
+                                            if (!definitionJson["allowedSurfaces"][surfaceIndex].is_string()) {
+                                                error = "sandboxes[" + std::to_string(i) + "].allowedSurfaces[" +
+                                                        std::to_string(surfaceIndex) + "] must be string";
+                                                return false;
+                                            }
+                                            definition.allowedSurfaces.push_back(
+                                                ToLower(definitionJson["allowedSurfaces"][surfaceIndex].get<std::string>()));
+                                        }
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseReloadInspectorDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModReloadInspectorDefinition>& outDefinitions,
+    std::string& outError) {
+    return ParseSimpleV4Catalog(content, apiVersion, "reload_inspector.json", "overlays", outDefinitions, outError,
+                                [&](const nlohmann::json& definitionJson, size_t i, std::unordered_set<std::string>& seenIds,
+                                    std::vector<ExternalModReloadInspectorDefinition>& output, std::string& error) {
+                                    ExternalModReloadInspectorDefinition definition;
+                                    if (!ValidateRequiredString(definitionJson, "id", definition.id, error)) {
+                                        error = "overlays[" + std::to_string(i) + "].id: " + error;
+                                        return false;
+                                    }
+                                    if (!IsNamespacedCatalogId(definition.id)) {
+                                        error = "overlays[" + std::to_string(i) + "].id must be namespaced";
+                                        return false;
+                                    }
+                                    if (!seenIds.insert(definition.id).second) {
+                                        error = "Duplicate reload inspector id: " + definition.id;
+                                        return false;
+                                    }
+                                    if (definitionJson.contains("enabledByDefault") &&
+                                        definitionJson["enabledByDefault"].is_boolean()) {
+                                        definition.enabledByDefault = definitionJson["enabledByDefault"].get<bool>();
+                                    }
+                                    output.push_back(std::move(definition));
+                                    return true;
+                                });
+}
+
+bool ExternalModManager::TryParseSettingsSchema(const std::string& content, ExternalModSettingsSchemaDefinition& outSchema,
+                                                std::string& outError) {
+    outSchema = ExternalModSettingsSchemaDefinition{};
+
+    nlohmann::json json;
+    try {
+        json = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("settings.schema.json parse error: ") + ex.what();
+        return false;
+    }
+
+    if (!json.is_object()) {
+        outError = "settings.schema.json must be an object";
+        return false;
+    }
+
+    if (!json.contains("version") || !json["version"].is_number_integer()) {
+        outError = "settings.schema.json.version must be integer 1";
+        return false;
+    }
+    outSchema.version = json["version"].get<int32_t>();
+    if (outSchema.version != 1) {
+        outError = "settings.schema.json.version must be 1";
+        return false;
+    }
+
+    if (!json.contains("groups") || !json["groups"].is_array()) {
+        outError = "settings.schema.json.groups must be an array";
+        return false;
+    }
+
+    std::unordered_set<std::string> seenGroupIds;
+    std::unordered_set<std::string> seenEntryKeys;
+    for (size_t groupIndex = 0; groupIndex < json["groups"].size(); ++groupIndex) {
+        const auto& groupJson = json["groups"][groupIndex];
+        if (!groupJson.is_object()) {
+            outError = "groups[" + std::to_string(groupIndex) + "] must be object";
+            return false;
+        }
+
+        ExternalModSettingGroupDefinition group;
+        if (!ValidateRequiredString(groupJson, "id", group.id, outError)) {
+            outError = "groups[" + std::to_string(groupIndex) + "].id: " + outError;
+            return false;
+        }
+        if (!seenGroupIds.insert(group.id).second) {
+            outError = "Duplicate settings group id: " + group.id;
+            return false;
+        }
+        group.label = group.id;
+        if (groupJson.contains("label")) {
+            if (!ValidateRequiredString(groupJson, "label", group.label, outError)) {
+                outError = "groups[" + std::to_string(groupIndex) + "].label: " + outError;
+                return false;
+            }
+        }
+        if (groupJson.contains("order")) {
+            if (!groupJson["order"].is_number_integer()) {
+                outError = "groups[" + std::to_string(groupIndex) + "].order must be integer";
+                return false;
+            }
+            group.order = groupJson["order"].get<int32_t>();
+        }
+        if (!groupJson.contains("entries") || !groupJson["entries"].is_array()) {
+            outError = "groups[" + std::to_string(groupIndex) + "].entries must be array";
+            return false;
+        }
+
+        for (size_t entryIndex = 0; entryIndex < groupJson["entries"].size(); ++entryIndex) {
+            const auto& entryJson = groupJson["entries"][entryIndex];
+            if (!entryJson.is_object()) {
+                outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                           "] must be object";
+                return false;
+            }
+
+            ExternalModSettingEntryDefinition entry;
+            if (!ValidateRequiredString(entryJson, "key", entry.key, outError)) {
+                outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                           "].key: " + outError;
+                return false;
+            }
+            if (!seenEntryKeys.insert(entry.key).second) {
+                outError = "Duplicate settings key: " + entry.key;
+                return false;
+            }
+
+            entry.label = entry.key;
+            if (entryJson.contains("label")) {
+                if (!ValidateRequiredString(entryJson, "label", entry.label, outError)) {
+                    outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                               "].label: " + outError;
+                    return false;
+                }
+            }
+            if (entryJson.contains("help")) {
+                if (!ValidateRequiredString(entryJson, "help", entry.help, outError)) {
+                    outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                               "].help: " + outError;
+                    return false;
+                }
+            }
+            std::string entryType;
+            if (!ValidateRequiredString(entryJson, "type", entryType, outError)) {
+                outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                           "].type: " + outError;
+                return false;
+            }
+
+            const std::string typeToken = ToLower(entryType);
+            if (typeToken == "bool") {
+                entry.type = ExternalModSettingValueType::Bool;
+            } else if (typeToken == "int") {
+                entry.type = ExternalModSettingValueType::Int;
+            } else if (typeToken == "float") {
+                entry.type = ExternalModSettingValueType::Float;
+            } else if (typeToken == "enum") {
+                entry.type = ExternalModSettingValueType::Enum;
+            } else if (typeToken == "string") {
+                entry.type = ExternalModSettingValueType::String;
+            } else if (typeToken == "color") {
+                entry.type = ExternalModSettingValueType::Color;
+            } else if (typeToken == "keybind") {
+                entry.type = ExternalModSettingValueType::Keybind;
+            } else {
+                outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                           "].type must be bool|int|float|enum|string|color|keybind";
+                return false;
+            }
+            if (!entryJson.contains("default")) {
+                outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                           "].default is required";
+                return false;
+            }
+
+            const auto& defaultJson = entryJson["default"];
+            if (defaultJson.is_string()) {
+                entry.defaultValue = defaultJson.get<std::string>();
+            } else if (defaultJson.is_boolean()) {
+                entry.defaultValue = defaultJson.get<bool>() ? "true" : "false";
+            } else if (defaultJson.is_number_integer()) {
+                entry.defaultValue = std::to_string(defaultJson.get<long long>());
+            } else if (defaultJson.is_number_float()) {
+                entry.defaultValue = std::to_string(defaultJson.get<double>());
+            } else {
+                outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                           "].default must be string|number|boolean";
+                return false;
+            }
+
+            if (entryJson.contains("min")) {
+                if (!entryJson["min"].is_number()) {
+                    outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                               "].min must be number";
+                    return false;
+                }
+                entry.minValue = entryJson["min"].get<float>();
+                entry.hasMin = true;
+            }
+            if (entryJson.contains("max")) {
+                if (!entryJson["max"].is_number()) {
+                    outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                               "].max must be number";
+                    return false;
+                }
+                entry.maxValue = entryJson["max"].get<float>();
+                entry.hasMax = true;
+            }
+            if (entry.hasMin && entry.hasMax && entry.minValue > entry.maxValue) {
+                outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                           "] requires min <= max";
+                return false;
+            }
+            if (entryJson.contains("step")) {
+                if (!entryJson["step"].is_number()) {
+                    outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                               "].step must be number";
+                    return false;
+                }
+                entry.stepValue = entryJson["step"].get<float>();
+                entry.hasStep = true;
+            }
+            if (entry.hasStep && entry.stepValue <= 0.0f) {
+                outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                           "].step must be > 0";
+                return false;
+            }
+
+            if (entryJson.contains("enumValues")) {
+                if (!entryJson["enumValues"].is_array()) {
+                    outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                               "].enumValues must be array";
+                    return false;
+                }
+                for (size_t enumIndex = 0; enumIndex < entryJson["enumValues"].size(); ++enumIndex) {
+                    if (!entryJson["enumValues"][enumIndex].is_string()) {
+                        outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                                   "].enumValues[" + std::to_string(enumIndex) + "] must be string";
+                        return false;
+                    }
+                    entry.enumValues.push_back(entryJson["enumValues"][enumIndex].get<std::string>());
+                }
+            }
+
+            if (entryJson.contains("domain")) {
+                if (!entryJson["domain"].is_string()) {
+                    outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                               "].domain must be string";
+                    return false;
+                }
+                const auto domainToken = ToLower(entryJson["domain"].get<std::string>());
+                if (domainToken == "save") {
+                    entry.domain = ExternalModSettingDomain::Save;
+                } else if (domainToken == "session") {
+                    entry.domain = ExternalModSettingDomain::Session;
+                } else if (domainToken == "global") {
+                    entry.domain = ExternalModSettingDomain::Global;
+                } else {
+                    outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                               "].domain must be global|save|session";
+                    return false;
+                }
+            }
+
+            if (entryJson.contains("applyMode")) {
+                if (!entryJson["applyMode"].is_string()) {
+                    outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                               "].applyMode must be string";
+                    return false;
+                }
+                const auto applyModeToken = ToLower(entryJson["applyMode"].get<std::string>());
+                if (applyModeToken == "scene_reload") {
+                    entry.applyMode = ExternalModSettingApplyMode::SceneReload;
+                } else if (applyModeToken == "restart") {
+                    entry.applyMode = ExternalModSettingApplyMode::Restart;
+                } else if (applyModeToken == "realtime") {
+                    entry.applyMode = ExternalModSettingApplyMode::Realtime;
+                } else {
+                    outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                               "].applyMode must be realtime|scene_reload|restart";
+                    return false;
+                }
+            }
+
+            if (entryJson.contains("visibility")) {
+                if (!entryJson["visibility"].is_object()) {
+                    outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                               "].visibility must be object";
+                    return false;
+                }
+                const auto& visibilityJson = entryJson["visibility"];
+                if (visibilityJson.contains("requiresCapability")) {
+                    if (!ValidateRequiredString(visibilityJson, "requiresCapability", entry.requiresCapability, outError)) {
+                        outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                                   "].visibility.requiresCapability: " + outError;
+                        return false;
+                    }
+                }
+                if (visibilityJson.contains("requiresRegistry")) {
+                    if (!ValidateRequiredString(visibilityJson, "requiresRegistry", entry.requiresRegistry, outError)) {
+                        outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                                   "].visibility.requiresRegistry: " + outError;
+                        return false;
+                    }
+                }
+                if (visibilityJson.contains("experimental")) {
+                    if (!visibilityJson["experimental"].is_boolean()) {
+                        outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                                   "].visibility.experimental must be boolean";
+                        return false;
+                    }
+                    entry.experimental = visibilityJson["experimental"].get<bool>();
+                }
+            }
+
+            std::string normalizedDefault;
+            if (!NormalizeSettingValueForEntry(&entry, entry.defaultValue, normalizedDefault, outError)) {
+                outError = "groups[" + std::to_string(groupIndex) + "].entries[" + std::to_string(entryIndex) +
+                           "].default invalid: " + outError;
+                return false;
+            }
+            entry.defaultValue = normalizedDefault;
+
+            group.entries.push_back(std::move(entry));
+        }
+
+        outSchema.groups.push_back(std::move(group));
+    }
+
+    outSchema.valid = true;
+    return true;
+}
+
 bool ExternalModManager::ReadManifestFromDirectory(const std::filesystem::path& dirPath, std::string& outContent,
+                                                   std::filesystem::path& outManifestRelativePath,
                                                    std::string& outError) {
-    return ReadFileFromDirectory(dirPath / "mod.json", kMaxManifestBytes, outContent, outError);
+    for (const auto& candidate : { std::filesystem::path("mod.json"), std::filesystem::path("data/mod.json") }) {
+        if (ReadFileFromDirectory(dirPath / candidate, kMaxManifestBytes, outContent, outError)) {
+            outManifestRelativePath = candidate;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool ExternalModManager::ReadManifestFromZip(const std::filesystem::path& zipPath, std::string& outContent,
-                                             std::string& outError) {
-    std::vector<char> bytes;
-    if (!ReadFileFromZip(zipPath, "mod.json", kMaxManifestBytes, bytes, outError)) {
-        return false;
+                                             std::filesystem::path& outManifestRelativePath, std::string& outError) {
+    for (const auto& candidate : { std::filesystem::path("mod.json"), std::filesystem::path("data/mod.json") }) {
+        std::vector<char> bytes;
+        if (ReadFileFromZip(zipPath, candidate, kMaxManifestBytes, bytes, outError)) {
+            outContent.assign(bytes.begin(), bytes.end());
+            outManifestRelativePath = candidate;
+            return true;
+        }
     }
-    outContent.assign(bytes.begin(), bytes.end());
-    return true;
+    return false;
 }
 
 bool ExternalModManager::ReadFileFromDirectory(const std::filesystem::path& filePath, uint64_t maxBytes,
@@ -19492,18 +27654,66 @@ bool ExternalModManager::ReadFileFromZip(const std::filesystem::path& zipPath,
     return true;
 }
 
+std::filesystem::path ExternalModManager::GetPackageDataRoot(const ExternalModPackage& package) {
+    if (!package.dataRootPath.empty()) {
+        return package.dataRootPath;
+    }
+    return package.sourcePath;
+}
+
+std::filesystem::path ExternalModManager::GetPackageRuntimeRoot(const ExternalModPackage& package) {
+    if (!package.runtimeRootPath.empty()) {
+        return package.runtimeRootPath;
+    }
+    if (package.isSplitLayout) {
+        return {};
+    }
+    return GetPackageDataRoot(package);
+}
+
+bool ExternalModManager::ResolvePackageFilePath(const ExternalModPackage& package,
+                                                const std::filesystem::path& packageRelativePath,
+                                                std::filesystem::path& outRoot, std::filesystem::path& outFullPath,
+                                                std::string& outError) {
+    outRoot = IsPackageRuntimeRelativePath(packageRelativePath) ? GetPackageRuntimeRoot(package) : GetPackageDataRoot(package);
+    if (outRoot.empty()) {
+        outError = "Package root not available for " + packageRelativePath.generic_string();
+        return false;
+    }
+
+    outFullPath = (outRoot / packageRelativePath).lexically_normal();
+    if (!IsPathWithinBase(outRoot, outFullPath)) {
+        outError = "Path escaped package root: " + packageRelativePath.generic_string();
+        return false;
+    }
+
+    return true;
+}
+
+std::filesystem::path ExternalModManager::ResolveZipPathForPackage(const ExternalModPackage& package,
+                                                                   const std::filesystem::path& packageRelativePath) {
+    return ResolvePackageZipPrefix(package, packageRelativePath);
+}
+
 bool ExternalModManager::ReadFileFromPackage(const ExternalModPackage& package,
                                              const std::filesystem::path& packageRelativePath, uint64_t maxBytes,
                                              std::string& outContent, std::string& outError) {
     if (package.isZip) {
         std::vector<char> bytes;
-        if (!ReadFileFromZip(package.sourcePath, packageRelativePath, maxBytes, bytes, outError)) {
+        if (!ReadFileFromZip(package.sourcePath, ResolveZipPathForPackage(package, packageRelativePath), maxBytes, bytes,
+                             outError)) {
             return false;
         }
         outContent.assign(bytes.begin(), bytes.end());
         return true;
     }
-    return ReadFileFromDirectory(package.sourcePath / packageRelativePath, maxBytes, outContent, outError);
+
+    std::filesystem::path rootPath;
+    std::filesystem::path fullPath;
+    if (!ResolvePackageFilePath(package, packageRelativePath, rootPath, fullPath, outError)) {
+        return false;
+    }
+    return ReadFileFromDirectory(fullPath, maxBytes, outContent, outError);
 }
 
 bool ExternalModManager::ReadBinaryFromPackage(const ExternalModPackage& package,
@@ -19513,14 +27723,19 @@ bool ExternalModManager::ReadBinaryFromPackage(const ExternalModPackage& package
 
     if (package.isZip) {
         std::vector<char> bytes;
-        if (!ReadFileFromZip(package.sourcePath, packageRelativePath, maxBytes, bytes, outError)) {
+        if (!ReadFileFromZip(package.sourcePath, ResolveZipPathForPackage(package, packageRelativePath), maxBytes, bytes,
+                             outError)) {
             return false;
         }
         outBytes.assign(bytes.begin(), bytes.end());
         return true;
     }
 
-    const auto fullPath = package.sourcePath / packageRelativePath;
+    std::filesystem::path rootPath;
+    std::filesystem::path fullPath;
+    if (!ResolvePackageFilePath(package, packageRelativePath, rootPath, fullPath, outError)) {
+        return false;
+    }
     if (!std::filesystem::exists(fullPath) || !std::filesystem::is_regular_file(fullPath)) {
         outError = "File not found: " + fullPath.generic_string();
         return false;
@@ -19551,75 +27766,567 @@ bool ExternalModManager::ReadBinaryFromPackage(const ExternalModPackage& package
     return true;
 }
 
-bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std::string& outError) {
-    std::filesystem::path scriptPath;
-    if (!IsSafePackageRelativePath(package.manifest.entryScript, scriptPath, outError)) {
-        return false;
+bool ExternalModManager::PreparePackageFileForHostAccess(const ExternalModPackage& package,
+                                                         const std::filesystem::path& packageRelativePath,
+                                                         uint64_t maxBytes, const char* categoryName,
+                                                         std::filesystem::path& outPreparedPath, bool& outFromCache,
+                                                         std::string& outError) {
+    outPreparedPath.clear();
+    outFromCache = false;
+
+    if (!package.isZip) {
+        std::filesystem::path rootPath;
+        std::filesystem::path fullPath;
+        if (!ResolvePackageFilePath(package, packageRelativePath, rootPath, fullPath, outError)) {
+            outError = std::string("Path escaped package root for ") + (categoryName != nullptr ? categoryName : "host file") +
+                       ": " + outError;
+            return false;
+        }
+        if (!std::filesystem::exists(fullPath) || !std::filesystem::is_regular_file(fullPath)) {
+            outError = "Host file not found: " + fullPath.generic_string();
+            return false;
+        }
+        if (std::filesystem::file_size(fullPath) > maxBytes) {
+            outError = "Host file exceeds max size: " + fullPath.generic_string();
+            return false;
+        }
+        outPreparedPath = fullPath.lexically_normal();
+        return true;
     }
-    std::string scriptContent;
-    if (!ReadFileFromPackage(package, scriptPath, kMaxScriptBytes, scriptContent, outError)) {
+
+    std::vector<char> fileBytes;
+    if (!ReadFileFromZip(package.sourcePath, ResolveZipPathForPackage(package, packageRelativePath), maxBytes, fileBytes,
+                         outError)) {
+        outError = std::string("Failed to extract ") + (categoryName != nullptr ? categoryName : "host file") + ": " + outError;
         return false;
     }
 
-    ExternalModRuntime runtime;
-    if (!TryParseEntryScript(scriptContent, package.manifest.apiVersion, runtime, outError)) {
+    const auto cacheRoot = GetExternalModsCacheRootPath();
+    const auto targetPath = cacheRoot / "_native" / SanitizeModIdForPath(package.manifest.id) / packageRelativePath;
+    std::error_code ec;
+    std::filesystem::create_directories(targetPath.parent_path(), ec);
+    if (ec) {
+        outError = "Failed to create native cache directory: " + ec.message();
         return false;
     }
+
+    std::ofstream out(targetPath, std::ios::binary | std::ios::trunc);
+    if (!out.is_open()) {
+        outError = "Failed to open native cache file for write: " + targetPath.generic_string();
+        return false;
+    }
+    if (!fileBytes.empty()) {
+        out.write(fileBytes.data(), static_cast<std::streamsize>(fileBytes.size()));
+    }
+    if (!out.good()) {
+        outError = "Failed writing native cache file: " + targetPath.generic_string();
+        return false;
+    }
+
+    outPreparedPath = targetPath.lexically_normal();
+    outFromCache = true;
+    return true;
+}
+
+bool ExternalModManager::LoadDslDocumentsForPackage(const ExternalModPackage& package, ExternalModRuntime& runtime,
+                                                    std::string& outError) {
+    runtime.dslDocuments.clear();
+
+    static const std::array<std::string, 8> kDslCategories = {
+        "components",
+        "entities",
+        "prefabs",
+        "graphs",
+        "world",
+        "narrative",
+        "ui",
+        "services",
+    };
+
+    const auto appendDslDocument = [&](const std::filesystem::path& relativePath, const std::string& category) -> bool {
+        std::string rawContent;
+        if (!ReadFileFromPackage(package, relativePath, kMaxDslDocumentBytes, rawContent, outError)) {
+            return false;
+        }
+
+        nlohmann::json json;
+        try {
+            json = nlohmann::json::parse(rawContent);
+        } catch (const std::exception& ex) {
+            outError = std::string("DSL parse error in ") + relativePath.generic_string() + ": " + ex.what();
+            return false;
+        }
+
+        ExternalModDslDocument document;
+        document.id = ResolveDslDocumentId(json, relativePath);
+        document.category = category;
+        document.subtype = ResolveDslDocumentSubtype(json, category);
+        document.sourcePath = relativePath.generic_string();
+        document.visibility = package.manifest.sharePolicy.read;
+        document.mutableBy = package.manifest.sharePolicy.write;
+        document.friends = package.manifest.sharePolicy.friends;
+        document.denyMods = package.manifest.sharePolicy.denyMods;
+        document.rawJson = std::move(rawContent);
+
+        if (json.is_object()) {
+            if (json.contains("visibility")) {
+                if (!json["visibility"].is_string()) {
+                    outError = "DSL visibility must be string in " + relativePath.generic_string();
+                    return false;
+                }
+                document.visibility = ToLower(json["visibility"].get<std::string>());
+            }
+            if (json.contains("mutableBy")) {
+                if (!json["mutableBy"].is_string()) {
+                    outError = "DSL mutableBy must be string in " + relativePath.generic_string();
+                    return false;
+                }
+                document.mutableBy = ToLower(json["mutableBy"].get<std::string>());
+            }
+            if (!TryParseShareList(json, "friends", document.friends, outError) ||
+                !TryParseShareList(json, "denyMods", document.denyMods, outError)) {
+                outError = "DSL share policy invalid in " + relativePath.generic_string() + ": " + outError;
+                return false;
+            }
+        }
+
+        runtime.dslDocuments.push_back(std::move(document));
+        return true;
+    };
+
+    if (package.isZip) {
+        int err = 0;
+        zip_t* archive = zip_open(package.sourcePath.string().c_str(), ZIP_RDONLY, &err);
+        if (archive == nullptr) {
+            outError = "Unable to open zip archive for DSL scan: " + package.sourcePath.generic_string();
+            return false;
+        }
+
+        const zip_int64_t entryCount = zip_get_num_entries(archive, ZIP_FL_UNCHANGED);
+        for (zip_uint64_t i = 0; i < static_cast<zip_uint64_t>(entryCount); ++i) {
+            const char* entryName = zip_get_name(archive, i, ZIP_FL_ENC_GUESS);
+            if (entryName == nullptr) {
+                continue;
+            }
+
+            const std::filesystem::path fullEntryPath(entryName);
+            if (ToLower(fullEntryPath.extension().string()) != ".json") {
+                continue;
+            }
+
+            const std::filesystem::path dataPrefix = package.zipDataPrefix.empty() ? std::filesystem::path{} :
+                                                                                     std::filesystem::path(package.zipDataPrefix);
+            std::filesystem::path relativePath = fullEntryPath;
+            if (!dataPrefix.empty()) {
+                const auto prefixString = dataPrefix.generic_string();
+                const auto entryString = fullEntryPath.generic_string();
+                if (entryString.rfind(prefixString + "/", 0) != 0) {
+                    continue;
+                }
+                relativePath = fullEntryPath.lexically_relative(dataPrefix);
+            }
+
+            if (relativePath == "mod.json" || relativePath.empty()) {
+                continue;
+            }
+
+            const auto categoryIt = relativePath.begin();
+            if (categoryIt == relativePath.end()) {
+                continue;
+            }
+
+            const std::string category = ToLower(categoryIt->generic_string());
+            if (std::find(kDslCategories.begin(), kDslCategories.end(), category) == kDslCategories.end()) {
+                continue;
+            }
+
+            if (!appendDslDocument(relativePath, category)) {
+                zip_close(archive);
+                return false;
+            }
+        }
+        zip_close(archive);
+        return true;
+    }
+
+    const auto dataRoot = GetPackageDataRoot(package);
+    if (dataRoot.empty() || !std::filesystem::exists(dataRoot) || !std::filesystem::is_directory(dataRoot)) {
+        return true;
+    }
+
+    for (const auto& category : kDslCategories) {
+        const auto categoryRoot = dataRoot / category;
+        if (!std::filesystem::exists(categoryRoot) || !std::filesystem::is_directory(categoryRoot)) {
+            continue;
+        }
+
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(categoryRoot)) {
+            if (!entry.is_regular_file() || ToLower(entry.path().extension().string()) != ".json") {
+                continue;
+            }
+            const auto relativePath = std::filesystem::relative(entry.path(), dataRoot);
+            if (!appendDslDocument(relativePath, category)) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+bool ResolveDslEntityPlacementBindingsForRuntime(const ExternalModPackage& package, ExternalModRuntime& runtime,
+                                                 std::string& outError) {
+    std::unordered_map<std::string, std::string> componentPrefabCache;
+    std::unordered_map<std::string, std::string> entityPrefabCache;
+
+    auto findPrefabById = [&](const std::string& prefabId) -> const ExternalModPrefabDefinition* {
+        const auto it =
+            std::find_if(runtime.prefabDefinitions.begin(), runtime.prefabDefinitions.end(),
+                         [&](const ExternalModPrefabDefinition& definition) { return definition.id == prefabId; });
+        if (it == runtime.prefabDefinitions.end()) {
+            return nullptr;
+        }
+        return &(*it);
+    };
+
+    auto synthesizePrefabFromVisualDocument =
+        [&](const ExternalModDslDocument& document, const nlohmann::json& json, const std::string& prefabId,
+            const std::string& meshId, std::string& error) -> bool {
+        if (findPrefabById(prefabId) != nullptr) {
+            return true;
+        }
+
+        ExternalModPrefabDefinition definition;
+        definition.id = prefabId;
+        definition.sourceModId = package.manifest.id;
+        definition.meshId = ResolveProfileIdForMod(package.manifest.id, meshId);
+
+        if (json.contains("transform")) {
+            if (!json["transform"].is_object()) {
+                error = document.sourcePath + ".transform must be object";
+                return false;
+            }
+            const auto& transform = json["transform"];
+            if (transform.contains("offset") &&
+                !ParseVec3(transform["offset"], definition.offsetX, definition.offsetY, definition.offsetZ,
+                           (document.sourcePath + ".transform.offset").c_str(), error)) {
+                error = document.sourcePath + ".transform.offset: " + error;
+                return false;
+            }
+            if (transform.contains("rotation") &&
+                !ParseVec3(transform["rotation"], definition.rotOffsetX, definition.rotOffsetY, definition.rotOffsetZ,
+                           (document.sourcePath + ".transform.rotation").c_str(), error)) {
+                error = document.sourcePath + ".transform.rotation: " + error;
+                return false;
+            }
+            if (transform.contains("scale") &&
+                !ParseVec3(transform["scale"], definition.scaleX, definition.scaleY, definition.scaleZ,
+                           (document.sourcePath + ".transform.scale").c_str(), error)) {
+                error = document.sourcePath + ".transform.scale: " + error;
+                return false;
+            }
+        }
+
+        if (json.contains("lodDistance")) {
+            if (!json["lodDistance"].is_number()) {
+                error = document.sourcePath + ".lodDistance must be number";
+                return false;
+            }
+            definition.lodDistance = json["lodDistance"].get<float>();
+        }
+        if (json.contains("billboard")) {
+            if (!json["billboard"].is_boolean()) {
+                error = document.sourcePath + ".billboard must be boolean";
+                return false;
+            }
+            definition.billboard = json["billboard"].get<bool>();
+        }
+
+        if (definition.scaleX == 0.0f || definition.scaleY == 0.0f || definition.scaleZ == 0.0f) {
+            error = document.sourcePath + ".transform.scale cannot contain zero";
+            return false;
+        }
+        if (definition.lodDistance <= 0.0f || definition.lodDistance > 100000.0f) {
+            error = document.sourcePath + ".lodDistance must be in (0, 100000]";
+            return false;
+        }
+
+        runtime.prefabDefinitions.push_back(std::move(definition));
+        return true;
+    };
+
+    std::function<bool(const std::string&, std::string&, bool&, std::string&)> resolveComponentVisualPrefab =
+        [&](const std::string& rawComponentId, std::string& resolvedPrefabId, bool& isVisual, std::string& error) -> bool {
+        resolvedPrefabId.clear();
+        isVisual = false;
+
+        const std::string componentId = ResolveProfileIdForMod(package.manifest.id, rawComponentId);
+        const auto cacheIt = componentPrefabCache.find(componentId);
+        if (cacheIt != componentPrefabCache.end()) {
+            resolvedPrefabId = cacheIt->second;
+            isVisual = true;
+            return true;
+        }
+
+        const auto* componentDocument = FindDslDocumentByIdAndCategory(runtime, componentId, "components");
+        if (componentDocument == nullptr) {
+            error = "Referenced DSL component not found: " + componentId;
+            return false;
+        }
+
+        nlohmann::json componentJson;
+        if (!TryParseDslDocumentObject(*componentDocument, componentJson, error)) {
+            return false;
+        }
+
+        const std::string componentType = ToLower(componentJson.value("type", std::string()));
+        if (componentType != "visual") {
+            return true;
+        }
+
+        std::string prefabId;
+        if (componentJson.contains("prefabId")) {
+            if (!ValidateRequiredString(componentJson, "prefabId", prefabId, error)) {
+                error = componentDocument->sourcePath + ".prefabId: " + error;
+                return false;
+            }
+        } else if (componentJson.contains("prefab")) {
+            if (!ValidateRequiredString(componentJson, "prefab", prefabId, error)) {
+                error = componentDocument->sourcePath + ".prefab: " + error;
+                return false;
+            }
+        }
+
+        std::string meshId;
+        if (componentJson.contains("meshId")) {
+            if (!ValidateRequiredString(componentJson, "meshId", meshId, error)) {
+                error = componentDocument->sourcePath + ".meshId: " + error;
+                return false;
+            }
+        } else if (componentJson.contains("mesh")) {
+            if (!ValidateRequiredString(componentJson, "mesh", meshId, error)) {
+                error = componentDocument->sourcePath + ".mesh: " + error;
+                return false;
+            }
+        }
+
+        if (!meshId.empty()) {
+            if (prefabId.empty()) {
+                prefabId = componentId + ".prefab";
+            }
+            prefabId = ResolveProfileIdForMod(package.manifest.id, prefabId);
+            if (!synthesizePrefabFromVisualDocument(*componentDocument, componentJson, prefabId, meshId, error)) {
+                return false;
+            }
+        } else if (!prefabId.empty()) {
+            prefabId = ResolveProfileIdForMod(package.manifest.id, prefabId);
+        } else {
+            error = "Visual component must define prefabId/prefab or meshId/mesh: " + componentId;
+            return false;
+        }
+
+        componentPrefabCache[componentId] = prefabId;
+        resolvedPrefabId = prefabId;
+        isVisual = true;
+        return true;
+    };
+
+    std::function<bool(const std::string&, std::string&, std::string&)> resolveEntityPrefab =
+        [&](const std::string& rawEntityId, std::string& resolvedPrefabId, std::string& error) -> bool {
+        resolvedPrefabId.clear();
+        const std::string entityId = ResolveProfileIdForMod(package.manifest.id, rawEntityId);
+        const auto cacheIt = entityPrefabCache.find(entityId);
+        if (cacheIt != entityPrefabCache.end()) {
+            resolvedPrefabId = cacheIt->second;
+            return true;
+        }
+
+        const auto* entityDocument = FindDslDocumentByIdAndCategory(runtime, entityId, "entities");
+        if (entityDocument == nullptr) {
+            error = "Referenced DSL entity not found: " + entityId;
+            return false;
+        }
+
+        nlohmann::json entityJson;
+        if (!TryParseDslDocumentObject(*entityDocument, entityJson, error)) {
+            return false;
+        }
+
+        const std::string entityType = ToLower(entityJson.value("type", std::string("entity")));
+        if (entityType != "entity") {
+            error = "Referenced DSL entity must have type=entity: " + entityId;
+            return false;
+        }
+
+        if (entityJson.contains("prefabId")) {
+            if (!ValidateRequiredString(entityJson, "prefabId", resolvedPrefabId, error)) {
+                error = entityDocument->sourcePath + ".prefabId: " + error;
+                return false;
+            }
+            resolvedPrefabId = ResolveProfileIdForMod(package.manifest.id, resolvedPrefabId);
+            entityPrefabCache[entityId] = resolvedPrefabId;
+            return true;
+        }
+        if (entityJson.contains("prefab")) {
+            if (!ValidateRequiredString(entityJson, "prefab", resolvedPrefabId, error)) {
+                error = entityDocument->sourcePath + ".prefab: " + error;
+                return false;
+            }
+            resolvedPrefabId = ResolveProfileIdForMod(package.manifest.id, resolvedPrefabId);
+            entityPrefabCache[entityId] = resolvedPrefabId;
+            return true;
+        }
+
+        if (!entityJson.contains("components") || !entityJson["components"].is_array()) {
+            error = "DSL entity must declare components array when prefabId is omitted: " + entityId;
+            return false;
+        }
+
+        for (size_t i = 0; i < entityJson["components"].size(); ++i) {
+            if (!entityJson["components"][i].is_string()) {
+                error = entityDocument->sourcePath + ".components[" + std::to_string(i) + "] must be string";
+                return false;
+            }
+
+            bool isVisual = false;
+            std::string componentPrefabId;
+            if (!resolveComponentVisualPrefab(entityJson["components"][i].get<std::string>(), componentPrefabId, isVisual,
+                                              error)) {
+                return false;
+            }
+            if (isVisual) {
+                resolvedPrefabId = componentPrefabId;
+                entityPrefabCache[entityId] = resolvedPrefabId;
+                return true;
+            }
+        }
+
+        error = "DSL entity does not expose a visual component or prefab binding: " + entityId;
+        return false;
+    };
+
+    for (size_t i = 0; i < runtime.editorPlacementDefinitions.size(); ++i) {
+        auto& definition = runtime.editorPlacementDefinitions[i];
+        if (!definition.prefabId.empty() || definition.entityId.empty()) {
+            continue;
+        }
+        if (!resolveEntityPrefab(definition.entityId, definition.prefabId, outError)) {
+            outError = "editorPlacementDefinitions[" + std::to_string(i) + "]: " + outError;
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < runtime.worldInstanceDefinitions.size(); ++i) {
+        auto& definition = runtime.worldInstanceDefinitions[i];
+        if (!definition.prefabId.empty() || definition.entityId.empty()) {
+            continue;
+        }
+        if (!resolveEntityPrefab(definition.entityId, definition.prefabId, outError)) {
+            outError = "worldInstanceDefinitions[" + std::to_string(i) + "]: " + outError;
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < runtime.worldAuthoringDefinitions.size(); ++i) {
+        auto& definition = runtime.worldAuthoringDefinitions[i];
+        if (!definition.prefabId.empty() || definition.entityId.empty()) {
+            continue;
+        }
+        if (!resolveEntityPrefab(definition.entityId, definition.prefabId, outError)) {
+            outError = "worldAuthoringDefinitions[" + std::to_string(i) + "]: " + outError;
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std::string& outError) {
+    ExternalModRuntime runtime;
+    if (!package.manifest.entryScript.empty()) {
+        std::filesystem::path scriptPath;
+        if (!IsSafePackageRelativePath(package.manifest.entryScript, scriptPath, outError)) {
+            return false;
+        }
+        std::string scriptContent;
+        if (!ReadFileFromPackage(package, scriptPath, kMaxScriptBytes, scriptContent, outError)) {
+            return false;
+        }
+        if (!TryParseEntryScript(scriptContent, package.manifest.apiVersion, runtime, outError)) {
+            return false;
+        }
+    }
+
     runtime.apiVersion = package.manifest.apiVersion;
+    runtime.kind = ResolveRuntimeKind(package.manifest.runtimeType);
+    runtime.nativeMode = ResolveNativeModeToken(package.manifest.runtimeNativeMode);
+    runtime.nativeAbiVersion = package.manifest.runtimeAbiVersion;
+    runtime.nativeReloadPolicy = package.manifest.runtimeReloadPolicy;
+    runtime.nativeBuildIdPolicy = package.manifest.runtimeBuildIdPolicy;
+    runtime.nativeThreadModel = package.manifest.runtimeThreadModel;
     runtime.frameBudgetMs = package.manifest.runtimeMaxFrameBudgetMs;
     runtime.maxHookCallsPerFrame = package.manifest.runtimeMaxHookCallsPerFrame;
     runtime.hookCallsThisFrame = 0;
     runtime.maxActorInstances = package.manifest.runtimeMaxActorInstances;
     runtime.maxActiveStatusEffects = package.manifest.runtimeMaxActiveStatuses;
 
+    if (!LoadDslDocumentsForPackage(package, runtime, outError)) {
+        return false;
+    }
+
     if (package.manifest.apiVersion >= kExternalModApiVersionV4) {
-        std::filesystem::path itemsPath;
-        if (!IsSafePackageRelativePath(package.manifest.itemDefinitions, itemsPath, outError)) {
-            return false;
-        }
-        std::string itemContent;
-        if (!ReadFileFromPackage(package, itemsPath, kMaxItemDefinitionBytes, itemContent, outError)) {
-            return false;
-        }
-
-        nlohmann::json itemDefinitionsJson;
-        try {
-            itemDefinitionsJson = nlohmann::json::parse(itemContent);
-        } catch (const std::exception& ex) {
-            outError = std::string("itemDefinitions parse error: ") + ex.what();
-            return false;
-        }
-
-        if (ManifestHasCapability(package.manifest, "patches.vanilla_items.v1")) {
-            std::filesystem::path patchPath;
-            if (!IsSafePackageRelativePath(package.manifest.vanillaItemPatches, patchPath, outError)) {
-                outError = "Invalid vanillaItemPatches: " + outError;
+        if (!package.manifest.itemDefinitions.empty()) {
+            std::filesystem::path itemsPath;
+            if (!IsSafePackageRelativePath(package.manifest.itemDefinitions, itemsPath, outError)) {
+                return false;
+            }
+            std::string itemContent;
+            if (!ReadFileFromPackage(package, itemsPath, kMaxItemDefinitionBytes, itemContent, outError)) {
                 return false;
             }
 
-            std::string patchContent;
-            if (!ReadFileFromPackage(package, patchPath, kMaxVanillaPatchDefinitionBytes, patchContent, outError)) {
-                outError = "Failed to read vanillaItemPatches: " + outError;
-                return false;
-            }
-
-            nlohmann::json patchJson;
+            nlohmann::json itemDefinitionsJson;
             try {
-                patchJson = nlohmann::json::parse(patchContent);
+                itemDefinitionsJson = nlohmann::json::parse(itemContent);
             } catch (const std::exception& ex) {
-                outError = std::string("vanillaItemPatches parse error: ") + ex.what();
+                outError = std::string("itemDefinitions parse error: ") + ex.what();
                 return false;
             }
 
-            std::string patchError;
-            if (!TryApplyVanillaItemPatchesToJson(itemDefinitionsJson, patchJson, patchError)) {
-                outError = "vanillaItemPatches apply failed: " + patchError;
+            if (ManifestHasCapability(package.manifest, "patches.vanilla_items.v1")) {
+                std::filesystem::path patchPath;
+                if (!IsSafePackageRelativePath(package.manifest.vanillaItemPatches, patchPath, outError)) {
+                    outError = "Invalid vanillaItemPatches: " + outError;
+                    return false;
+                }
+
+                std::string patchContent;
+                if (!ReadFileFromPackage(package, patchPath, kMaxVanillaPatchDefinitionBytes, patchContent, outError)) {
+                    outError = "Failed to read vanillaItemPatches: " + outError;
+                    return false;
+                }
+
+                nlohmann::json patchJson;
+                try {
+                    patchJson = nlohmann::json::parse(patchContent);
+                } catch (const std::exception& ex) {
+                    outError = std::string("vanillaItemPatches parse error: ") + ex.what();
+                    return false;
+                }
+
+                std::string patchError;
+                if (!TryApplyVanillaItemPatchesToJson(itemDefinitionsJson, patchJson, patchError)) {
+                    outError = "vanillaItemPatches apply failed: " + patchError;
+                    return false;
+                }
+                SPDLOG_INFO("[ExternalMods] Applied vanilla item patches for {}", package.manifest.id);
+            }
+
+            if (!TryParseItemDefinitions(itemDefinitionsJson.dump(), runtime.itemDefinitions, outError)) {
                 return false;
             }
-            SPDLOG_INFO("[ExternalMods] Applied vanilla item patches for {}", package.manifest.id);
-        }
-
-        if (!TryParseItemDefinitions(itemDefinitionsJson.dump(), runtime.itemDefinitions, outError)) {
+        } else if (ManifestHasCapability(package.manifest, "patches.vanilla_items.v1")) {
+            outError = "patches.vanilla_items.v1 requires itemDefinitions";
             return false;
         }
 
@@ -20122,17 +28829,19 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             }
         }
 
-        std::filesystem::path inputPath;
-        if (!IsSafePackageRelativePath(package.manifest.inputDefinitions, inputPath, outError)) {
-            return false;
-        }
-        std::string inputContent;
-        if (!ReadFileFromPackage(package, inputPath, kMaxInputDefinitionBytes, inputContent, outError)) {
-            return false;
-        }
-        if (!TryParseInputDefinitions(inputContent, runtime.inputBindings, runtime.cameraHotkeys, runtime.hotkeys,
-                                      outError)) {
-            return false;
+        if (!package.manifest.inputDefinitions.empty()) {
+            std::filesystem::path inputPath;
+            if (!IsSafePackageRelativePath(package.manifest.inputDefinitions, inputPath, outError)) {
+                return false;
+            }
+            std::string inputContent;
+            if (!ReadFileFromPackage(package, inputPath, kMaxInputDefinitionBytes, inputContent, outError)) {
+                return false;
+            }
+            if (!TryParseInputDefinitions(inputContent, runtime.inputBindings, runtime.cameraHotkeys, runtime.hotkeys,
+                                          outError)) {
+                return false;
+            }
         }
 
         for (const auto& inputTrigger : runtime.inputTriggers) {
@@ -20141,10 +28850,17 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
                                                     return binding.id == inputTrigger.bindingId;
                                                 });
             if (bindingIt == runtime.inputBindings.end()) {
-                outError = "onInput references unknown binding: " + inputTrigger.bindingId;
-                return false;
+                AddPackageIssue(package, ExternalModIssueSeverity::Error, "V52_REF_UNKNOWN_INPUT_BINDING",
+                                "onInput references unknown binding: " + inputTrigger.bindingId, "scripts/init.json",
+                                "core.input.v1", inputTrigger.bindingId,
+                                "Add the binding to inputDefinitions or remove the onInput trigger.");
             }
         }
+        std::erase_if(runtime.inputTriggers, [&](const ExternalModInputActionTrigger& inputTrigger) {
+            return std::find_if(runtime.inputBindings.begin(), runtime.inputBindings.end(),
+                                [&](const ExternalModInputBinding& binding) { return binding.id == inputTrigger.bindingId; }) ==
+                   runtime.inputBindings.end();
+        });
 
         if (ManifestHasCapability(package.manifest, "hooks.extended.v1")) {
             std::filesystem::path hooksPath;
@@ -20388,6 +29104,118 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             }
             if (!TryParseUiHudDefinitions(uiHudContent, runtime.apiVersion, runtime.uiHudDefinitions, outError)) {
                 return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "player.resources.v1")) {
+            std::filesystem::path resourcePath;
+            if (!IsSafePackageRelativePath(package.manifest.playerResourceDefinitions, resourcePath, outError)) {
+                outError = "Invalid playerResourceDefinitions: " + outError;
+                return false;
+            }
+
+            std::string resourceContent;
+            if (!ReadFileFromPackage(package, resourcePath, kMaxPlayerResourceDefinitionBytes, resourceContent, outError)) {
+                outError = "Failed to read playerResourceDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParsePlayerResourceDefinitions(resourceContent, runtime.apiVersion, runtime.playerResourceDefinitions,
+                                                   outError)) {
+                return false;
+            }
+            for (auto& definition : runtime.playerResourceDefinitions) {
+                definition.sourceModId = package.manifest.id;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "ui.resource_rings.v1")) {
+            std::filesystem::path ringPath;
+            if (!IsSafePackageRelativePath(package.manifest.resourceRingDefinitions, ringPath, outError)) {
+                outError = "Invalid resourceRingDefinitions: " + outError;
+                return false;
+            }
+
+            std::string ringContent;
+            if (!ReadFileFromPackage(package, ringPath, kMaxResourceRingDefinitionBytes, ringContent, outError)) {
+                outError = "Failed to read resourceRingDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseResourceRingDefinitions(ringContent, runtime.apiVersion, runtime.resourceRingDefinitions,
+                                                 outError)) {
+                return false;
+            }
+            for (auto& definition : runtime.resourceRingDefinitions) {
+                definition.sourceModId = package.manifest.id;
+                if (definition.companionVanillaItemId >= 0) {
+                    if (const auto* iconPtr = ResolveItemIconPointerForId(definition.companionVanillaItemId, true);
+                        iconPtr != nullptr) {
+                        definition.companionIconRgba32.assign(iconPtr, iconPtr + (kItemIconSize * kItemIconSize * 4));
+                    }
+                } else if (!definition.companionIconAsset.empty()) {
+                    std::filesystem::path iconPath;
+                    if (!IsSafePackageRelativePath(definition.companionIconAsset, iconPath, outError)) {
+                        outError = "Invalid resource_rings companionIconAsset: " + outError;
+                        return false;
+                    }
+                    std::vector<uint8_t> iconBytes;
+                    if (!ReadBinaryFromPackage(package, iconPath, kMaxItemIconBytes, iconBytes, outError)) {
+                        outError = "Failed to read resource_rings companionIconAsset: " + outError;
+                        return false;
+                    }
+                    if (!TryDecodePngToRgba32FixedSize(iconBytes, kItemIconSize, kItemIconSize,
+                                                       definition.companionIconRgba32, outError)) {
+                        outError = "Failed to decode resource_rings companionIconAsset: " + outError;
+                        return false;
+                    }
+                }
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "player.consumables.v1")) {
+            std::filesystem::path consumablePath;
+            if (!IsSafePackageRelativePath(package.manifest.playerConsumableDefinitions, consumablePath, outError)) {
+                outError = "Invalid playerConsumableDefinitions: " + outError;
+                return false;
+            }
+            std::string consumableContent;
+            if (!ReadFileFromPackage(package, consumablePath, kMaxPlayerConsumableDefinitionBytes, consumableContent,
+                                     outError)) {
+                outError = "Failed to read playerConsumableDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParsePlayerConsumableDefinitions(consumableContent, runtime.apiVersion, runtime.playerConsumableDefinitions,
+                                                     outError)) {
+                return false;
+            }
+            for (auto& definition : runtime.playerConsumableDefinitions) {
+                definition.sourceModId = package.manifest.id;
+                auto loadBottlePlaceholderIcon = [&](const std::string& fieldName, const std::string& asset,
+                                                     std::vector<uint8_t>& outRgba32) -> bool {
+                    if (asset.empty()) {
+                        return true;
+                    }
+                    std::filesystem::path iconPath;
+                    if (!IsSafePackageRelativePath(asset, iconPath, outError)) {
+                        outError = "Invalid player_consumables " + fieldName + ": " + outError;
+                        return false;
+                    }
+                    std::vector<uint8_t> iconBytes;
+                    if (!ReadBinaryFromPackage(package, iconPath, kMaxItemIconBytes, iconBytes, outError)) {
+                        outError = "Failed to read player_consumables " + fieldName + ": " + outError;
+                        return false;
+                    }
+                    if (!TryDecodePngToRgba32FixedSize(iconBytes, kItemIconSize, kItemIconSize, outRgba32, outError)) {
+                        outError = "Failed to decode player_consumables " + fieldName + ": " + outError;
+                        return false;
+                    }
+                    return true;
+                };
+                if (!loadBottlePlaceholderIcon("placeholderIconAsset", definition.placeholderIconAsset,
+                                               definition.placeholderIconRgba32) ||
+                    !loadBottlePlaceholderIcon("placeholderPartialIconAsset", definition.placeholderPartialIconAsset,
+                                               definition.placeholderPartialIconRgba32)) {
+                    return false;
+                }
             }
         }
 
@@ -20759,6 +29587,516 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             }
         }
 
+        if (ManifestHasCapability(package.manifest, "assets.raw.v1")) {
+            std::filesystem::path assetSourcePath;
+            if (!IsSafePackageRelativePath(package.manifest.assetSourceDefinitions, assetSourcePath, outError)) {
+                outError = "Invalid assetSourceDefinitions: " + outError;
+                return false;
+            }
+
+            std::string assetSourceContent;
+            if (!ReadFileFromPackage(package, assetSourcePath, kMaxAssetSourceDefinitionBytes, assetSourceContent,
+                                     outError)) {
+                outError = "Failed to read assetSourceDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseAssetSourceDefinitions(assetSourceContent, runtime.apiVersion, runtime.assetSourceDefinitions,
+                                                outError)) {
+                return false;
+            }
+
+            for (auto& definition : runtime.assetSourceDefinitions) {
+                std::filesystem::path rawAssetPath;
+                if (!IsSafePackageRelativePath(definition.path, rawAssetPath, outError)) {
+                    outError = "Invalid asset source path for " + definition.id + ": " + outError;
+                    return false;
+                }
+
+                if (definition.hostAccess) {
+                    bool loadedFromCache = false;
+                    std::filesystem::path preparedPath;
+                    if (!PreparePackageFileForHostAccess(package, rawAssetPath, kMaxAssetBytes,
+                                                         "assetSourceDefinitions", preparedPath, loadedFromCache,
+                                                         outError)) {
+                        outError = "Failed to prepare asset source '" + definition.id + "': " + outError;
+                        return false;
+                    }
+
+                    definition.preparedPath = preparedPath.generic_string();
+                    definition.loadedFromCache = loadedFromCache;
+
+                    std::error_code sizeError;
+                    definition.sizeBytes = std::filesystem::file_size(preparedPath, sizeError);
+                    if (sizeError) {
+                        outError = "Failed to read prepared asset size for '" + definition.id + "': " + sizeError.message();
+                        return false;
+                    }
+                } else if (!package.isZip) {
+                    std::filesystem::path rootPath;
+                    std::filesystem::path fullPath;
+                    if (!ResolvePackageFilePath(package, rawAssetPath, rootPath, fullPath, outError)) {
+                        outError = "Asset source escaped package root for '" + definition.id + "': " + outError;
+                        return false;
+                    }
+                    std::error_code sizeError;
+                    if (!std::filesystem::exists(fullPath) || !std::filesystem::is_regular_file(fullPath)) {
+                        outError = "Asset source file not found for '" + definition.id + "'";
+                        return false;
+                    }
+                    definition.sizeBytes = std::filesystem::file_size(fullPath, sizeError);
+                    if (sizeError) {
+                        outError = "Failed to read asset source size for '" + definition.id + "': " + sizeError.message();
+                        return false;
+                    }
+                }
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "render.meshes.v1")) {
+            std::filesystem::path meshPath;
+            if (!IsSafePackageRelativePath(package.manifest.meshDefinitions, meshPath, outError)) {
+                outError = "Invalid meshDefinitions: " + outError;
+                return false;
+            }
+
+            std::string meshContent;
+            if (!ReadFileFromPackage(package, meshPath, kMaxMeshDefinitionBytes, meshContent, outError)) {
+                outError = "Failed to read meshDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseMeshDefinitions(meshContent, runtime.apiVersion, runtime.meshDefinitions, outError)) {
+                return false;
+            }
+
+            for (size_t i = 0; i < runtime.meshDefinitions.size(); ++i) {
+                auto& definition = runtime.meshDefinitions[i];
+                definition.sourceModId = package.manifest.id;
+
+                if (definition.modelAsset.empty()) {
+                    continue;
+                }
+
+                std::filesystem::path modelPath;
+                if (!IsSafePackageRelativePath(definition.modelAsset, modelPath, outError)) {
+                    outError = "meshes[" + std::to_string(i) + "].modelAsset " + outError;
+                    return false;
+                }
+
+                auto convertFast64SourceModel = [&](const std::string& modelIncContent,
+                                                    const std::filesystem::path& objectPathHint) -> bool {
+                    std::string conversionError;
+                    Fast64ConversionOutput conversion;
+                    const std::string objectName =
+                        DeriveObjectNameFromPath(objectPathHint, definition.id.empty() ? "external_mesh" : definition.id);
+                    auto resolveFast64TextureInclude = [&](const std::string& includePath, const Fast64TextureMeta& meta,
+                                                           std::vector<uint8_t>& outBytes,
+                                                           int32_t& outDecodedWidth, int32_t& outDecodedHeight,
+                                                           std::string& resolveError) -> bool {
+                        outBytes.clear();
+                        outDecodedWidth = 0;
+                        outDecodedHeight = 0;
+                        std::vector<std::filesystem::path> candidates;
+                        std::unordered_set<std::string> seen;
+
+                        auto addCandidate = [&](const std::filesystem::path& candidate) {
+                            if (candidate.empty()) {
+                                return;
+                            }
+                            const auto normalized = candidate.lexically_normal();
+                            const auto key = normalized.generic_string();
+                            if (!key.empty() && seen.insert(key).second) {
+                                candidates.push_back(normalized);
+                            }
+                        };
+                        auto addPngVariants = [&](const std::filesystem::path& candidate) {
+                            addCandidate(candidate);
+                            std::string raw = candidate.generic_string();
+                            if (EndsWithString(raw, ".inc.c")) {
+                                addCandidate(std::filesystem::path(raw.substr(0, raw.size() - 6) + ".png"));
+                            }
+                        };
+
+                        const std::filesystem::path includeRelativePath(includePath);
+                        addPngVariants(includeRelativePath);
+                        addPngVariants(objectPathHint / includeRelativePath);
+                        addPngVariants(objectPathHint / includeRelativePath.filename());
+
+                        std::string lastReadError;
+                        for (const auto& candidate : candidates) {
+                            if (ToLower(candidate.extension().string()) != ".png") {
+                                continue;
+                            }
+
+                            std::filesystem::path safeCandidate;
+                            std::string safeError;
+                            if (!IsSafePackageRelativePath(candidate.generic_string(), safeCandidate, safeError)) {
+                                continue;
+                            }
+
+                            std::vector<uint8_t> pngBytes;
+                            std::string readError;
+                            if (!ReadBinaryFromPackage(package, safeCandidate, kMaxItemModelTextureBytes, pngBytes,
+                                                       readError)) {
+                                lastReadError = readError;
+                                continue;
+                            }
+
+                            std::vector<uint8_t> decodedRgba32;
+                            int32_t decodedWidth = 0;
+                            int32_t decodedHeight = 0;
+                            if (!TryDecodePngToRgba32(pngBytes, decodedRgba32, decodedWidth, decodedHeight, resolveError)) {
+                                resolveError = "failed decoding " + safeCandidate.generic_string() + ": " + resolveError;
+                                return false;
+                            }
+
+                            const std::string normalizedSize = NormalizeTextureSizeToken(meta.size);
+                            if (meta.format == "G_IM_FMT_RGBA" && normalizedSize == "G_IM_SIZ_32b") {
+                                outDecodedWidth = decodedWidth;
+                                outDecodedHeight = decodedHeight;
+                                outBytes = std::move(decodedRgba32);
+                                return true;
+                            }
+                            if (meta.format == "G_IM_FMT_RGBA" && normalizedSize == "G_IM_SIZ_16b") {
+                                outDecodedWidth = decodedWidth;
+                                outDecodedHeight = decodedHeight;
+                                ConvertRgba32ToRgba16(decodedRgba32, outBytes);
+                                return true;
+                            }
+                            if (meta.format == "G_IM_FMT_I" && normalizedSize == "G_IM_SIZ_8b") {
+                                outDecodedWidth = decodedWidth;
+                                outDecodedHeight = decodedHeight;
+                                ConvertRgba32ToI8(decodedRgba32, outBytes);
+                                return true;
+                            }
+
+                            resolveError =
+                                "unsupported include texture format/size: " + meta.format + "|" + normalizedSize;
+                            return false;
+                        }
+
+                        resolveError = "png not found for include " + includePath;
+                        if (!lastReadError.empty()) {
+                            resolveError += " (" + lastReadError + ")";
+                        }
+                        return false;
+                    };
+                    if (!ConvertFast64SourceToResources(modelIncContent, objectName, resolveFast64TextureInclude,
+                                                        definition.modelTextureFilter,
+                                                        package.manifest.id + "." + definition.id, conversion,
+                                                        conversionError)) {
+                        outError = "meshes[" + std::to_string(i) + "].modelAsset conversion failed: " + conversionError;
+                        return false;
+                    }
+
+                    const auto generatedArchivePath =
+                        BuildGeneratedFast64ArchivePath(package.manifest.id, definition.id, objectName).lexically_normal();
+                    auto generatedArchive =
+                        CreateGeneratedFast64Archive(generatedArchivePath, std::move(conversion.resources), conversionError);
+                    if (generatedArchive == nullptr) {
+                        outError =
+                            "meshes[" + std::to_string(i) + "].modelAsset conversion archive failed: " + conversionError;
+                        return false;
+                    }
+
+                    runtime.generatedAssetArchives.push_back(generatedArchive);
+                    if (definition.modelDisplayList.empty()) {
+                        definition.modelDisplayList = conversion.rootDisplayListPath;
+                    }
+                    return true;
+                };
+
+                const auto modelExtension = ToLower(modelPath.extension().string());
+                if (modelExtension == ".obj") {
+                    std::string modelContent;
+                    if (!ReadFileFromPackage(package, modelPath, kMaxItemModelBytes, modelContent, outError)) {
+                        outError = "meshes[" + std::to_string(i) + "].modelAsset read failed: " + outError;
+                        return false;
+                    }
+                    int32_t modelTextureWidth = kItemModelTextureSize;
+                    int32_t modelTextureHeight = kItemModelTextureSize;
+                    definition.modelTextureWidth = 0;
+                    definition.modelTextureHeight = 0;
+                    definition.modelTextureHasTransparency = false;
+                    std::string resolvedModelTextureAsset = definition.modelTextureAsset;
+                    std::vector<uint8_t> modelTextureRgba32ForUvHeuristic;
+
+                    if (resolvedModelTextureAsset.empty()) {
+                        std::string mtlPathFromObj;
+                        if (TryExtractObjMaterialLibraryPath(modelContent, mtlPathFromObj)) {
+                            const std::filesystem::path unresolvedMtlPath = modelPath.parent_path() / mtlPathFromObj;
+                            std::filesystem::path mtlPath;
+                            std::string resolveError;
+                            if (IsSafePackageRelativePath(unresolvedMtlPath.generic_string(), mtlPath, resolveError)) {
+                                std::string mtlContent;
+                                if (ReadFileFromPackage(package, mtlPath, kMaxObjMaterialBytes, mtlContent, resolveError)) {
+                                    std::string mapKdTexturePath;
+                                    if (TryExtractMtlDiffuseTexturePath(mtlContent, mapKdTexturePath)) {
+                                        const std::filesystem::path unresolvedTexturePath = mtlPath.parent_path() / mapKdTexturePath;
+                                        std::filesystem::path texturePath;
+                                        if (IsSafePackageRelativePath(unresolvedTexturePath.generic_string(), texturePath,
+                                                                      resolveError) &&
+                                            ToLower(texturePath.extension().string()) == ".png") {
+                                            resolvedModelTextureAsset = texturePath.generic_string();
+                                            definition.modelTextureAsset = resolvedModelTextureAsset;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (!resolvedModelTextureAsset.empty()) {
+                        std::filesystem::path modelTexturePath;
+                        if (!IsSafePackageRelativePath(resolvedModelTextureAsset, modelTexturePath, outError)) {
+                            outError = "meshes[" + std::to_string(i) + "].modelTextureAsset " + outError;
+                            return false;
+                        }
+
+                        if (ToLower(modelTexturePath.extension().string()) != ".png") {
+                            outError = "meshes[" + std::to_string(i) + "].modelTextureAsset must point to a .png file";
+                            return false;
+                        }
+
+                        std::vector<uint8_t> modelTextureBytes;
+                        if (!ReadBinaryFromPackage(package, modelTexturePath, kMaxItemModelTextureBytes, modelTextureBytes,
+                                                   outError)) {
+                            outError = "meshes[" + std::to_string(i) + "].modelTextureAsset read failed: " + outError;
+                            return false;
+                        }
+
+                        std::vector<uint8_t> decodedModelTextureRgba32;
+                        int32_t decodedModelTextureWidth = 0;
+                        int32_t decodedModelTextureHeight = 0;
+                        if (!TryDecodePngToRgba32(modelTextureBytes, decodedModelTextureRgba32, decodedModelTextureWidth,
+                                                  decodedModelTextureHeight, outError)) {
+                            outError = "meshes[" + std::to_string(i) + "].modelTextureAsset decode failed: " + outError;
+                            return false;
+                        }
+
+                        int32_t effectiveModelTextureWidth = decodedModelTextureWidth;
+                        int32_t effectiveModelTextureHeight = decodedModelTextureHeight;
+                        if (definition.modelTextureTargetWidth > 0 && definition.modelTextureTargetHeight > 0 &&
+                            (definition.modelTextureTargetWidth != decodedModelTextureWidth ||
+                             definition.modelTextureTargetHeight != decodedModelTextureHeight)) {
+                            std::vector<uint8_t> resizedRgba32;
+                            ResizeRgba32Nearest(decodedModelTextureRgba32, decodedModelTextureWidth,
+                                                decodedModelTextureHeight, definition.modelTextureTargetWidth,
+                                                definition.modelTextureTargetHeight, resizedRgba32);
+                            decodedModelTextureRgba32 = std::move(resizedRgba32);
+                            effectiveModelTextureWidth = definition.modelTextureTargetWidth;
+                            effectiveModelTextureHeight = definition.modelTextureTargetHeight;
+                        }
+
+                        modelTextureRgba32ForUvHeuristic = decodedModelTextureRgba32;
+                        definition.modelTextureHasTransparency =
+                            TextureHasMixedAlphaCoverage(modelTextureRgba32ForUvHeuristic, effectiveModelTextureWidth,
+                                                         effectiveModelTextureHeight);
+                        NormalizeModelTextureForOpaqueRendering(decodedModelTextureRgba32, effectiveModelTextureWidth,
+                                                                effectiveModelTextureHeight, false);
+                        ConvertRgba32ToRgba16(decodedModelTextureRgba32, definition.modelTextureRgba32);
+                        definition.modelTextureWidth = effectiveModelTextureWidth;
+                        definition.modelTextureHeight = effectiveModelTextureHeight;
+                        modelTextureWidth = effectiveModelTextureWidth;
+                        modelTextureHeight = effectiveModelTextureHeight;
+                    }
+
+                    if (!TryParseObjCustomModel(modelContent, definition.modelScale, modelTextureWidth, modelTextureHeight,
+                                                definition.modelUvOrigin,
+                                                modelTextureRgba32ForUvHeuristic.empty() ? nullptr :
+                                                                                            &modelTextureRgba32ForUvHeuristic,
+                                                package.manifest.id, definition.id, definition.customModelTriangles,
+                                                outError)) {
+                        outError = "meshes[" + std::to_string(i) + "].modelAsset parse failed: " + outError;
+                        return false;
+                    }
+                } else if (modelExtension.empty()) {
+                    if (!definition.modelTextureAsset.empty()) {
+                        outError = "meshes[" + std::to_string(i) +
+                                   "].modelTextureAsset is only supported for .obj modelAsset";
+                        return false;
+                    }
+
+                    std::filesystem::path modelIncPath;
+                    if (!IsSafePackageRelativePath((modelPath / "model.inc.c").generic_string(), modelIncPath, outError)) {
+                        outError = "meshes[" + std::to_string(i) + "].modelAsset invalid model.inc.c path: " + outError;
+                        return false;
+                    }
+
+                    std::filesystem::path headerPath;
+                    if (!IsSafePackageRelativePath((modelPath / "header.h").generic_string(), headerPath, outError)) {
+                        outError = "meshes[" + std::to_string(i) + "].modelAsset invalid header.h path: " + outError;
+                        return false;
+                    }
+
+                    std::string modelIncContent;
+                    if (!ReadFileFromPackage(package, modelIncPath, kMaxItemModelBytes, modelIncContent, outError)) {
+                        outError = "meshes[" + std::to_string(i) + "].modelAsset missing model.inc.c: " + outError;
+                        return false;
+                    }
+
+                    std::string headerContent;
+                    if (!ReadFileFromPackage(package, headerPath, kMaxItemModelBytes, headerContent, outError)) {
+                        outError = "meshes[" + std::to_string(i) + "].modelAsset missing header.h: " + outError;
+                        return false;
+                    }
+                    (void)headerContent;
+
+                    if (!convertFast64SourceModel(modelIncContent, modelPath)) {
+                        return false;
+                    }
+                } else if (HasSupportedArchiveExtension(modelPath)) {
+                    if (!definition.modelTextureAsset.empty()) {
+                        outError = "meshes[" + std::to_string(i) +
+                                   "].modelTextureAsset is only supported for .obj modelAsset";
+                        return false;
+                    }
+
+                    std::vector<uint8_t> archiveBytes;
+                    std::string archiveReadError;
+                    if (!ReadBinaryFromPackage(package, modelPath, kMaxAssetBytes, archiveBytes, archiveReadError)) {
+                        outError = "meshes[" + std::to_string(i) + "].modelAsset read failed: " + archiveReadError;
+                        return false;
+                    }
+
+                    Fast64ArchiveInspection inspection;
+                    std::string inspectError;
+                    const bool inspected = InspectFast64ArchiveBytes(archiveBytes, inspection, inspectError);
+                    if (!inspected && definition.modelDisplayList.empty()) {
+                        outError = "meshes[" + std::to_string(i) +
+                                   "].modelAsset inspection failed (set modelDisplayList or use Fast64 source folder): " +
+                                   inspectError;
+                        return false;
+                    }
+
+                    bool convertedFromSourceArchive = false;
+                    if (inspected) {
+                        if (definition.modelDisplayList.empty() && !inspection.rootDisplayListPath.empty()) {
+                            definition.modelDisplayList = inspection.rootDisplayListPath;
+                        }
+
+                        if (inspection.hasFast64Source && !inspection.hasDisplayListResources) {
+                            std::filesystem::path objectHint =
+                                inspection.objectNameHint.empty() ? modelPath.stem() : std::filesystem::path(inspection.objectNameHint);
+                            if (!convertFast64SourceModel(inspection.modelIncContent, objectHint)) {
+                                return false;
+                            }
+                            convertedFromSourceArchive = true;
+                        }
+                    }
+
+                    if (!convertedFromSourceArchive) {
+                        if (definition.modelDisplayList.empty()) {
+                            outError = "meshes[" + std::to_string(i) +
+                                       "].modelDisplayList is required when modelAsset archive has no detectable display list";
+                            return false;
+                        }
+
+                        const auto normalizedArchivePath = modelPath.generic_string();
+                        const auto alreadyListed =
+                            std::find(package.manifest.assets.begin(), package.manifest.assets.end(), normalizedArchivePath) !=
+                            package.manifest.assets.end();
+                        if (!alreadyListed) {
+                            package.manifest.assets.push_back(normalizedArchivePath);
+                        }
+                    }
+                } else {
+                    outError = "meshes[" + std::to_string(i) +
+                               "].modelAsset must point to .obj, .otr/.o2r, or a folder with model.inc.c + header.h";
+                    return false;
+                }
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "actors.prefabs.v1")) {
+            std::filesystem::path prefabPath;
+            if (!IsSafePackageRelativePath(package.manifest.prefabDefinitions, prefabPath, outError)) {
+                outError = "Invalid prefabDefinitions: " + outError;
+                return false;
+            }
+
+            std::string prefabContent;
+            if (!ReadFileFromPackage(package, prefabPath, kMaxPrefabDefinitionBytes, prefabContent, outError)) {
+                outError = "Failed to read prefabDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParsePrefabDefinitions(prefabContent, runtime.apiVersion, runtime.prefabDefinitions, outError)) {
+                return false;
+            }
+            for (auto& definition : runtime.prefabDefinitions) {
+                definition.sourceModId = package.manifest.id;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "world.instances.v1")) {
+            std::filesystem::path worldInstancesPath;
+            if (!IsSafePackageRelativePath(package.manifest.worldInstanceDefinitions, worldInstancesPath, outError)) {
+                outError = "Invalid worldInstanceDefinitions: " + outError;
+                return false;
+            }
+
+            std::string worldInstancesContent;
+            if (!ReadFileFromPackage(package, worldInstancesPath, kMaxWorldInstanceDefinitionBytes, worldInstancesContent,
+                                     outError)) {
+                outError = "Failed to read worldInstanceDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseWorldInstanceDefinitions(worldInstancesContent, runtime.apiVersion,
+                                                  runtime.worldInstanceDefinitions, outError)) {
+                return false;
+            }
+            for (auto& definition : runtime.worldInstanceDefinitions) {
+                definition.sourceModId = package.manifest.id;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "editor.placement.v1")) {
+            std::filesystem::path placementPath;
+            if (!IsSafePackageRelativePath(package.manifest.editorPlacementDefinitions, placementPath, outError)) {
+                outError = "Invalid editorPlacementDefinitions: " + outError;
+                return false;
+            }
+
+            std::string placementContent;
+            if (!ReadFileFromPackage(package, placementPath, kMaxEditorPlacementDefinitionBytes, placementContent,
+                                     outError)) {
+                outError = "Failed to read editorPlacementDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseEditorPlacementDefinitions(placementContent, runtime.apiVersion,
+                                                    runtime.editorPlacementDefinitions, outError)) {
+                return false;
+            }
+            for (auto& definition : runtime.editorPlacementDefinitions) {
+                definition.sourceModId = package.manifest.id;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "world.authoring.v1")) {
+            std::filesystem::path authoringPath;
+            if (!IsSafePackageRelativePath(package.manifest.worldAuthoringDefinitions, authoringPath, outError)) {
+                outError = "Invalid worldAuthoringDefinitions: " + outError;
+                return false;
+            }
+
+            std::string authoringContent;
+            if (!ReadFileFromPackage(package, authoringPath, kMaxWorldAuthoringDefinitionBytes, authoringContent,
+                                     outError)) {
+                outError = "Failed to read worldAuthoringDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseWorldAuthoringDefinitions(authoringContent, runtime.apiVersion,
+                                                   runtime.worldAuthoringDefinitions, outError)) {
+                return false;
+            }
+            for (auto& definition : runtime.worldAuthoringDefinitions) {
+                definition.sourceModId = package.manifest.id;
+            }
+        }
+
+        if (!ResolveDslEntityPlacementBindingsForRuntime(package, runtime, outError)) {
+            return false;
+        }
+
         if (ManifestHasCapability(package.manifest, "debug.render_inspector.v1")) {
             std::filesystem::path inspectorPath;
             if (!IsSafePackageRelativePath(package.manifest.renderInspectorDefinitions, inspectorPath, outError)) {
@@ -20775,6 +30113,363 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             if (!TryParseRenderInspectorDefinitions(inspectorContent, runtime.apiVersion, runtime.renderInspectorDefinitions,
                                                     outError)) {
                 return false;
+            }
+            for (const auto& definition : runtime.renderInspectorDefinitions) {
+                const auto cvarName = BuildRenderInspectorOverlayCVarName(package.manifest.id, definition.id);
+                runtime.debugOverlayVisibility[definition.id] =
+                    CVarGetInteger(cvarName.c_str(), definition.enabledByDefault ? 1 : 0) != 0;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "world.persistence.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.worldPersistenceDefinitions, definitionsPath, outError)) {
+                outError = "Invalid worldPersistenceDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxWorldPersistenceDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read worldPersistenceDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseWorldPersistenceDefinitions(definitionsContent, runtime.apiVersion,
+                                                     runtime.worldPersistenceDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "world.storage.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.worldStorageDefinitions, definitionsPath, outError)) {
+                outError = "Invalid worldStorageDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxWorldStorageDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read worldStorageDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseWorldStorageDefinitions(definitionsContent, runtime.apiVersion, runtime.worldStorageDefinitions,
+                                                 outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "world.spawn_profiles.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.worldSpawnProfileDefinitions, definitionsPath, outError)) {
+                outError = "Invalid worldSpawnProfileDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxWorldSpawnProfileDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read worldSpawnProfileDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseWorldSpawnProfileDefinitions(definitionsContent, runtime.apiVersion, runtime.worldSpawnProfiles,
+                                                      outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "world.forage.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.worldForageDefinitions, definitionsPath, outError)) {
+                outError = "Invalid worldForageDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxWorldForageDefinitionBytes, definitionsContent, outError)) {
+                outError = "Failed to read worldForageDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseWorldForageDefinitions(definitionsContent, runtime.apiVersion, runtime.worldForageDefinitions,
+                                                outError)) {
+                return false;
+            }
+            for (auto& definition : runtime.worldForageDefinitions) {
+                definition.sourceModId = package.manifest.id;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "world.time_weather.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.worldTimeWeatherDefinitions, definitionsPath, outError)) {
+                outError = "Invalid worldTimeWeatherDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxWorldTimeWeatherDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read worldTimeWeatherDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseWorldTimeWeatherDefinitions(definitionsContent, runtime.apiVersion,
+                                                     runtime.worldTimeWeatherDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "world.seeding.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.worldSeedingDefinitions, definitionsPath, outError)) {
+                outError = "Invalid worldSeedingDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxWorldSeedingDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read worldSeedingDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseWorldSeedingDefinitions(definitionsContent, runtime.apiVersion, runtime.worldSeedingDefinitions,
+                                                 outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "world.migrations.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.worldMigrationDefinitions, definitionsPath, outError)) {
+                outError = "Invalid worldMigrationDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxWorldMigrationDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read worldMigrationDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseWorldMigrationDefinitions(definitionsContent, runtime.apiVersion, runtime.worldMigrationDefinitions,
+                                                   outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "debug.persistence_inspector.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.persistenceInspectorDefinitions, definitionsPath, outError)) {
+                outError = "Invalid persistenceInspectorDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxPersistenceInspectorDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read persistenceInspectorDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParsePersistenceInspectorDefinitions(definitionsContent, runtime.apiVersion,
+                                                         runtime.persistenceInspectorDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "narrative.flags.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.narrativeFlagDefinitions, definitionsPath, outError)) {
+                outError = "Invalid narrativeFlagDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxNarrativeFlagDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read narrativeFlagDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseNarrativeFlagDefinitions(definitionsContent, runtime.apiVersion, runtime.narrativeFlagDefinitions,
+                                                  outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "narrative.dialogue.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.narrativeDialogueDefinitions, definitionsPath, outError)) {
+                outError = "Invalid narrativeDialogueDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxNarrativeDialogueDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read narrativeDialogueDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseNarrativeDialogueDefinitions(definitionsContent, runtime.apiVersion,
+                                                      runtime.narrativeDialogueDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "narrative.quests.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.narrativeQuestDefinitions, definitionsPath, outError)) {
+                outError = "Invalid narrativeQuestDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxNarrativeQuestDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read narrativeQuestDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseNarrativeQuestDefinitions(definitionsContent, runtime.apiVersion, runtime.narrativeQuestDefinitions,
+                                                   outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "narrative.timeline.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.narrativeTimelineDefinitions, definitionsPath, outError)) {
+                outError = "Invalid narrativeTimelineDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxNarrativeTimelineDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read narrativeTimelineDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseNarrativeTimelineDefinitions(definitionsContent, runtime.apiVersion,
+                                                      runtime.narrativeTimelineDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "debug.narrative_inspector.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.narrativeInspectorDefinitions, definitionsPath, outError)) {
+                outError = "Invalid narrativeInspectorDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxNarrativeInspectorDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read narrativeInspectorDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseNarrativeInspectorDefinitions(definitionsContent, runtime.apiVersion,
+                                                       runtime.narrativeInspectorDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "dev.hot_reload.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.devHotReloadDefinitions, definitionsPath, outError)) {
+                outError = "Invalid devHotReloadDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxDevHotReloadDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read devHotReloadDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseDevHotReloadDefinitions(definitionsContent, runtime.apiVersion, runtime.devHotReloadDefinitions,
+                                                 outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "dev.console.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.devConsoleDefinitions, definitionsPath, outError)) {
+                outError = "Invalid devConsoleDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxDevConsoleDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read devConsoleDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseDevConsoleDefinitions(definitionsContent, runtime.apiVersion, runtime.devConsoleDefinitions,
+                                               outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "dev.watchers.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.devWatcherDefinitions, definitionsPath, outError)) {
+                outError = "Invalid devWatcherDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxDevWatcherDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read devWatcherDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseDevWatcherDefinitions(definitionsContent, runtime.apiVersion, runtime.devWatcherDefinitions,
+                                               outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "wasm.sandbox.v2")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.wasmSandboxDefinitions, definitionsPath, outError)) {
+                outError = "Invalid wasmSandboxDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxWasmSandboxDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read wasmSandboxDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseWasmSandboxDefinitions(definitionsContent, runtime.apiVersion, runtime.wasmSandboxDefinitions,
+                                                outError)) {
+                return false;
+            }
+        }
+
+        if (ManifestHasCapability(package.manifest, "debug.reload_inspector.v1")) {
+            std::filesystem::path definitionsPath;
+            if (!IsSafePackageRelativePath(package.manifest.reloadInspectorDefinitions, definitionsPath, outError)) {
+                outError = "Invalid reloadInspectorDefinitions: " + outError;
+                return false;
+            }
+            std::string definitionsContent;
+            if (!ReadFileFromPackage(package, definitionsPath, kMaxReloadInspectorDefinitionBytes, definitionsContent,
+                                     outError)) {
+                outError = "Failed to read reloadInspectorDefinitions: " + outError;
+                return false;
+            }
+            if (!TryParseReloadInspectorDefinitions(definitionsContent, runtime.apiVersion,
+                                                    runtime.reloadInspectorDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        if (!runtime.worldSeedingDefinitions.empty()) {
+            runtime.worldSeed = (static_cast<int32_t>(gSaveContext.fileNum) * 1009) + runtime.worldSeedingDefinitions.front().seedOffset;
+        } else {
+            runtime.worldSeed = static_cast<int32_t>(gSaveContext.fileNum) * 1009;
+        }
+        if (!runtime.worldTimeWeatherDefinitions.empty()) {
+            runtime.worldTimeSegment = runtime.worldTimeWeatherDefinitions.front().defaultTimeSegment;
+            runtime.worldWeatherState = runtime.worldTimeWeatherDefinitions.front().defaultWeather;
+        }
+        if (!runtime.devHotReloadDefinitions.empty()) {
+            runtime.hotReloadEnabled = runtime.devHotReloadDefinitions.front().enabled;
+            runtime.hotReloadDebounceMs = std::clamp(runtime.devHotReloadDefinitions.front().debounceMs, 0, 60000);
+            runtime.hotReloadCooldownMs = 0;
+        }
+        if (!runtime.wasmSandboxDefinitions.empty()) {
+            const auto& sandbox = runtime.wasmSandboxDefinitions.front();
+            runtime.sandboxMaxCallMs = sandbox.maxCallMs;
+            runtime.sandboxMaxFrameBudgetMs = sandbox.maxFrameBudgetMs;
+            runtime.sandboxMaxHookCallsPerFrame = sandbox.maxHookCallsPerFrame;
+            runtime.sandboxDeterministicMode = sandbox.deterministicMode;
+            runtime.sandboxAllowedSurfaces.clear();
+            for (const auto& surface : sandbox.allowedSurfaces) {
+                runtime.sandboxAllowedSurfaces.insert(ToLower(surface));
             }
         }
 
@@ -20825,6 +30520,16 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
                                           package.manifest.uiScreenDefinitions, kMaxUiScreenDefinitionBytes, true) ||
             !validateV4CapabilityJsonFile("uiHudDefinitions", "ui.hud.v1", package.manifest.uiHudDefinitions,
                                           kMaxUiHudDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("playerResourceDefinitions", "player.resources.v1",
+                                          package.manifest.playerResourceDefinitions, kMaxPlayerResourceDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("resourceRingDefinitions", "ui.resource_rings.v1",
+                                          package.manifest.resourceRingDefinitions, kMaxResourceRingDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("playerConsumableDefinitions", "player.consumables.v1",
+                                          package.manifest.playerConsumableDefinitions,
+                                          kMaxPlayerConsumableDefinitionBytes,
+                                          true) ||
             !validateV4CapabilityJsonFile("inventoryExtensionDefinitions", "ui.inventory_ext.v1",
                                           package.manifest.inventoryExtensionDefinitions,
                                           kMaxInventoryExtensionDefinitionBytes, true) ||
@@ -20899,6 +30604,14 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
                                           package.manifest.roomProfileDefinitions, kMaxRoomProfileDefinitionBytes, true) ||
             !validateV4CapabilityJsonFile("assetPackDefinitions", "assets.packs.v2",
                                           package.manifest.assetPackDefinitions, kMaxAssetPackDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("assetSourceDefinitions", "assets.raw.v1",
+                                          package.manifest.assetSourceDefinitions, kMaxAssetSourceDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("meshDefinitions", "render.meshes.v1", package.manifest.meshDefinitions,
+                                          kMaxMeshDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("prefabDefinitions", "actors.prefabs.v1", package.manifest.prefabDefinitions,
+                                          kMaxPrefabDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("worldInstanceDefinitions", "world.instances.v1",
+                                          package.manifest.worldInstanceDefinitions, kMaxWorldInstanceDefinitionBytes, true) ||
             !validateV4CapabilityJsonFile("renderInspectorDefinitions", "debug.render_inspector.v1",
                                           package.manifest.renderInspectorDefinitions, kMaxRenderInspectorDefinitionBytes,
                                           true) ||
@@ -20933,6 +30646,56 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
                                           kMaxCollisionAuthoringDefinitionBytes, true) ||
             !validateV4CapabilityJsonFile("editorInspectorDefinitions", "debug.editor_inspector.v1",
                                           package.manifest.editorInspectorDefinitions, kMaxEditorInspectorDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("worldPersistenceDefinitions", "world.persistence.v1",
+                                          package.manifest.worldPersistenceDefinitions, kMaxWorldPersistenceDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("worldStorageDefinitions", "world.storage.v1",
+                                          package.manifest.worldStorageDefinitions, kMaxWorldStorageDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("worldSpawnProfileDefinitions", "world.spawn_profiles.v1",
+                                          package.manifest.worldSpawnProfileDefinitions,
+                                          kMaxWorldSpawnProfileDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("worldForageDefinitions", "world.forage.v1",
+                                          package.manifest.worldForageDefinitions, kMaxWorldForageDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("worldTimeWeatherDefinitions", "world.time_weather.v1",
+                                          package.manifest.worldTimeWeatherDefinitions,
+                                          kMaxWorldTimeWeatherDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("worldSeedingDefinitions", "world.seeding.v1",
+                                          package.manifest.worldSeedingDefinitions, kMaxWorldSeedingDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("worldMigrationDefinitions", "world.migrations.v1",
+                                          package.manifest.worldMigrationDefinitions, kMaxWorldMigrationDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("persistenceInspectorDefinitions", "debug.persistence_inspector.v1",
+                                          package.manifest.persistenceInspectorDefinitions,
+                                          kMaxPersistenceInspectorDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("narrativeTimelineDefinitions", "narrative.timeline.v1",
+                                          package.manifest.narrativeTimelineDefinitions,
+                                          kMaxNarrativeTimelineDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("narrativeDialogueDefinitions", "narrative.dialogue.v1",
+                                          package.manifest.narrativeDialogueDefinitions,
+                                          kMaxNarrativeDialogueDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("narrativeQuestDefinitions", "narrative.quests.v1",
+                                          package.manifest.narrativeQuestDefinitions, kMaxNarrativeQuestDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("narrativeFlagDefinitions", "narrative.flags.v1",
+                                          package.manifest.narrativeFlagDefinitions, kMaxNarrativeFlagDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("narrativeInspectorDefinitions", "debug.narrative_inspector.v1",
+                                          package.manifest.narrativeInspectorDefinitions,
+                                          kMaxNarrativeInspectorDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("devHotReloadDefinitions", "dev.hot_reload.v1",
+                                          package.manifest.devHotReloadDefinitions, kMaxDevHotReloadDefinitionBytes,
+                                          true) ||
+            !validateV4CapabilityJsonFile("devConsoleDefinitions", "dev.console.v1",
+                                          package.manifest.devConsoleDefinitions, kMaxDevConsoleDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("devWatcherDefinitions", "dev.watchers.v1",
+                                          package.manifest.devWatcherDefinitions, kMaxDevWatcherDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("wasmSandboxDefinitions", "wasm.sandbox.v2",
+                                          package.manifest.wasmSandboxDefinitions, kMaxWasmSandboxDefinitionBytes, true) ||
+            !validateV4CapabilityJsonFile("reloadInspectorDefinitions", "debug.reload_inspector.v1",
+                                          package.manifest.reloadInspectorDefinitions, kMaxReloadInspectorDefinitionBytes,
                                           true)) {
             return false;
         }
@@ -20983,207 +30746,552 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
                                                          return definition.id == profileId;
                                                      }) != runtime.lightProfiles.end();
         };
+        const auto reportRuntimeReferenceError = [&](const std::string& code, const std::string& message,
+                                                     const std::string& sourcePath, const std::string& registryId,
+                                                     const std::string& referencedId,
+                                                     const std::string& suggestedFix) {
+            AddPackageIssue(package, ExternalModIssueSeverity::Error, code, message, sourcePath, registryId, referencedId,
+                            suggestedFix);
+        };
+        const auto validateEffectRefs = [&](const std::vector<ExternalModUseProfileEffect>& effects,
+                                            const std::string& ownerPrefix,
+                                            const std::string& registryId) -> bool {
+            bool valid = true;
+            for (const auto& effect : effects) {
+                if (!hasDamageRef(effect.damageProfileId)) {
+                    reportRuntimeReferenceError("V52_REF_UNKNOWN_DAMAGE_PROFILE",
+                                                ownerPrefix + " references unknown damageProfile: " +
+                                                    effect.damageProfileId,
+                                                ownerPrefix, registryId, effect.damageProfileId,
+                                                "Provide the missing damage profile or fix the reference.");
+                    valid = false;
+                }
+                if (!hasStatusRef(effect.statusId)) {
+                    reportRuntimeReferenceError("V52_REF_UNKNOWN_STATUS",
+                                                ownerPrefix + " references unknown status: " + effect.statusId, ownerPrefix,
+                                                registryId, effect.statusId,
+                                                "Provide the missing status or fix the reference.");
+                    valid = false;
+                }
+                if (!hasProjectileRef(effect.projectileProfileId)) {
+                    reportRuntimeReferenceError("V52_REF_UNKNOWN_PROJECTILE_PROFILE",
+                                                ownerPrefix + " references unknown projectileProfile: " +
+                                                    effect.projectileProfileId,
+                                                ownerPrefix, registryId, effect.projectileProfileId,
+                                                "Provide the missing projectile profile or fix the reference.");
+                    valid = false;
+                }
+                if (!hasAoERef(effect.aoeProfileId)) {
+                    reportRuntimeReferenceError("V52_REF_UNKNOWN_AOE_PROFILE",
+                                                ownerPrefix + " references unknown aoeProfile: " + effect.aoeProfileId,
+                                                ownerPrefix, registryId, effect.aoeProfileId,
+                                                "Provide the missing AoE profile or fix the reference.");
+                    valid = false;
+                }
+                if (!hasMovementRef(effect.movementProfileId)) {
+                    reportRuntimeReferenceError("V52_REF_UNKNOWN_MOVEMENT_PROFILE",
+                                                ownerPrefix + " references unknown movementProfile: " +
+                                                    effect.movementProfileId,
+                                                ownerPrefix, registryId, effect.movementProfileId,
+                                                "Provide the missing movement profile or fix the reference.");
+                    valid = false;
+                }
+                if (!hasFxPresetRef(effect.fxPresetId)) {
+                    reportRuntimeReferenceError("V52_REF_UNKNOWN_FX_PRESET",
+                                                ownerPrefix + " references unknown fxPreset: " + effect.fxPresetId,
+                                                ownerPrefix, registryId, effect.fxPresetId,
+                                                "Provide the missing FX preset or fix the reference.");
+                    valid = false;
+                }
+                if (!hasStateRef(effect.stateId)) {
+                    reportRuntimeReferenceError("V52_REF_UNKNOWN_STATE",
+                                                ownerPrefix + " references unknown stateId: " + effect.stateId,
+                                                ownerPrefix, registryId, effect.stateId,
+                                                "Provide the missing state or fix the reference.");
+                    valid = false;
+                }
+                if (!hasSpellRef(effect.spellId)) {
+                    reportRuntimeReferenceError("V52_REF_UNKNOWN_SPELL",
+                                                ownerPrefix + " references unknown spellId: " + effect.spellId,
+                                                ownerPrefix, registryId, effect.spellId,
+                                                "Provide the missing spell or fix the reference.");
+                    valid = false;
+                }
+            }
+            return valid;
+        };
 
-        for (const auto& profile : runtime.itemUseProfiles) {
+        std::erase_if(runtime.itemUseProfiles, [&](const ExternalModItemUseProfile& profile) {
+            bool valid = true;
             if (!hasTargetingRef(profile.targetingProfileId)) {
-                outError = "use profile references unknown targetingProfile: " + profile.id + " -> " +
-                           profile.targetingProfileId;
-                return false;
+                reportRuntimeReferenceError("V52_REF_UNKNOWN_TARGETING_PROFILE",
+                                            "use profile references unknown targetingProfile: " + profile.id + " -> " +
+                                                profile.targetingProfileId,
+                                            profile.id, "items.use_profiles.v1", profile.targetingProfileId,
+                                            "Provide the targeting profile or fix the useProfile reference.");
+                valid = false;
             }
-            for (const auto& effect : profile.effects) {
-                if (!hasDamageRef(effect.damageProfileId) || !hasStatusRef(effect.statusId) ||
-                    !hasProjectileRef(effect.projectileProfileId) || !hasAoERef(effect.aoeProfileId) ||
-                    !hasMovementRef(effect.movementProfileId) || !hasFxPresetRef(effect.fxPresetId) ||
-                    !hasStateRef(effect.stateId) || !hasSpellRef(effect.spellId)) {
-                    outError = "use profile references missing catalog id: " + profile.id;
-                    return false;
-                }
+            if (!validateEffectRefs(profile.effects, "use profile " + profile.id, "items.use_profiles.v1")) {
+                valid = false;
             }
-        }
-        for (const auto& spell : runtime.spellDefinitions) {
+            return !valid;
+        });
+
+        std::erase_if(runtime.spellDefinitions, [&](const ExternalModSpellDefinition& spell) {
+            bool valid = true;
             if (!hasTargetingRef(spell.targetingProfileId)) {
-                outError = "spell references unknown targetingProfile: " + spell.id + " -> " + spell.targetingProfileId;
-                return false;
+                reportRuntimeReferenceError("V52_REF_UNKNOWN_TARGETING_PROFILE",
+                                            "spell references unknown targetingProfile: " + spell.id + " -> " +
+                                                spell.targetingProfileId,
+                                            spell.id, "spells.catalog.v1", spell.targetingProfileId,
+                                            "Provide the targeting profile or fix the spell reference.");
+                valid = false;
             }
-            for (const auto& effect : spell.effects) {
-                if (!hasDamageRef(effect.damageProfileId) || !hasStatusRef(effect.statusId) ||
-                    !hasProjectileRef(effect.projectileProfileId) || !hasAoERef(effect.aoeProfileId) ||
-                    !hasMovementRef(effect.movementProfileId) || !hasFxPresetRef(effect.fxPresetId) ||
-                    !hasStateRef(effect.stateId) || !hasSpellRef(effect.spellId)) {
-                    outError = "spell references missing catalog id: " + spell.id;
-                    return false;
-                }
+            if (!validateEffectRefs(spell.effects, "spell " + spell.id, "spells.catalog.v1")) {
+                valid = false;
             }
-        }
-        for (const auto& projectile : runtime.projectileProfiles) {
+            return !valid;
+        });
+
+        std::erase_if(runtime.projectileProfiles, [&](const ExternalModProjectileProfile& projectile) {
+            bool valid = true;
             if (!hasDamageRef(projectile.damageProfileId)) {
-                outError = "projectile references unknown damageProfile: " + projectile.id + " -> " +
-                           projectile.damageProfileId;
-                return false;
+                reportRuntimeReferenceError("V52_REF_UNKNOWN_DAMAGE_PROFILE",
+                                            "projectile references unknown damageProfile: " + projectile.id + " -> " +
+                                                projectile.damageProfileId,
+                                            projectile.id, "combat.projectiles.v1", projectile.damageProfileId,
+                                            "Provide the damage profile or fix the projectile reference.");
+                valid = false;
             }
             for (const auto& statusId : projectile.applyStatuses) {
                 if (!hasStatusRef(statusId)) {
-                    outError = "projectile references unknown status: " + projectile.id + " -> " + statusId;
+                    reportRuntimeReferenceError("V52_REF_UNKNOWN_STATUS",
+                                                "projectile references unknown status: " + projectile.id + " -> " +
+                                                    statusId,
+                                                projectile.id, "combat.projectiles.v1", statusId,
+                                                "Provide the status definition or fix the projectile reference.");
+                    valid = false;
+                }
+            }
+            return !valid;
+        });
+
+        std::erase_if(runtime.aoeProfiles, [&](const ExternalModAoEProfile& aoe) {
+            bool valid = true;
+            if (!validateEffectRefs(aoe.onEnter, "aoe profile " + aoe.id + ".onEnter", "combat.aoe.v1")) {
+                valid = false;
+            }
+            if (!validateEffectRefs(aoe.onTick, "aoe profile " + aoe.id + ".onTick", "combat.aoe.v1")) {
+                valid = false;
+            }
+            if (!validateEffectRefs(aoe.onExit, "aoe profile " + aoe.id + ".onExit", "combat.aoe.v1")) {
+                valid = false;
+            }
+            return !valid;
+        });
+
+        for (auto& itemDefinition : runtime.itemDefinitions) {
+            if (!itemDefinition.useProfile.empty() &&
+                ExternalModContentRegistry::FindItemUseProfileById(runtime, itemDefinition.useProfile) == nullptr) {
+                reportRuntimeReferenceError("V52_REF_UNKNOWN_USE_PROFILE",
+                                            "item references unknown useProfile: " + itemDefinition.id + " -> " +
+                                                itemDefinition.useProfile,
+                                            itemDefinition.id, "core.items.v1", itemDefinition.useProfile,
+                                            "Provide the use profile or remove the invalid reference.");
+                itemDefinition.useProfile.clear();
+            }
+        }
+        for (auto& sceneProfile : runtime.sceneProfiles) {
+            if (!hasPostFxPresetRef(sceneProfile.postFxPresetId)) {
+                reportRuntimeReferenceError("V52_REF_UNKNOWN_POSTFX_PRESET",
+                                            "scene profile references unknown postFx preset: " + sceneProfile.id + " -> " +
+                                                sceneProfile.postFxPresetId,
+                                            sceneProfile.id, "world.scenes.v1", sceneProfile.postFxPresetId,
+                                            "Provide the postfx preset or clear the reference.");
+                sceneProfile.postFxPresetId.clear();
+            }
+            if (!hasLightProfileRef(sceneProfile.skylightProfileId)) {
+                reportRuntimeReferenceError("V52_REF_UNKNOWN_LIGHT_PROFILE",
+                                            "scene profile references unknown skylight profile: " + sceneProfile.id +
+                                                " -> " + sceneProfile.skylightProfileId,
+                                            sceneProfile.id, "world.scenes.v1", sceneProfile.skylightProfileId,
+                                            "Provide the light profile or clear the reference.");
+                sceneProfile.skylightProfileId.clear();
+            }
+        }
+        for (auto& roomProfile : runtime.roomProfiles) {
+            if (!hasPostFxPresetRef(roomProfile.postFxPresetId)) {
+                reportRuntimeReferenceError("V52_REF_UNKNOWN_POSTFX_PRESET",
+                                            "room profile references unknown postFx preset: " + roomProfile.id + " -> " +
+                                                roomProfile.postFxPresetId,
+                                            roomProfile.id, "world.rooms.v1", roomProfile.postFxPresetId,
+                                            "Provide the postfx preset or clear the reference.");
+                roomProfile.postFxPresetId.clear();
+            }
+            if (!hasLightProfileRef(roomProfile.skylightProfileId)) {
+                reportRuntimeReferenceError("V52_REF_UNKNOWN_LIGHT_PROFILE",
+                                            "room profile references unknown skylight profile: " + roomProfile.id +
+                                                " -> " + roomProfile.skylightProfileId,
+                                            roomProfile.id, "world.rooms.v1", roomProfile.skylightProfileId,
+                                            "Provide the light profile or clear the reference.");
+                roomProfile.skylightProfileId.clear();
+            }
+        }
+
+        std::unordered_map<std::string, bool> permissionPreview;
+        ResolvePermissionGrantsForManifest(package.manifest, permissionPreview);
+
+        if (runtime.kind == ExternalModRuntimeKind::Wasm || runtime.kind == ExternalModRuntimeKind::Hybrid) {
+            std::filesystem::path runtimeModulePath;
+            if (!IsSafePackageRelativePath(package.manifest.runtimeModule, runtimeModulePath, outError)) {
+                outError = "Invalid runtime.module: " + outError;
+                return false;
+            }
+            if (!IsSupportedRuntimeModuleExtension(runtimeModulePath)) {
+                outError = "Invalid runtime.module extension (expected .wasm or .wat)";
+                return false;
+            }
+
+            runtime.moduleSourcePath = runtimeModulePath.generic_string();
+            runtime.moduleFormat = ResolveRuntimeModuleFormat(runtimeModulePath);
+            runtime.moduleCompileTimeMs = 0;
+            runtime.moduleCompileDiagnostics.clear();
+            runtime.compiledModuleSizeBytes = 0;
+
+            std::vector<uint8_t> wasmBytes;
+            if (runtime.moduleFormat == ExternalModRuntimeModuleFormat::WatText) {
+                std::string watContent;
+                if (!ReadFileFromPackage(package, runtimeModulePath, kMaxWatSourceBytes, watContent, outError)) {
+                    outError = "Failed to read runtime.module: " + outError;
+                    return false;
+                }
+
+                int32_t compileMs = 0;
+                std::string compileDiagnostics;
+                if (!CompileWatToWasm(watContent, runtime.moduleSourcePath, wasmBytes, compileMs, compileDiagnostics)) {
+                    runtime.moduleCompileDiagnostics = compileDiagnostics;
+                    outError = "Failed to compile runtime.module (.wat): " + compileDiagnostics;
+                    return false;
+                }
+
+                if (wasmBytes.size() > kMaxWasmBytes) {
+                    outError = "Compiled wasm exceeds max module size";
+                    return false;
+                }
+
+                runtime.moduleCompileTimeMs = compileMs;
+                runtime.moduleCompileDiagnostics = compileDiagnostics;
+            } else {
+                if (!ReadBinaryFromPackage(package, runtimeModulePath, kMaxWasmBytes, wasmBytes, outError)) {
+                    outError = "Failed to read runtime.module: " + outError;
                     return false;
                 }
             }
-        }
-        for (const auto& aoe : runtime.aoeProfiles) {
-            const auto validateEffects = [&](const std::vector<ExternalModUseProfileEffect>& effects,
-                                             const char* listName) -> bool {
-                for (const auto& effect : effects) {
-                    if (!hasDamageRef(effect.damageProfileId) || !hasStatusRef(effect.statusId) ||
-                        !hasProjectileRef(effect.projectileProfileId) || !hasAoERef(effect.aoeProfileId) ||
-                        !hasMovementRef(effect.movementProfileId)) {
-                        outError = "aoe profile references missing catalog id: " + aoe.id + "." + listName;
-                        return false;
-                    }
-                }
-                return true;
+
+            runtime.compiledModuleSizeBytes = wasmBytes.size();
+
+            runtime.wasmRuntime = std::make_unique<ExternalModWasmRuntime>();
+            ExternalModWasmConfig config;
+            config.modId = package.manifest.id;
+            config.maxMemoryKb = package.manifest.runtimeMaxMemoryKb;
+            config.maxCallMs = package.manifest.runtimeMaxCallMs;
+            config.maxFrameBudgetMs = package.manifest.runtimeMaxFrameBudgetMs;
+            if (!runtime.wasmSandboxDefinitions.empty()) {
+                config.maxCallMs = std::clamp(runtime.sandboxMaxCallMs, 1, 33);
+                config.maxFrameBudgetMs = std::clamp(runtime.sandboxMaxFrameBudgetMs, 1, 33);
+            }
+            config.hostApi.useItemProfile = [modId = package.manifest.id](const std::string& itemOrProfileId) {
+                return ExternalModManager::Instance().WasmHostUseItemProfile(modId, itemOrProfileId);
             };
-            if (!validateEffects(aoe.onEnter, "onEnter") || !validateEffects(aoe.onTick, "onTick") ||
-                !validateEffects(aoe.onExit, "onExit")) {
-                return false;
-            }
-        }
-        for (const auto& itemDefinition : runtime.itemDefinitions) {
-            if (!itemDefinition.useProfile.empty() && ExternalModContentRegistry::FindItemUseProfileById(runtime, itemDefinition.useProfile) == nullptr) {
-                outError = "item references unknown useProfile: " + itemDefinition.id + " -> " + itemDefinition.useProfile;
-                return false;
-            }
-        }
-        for (const auto& sceneProfile : runtime.sceneProfiles) {
-            if (!hasPostFxPresetRef(sceneProfile.postFxPresetId)) {
-                outError = "scene profile references unknown postFx preset: " + sceneProfile.id + " -> " +
-                           sceneProfile.postFxPresetId;
-                return false;
-            }
-            if (!hasLightProfileRef(sceneProfile.skylightProfileId)) {
-                outError = "scene profile references unknown skylight profile: " + sceneProfile.id + " -> " +
-                           sceneProfile.skylightProfileId;
-                return false;
-            }
-        }
-        for (const auto& roomProfile : runtime.roomProfiles) {
-            if (!hasPostFxPresetRef(roomProfile.postFxPresetId)) {
-                outError = "room profile references unknown postFx preset: " + roomProfile.id + " -> " +
-                           roomProfile.postFxPresetId;
-                return false;
-            }
-            if (!hasLightProfileRef(roomProfile.skylightProfileId)) {
-                outError = "room profile references unknown skylight profile: " + roomProfile.id + " -> " +
-                           roomProfile.skylightProfileId;
-                return false;
-            }
-        }
-
-        if (package.manifest.runtimeType != "wasm3-v1") {
-            outError = "Unsupported runtime.type for apiVersion 4: " + package.manifest.runtimeType;
-            return false;
-        }
-
-        std::filesystem::path runtimeModulePath;
-        if (!IsSafePackageRelativePath(package.manifest.runtimeModule, runtimeModulePath, outError)) {
-            outError = "Invalid runtime.module: " + outError;
-            return false;
-        }
-        if (!IsSupportedRuntimeModuleExtension(runtimeModulePath)) {
-            outError = "Invalid runtime.module extension (expected .wasm or .wat)";
-            return false;
-        }
-
-        runtime.moduleSourcePath = runtimeModulePath.generic_string();
-        runtime.moduleFormat = ResolveRuntimeModuleFormat(runtimeModulePath);
-        runtime.moduleCompileTimeMs = 0;
-        runtime.moduleCompileDiagnostics.clear();
-        runtime.compiledModuleSizeBytes = 0;
-
-        std::vector<uint8_t> wasmBytes;
-        if (runtime.moduleFormat == ExternalModRuntimeModuleFormat::WatText) {
-            std::string watContent;
-            if (!ReadFileFromPackage(package, runtimeModulePath, kMaxWatSourceBytes, watContent, outError)) {
-                outError = "Failed to read runtime.module: " + outError;
-                return false;
-            }
-
-            int32_t compileMs = 0;
-            std::string compileDiagnostics;
-            if (!CompileWatToWasm(watContent, runtime.moduleSourcePath, wasmBytes, compileMs, compileDiagnostics)) {
-                runtime.moduleCompileDiagnostics = compileDiagnostics;
-                outError = "Failed to compile runtime.module (.wat): " + compileDiagnostics;
-                return false;
-            }
-
-            if (wasmBytes.size() > kMaxWasmBytes) {
-                outError = "Compiled wasm exceeds max module size";
-                return false;
-            }
-
-            runtime.moduleCompileTimeMs = compileMs;
-            runtime.moduleCompileDiagnostics = compileDiagnostics;
-        } else {
-            if (!ReadBinaryFromPackage(package, runtimeModulePath, kMaxWasmBytes, wasmBytes, outError)) {
-                outError = "Failed to read runtime.module: " + outError;
-                return false;
-            }
-        }
-
-        runtime.compiledModuleSizeBytes = wasmBytes.size();
-
-        runtime.wasmRuntime = std::make_unique<ExternalModWasmRuntime>();
-        ExternalModWasmConfig config;
-        config.modId = package.manifest.id;
-        config.maxMemoryKb = package.manifest.runtimeMaxMemoryKb;
-        config.maxCallMs = package.manifest.runtimeMaxCallMs;
-        config.maxFrameBudgetMs = package.manifest.runtimeMaxFrameBudgetMs;
-        config.hostApi.useItemProfile = [modId = package.manifest.id](const std::string& itemOrProfileId) {
-            return ExternalModManager::Instance().WasmHostUseItemProfile(modId, itemOrProfileId);
-        };
-        config.hostApi.resolveTarget = [modId = package.manifest.id](const std::string& profileId,
-                                                                     std::vector<int32_t>& outHandles) {
-            return ExternalModManager::Instance().WasmHostResolveTarget(modId, profileId, outHandles);
-        };
-        config.hostApi.dealDamage = [modId = package.manifest.id](int32_t targetHandle, const std::string& damageProfileId) {
-            return ExternalModManager::Instance().WasmHostDealDamage(modId, targetHandle, damageProfileId);
-        };
-        config.hostApi.applyStatus =
-            [modId = package.manifest.id](int32_t targetHandle, const std::string& statusId, int32_t durationOverrideFrames) {
+            config.hostApi.resolveTarget = [modId = package.manifest.id](const std::string& profileId,
+                                                                         std::vector<int32_t>& outHandles) {
+                return ExternalModManager::Instance().WasmHostResolveTarget(modId, profileId, outHandles);
+            };
+            config.hostApi.dealDamage =
+                [modId = package.manifest.id](int32_t targetHandle, const std::string& damageProfileId) {
+                    return ExternalModManager::Instance().WasmHostDealDamage(modId, targetHandle, damageProfileId);
+                };
+            config.hostApi.applyStatus = [modId = package.manifest.id](int32_t targetHandle, const std::string& statusId,
+                                                                       int32_t durationOverrideFrames) {
                 return ExternalModManager::Instance().WasmHostApplyStatus(modId, targetHandle, statusId,
                                                                           durationOverrideFrames);
             };
-        config.hostApi.spawnProjectile =
-            [modId = package.manifest.id](const std::string& profileId, const std::string& overridesJson) {
-                return ExternalModManager::Instance().WasmHostSpawnProjectile(modId, profileId, overridesJson);
+            config.hostApi.spawnProjectile =
+                [modId = package.manifest.id](const std::string& profileId, const std::string& overridesJson) {
+                    return ExternalModManager::Instance().WasmHostSpawnProjectile(modId, profileId, overridesJson);
+                };
+            config.hostApi.spawnAoE =
+                [modId = package.manifest.id](const std::string& profileId, const std::string& originJson) {
+                    return ExternalModManager::Instance().WasmHostSpawnAoE(modId, profileId, originJson);
+                };
+            config.hostApi.applyMovementProfile =
+                [modId = package.manifest.id](const std::string& profileId, int32_t durationFrames) {
+                    return ExternalModManager::Instance().WasmHostApplyMovementProfile(modId, profileId, durationFrames);
+                };
+            config.hostApi.applyImpulse =
+                [modId = package.manifest.id](int32_t mode, float strength, float x, float y, float z) {
+                    return ExternalModManager::Instance().WasmHostApplyImpulse(modId, mode, strength, x, y, z);
+                };
+            config.hostApi.getGroundInfo = [modId = package.manifest.id](ExternalModWasmGroundInfo& outInfo) {
+                return ExternalModManager::Instance().WasmHostGetGroundInfo(modId, outInfo);
             };
-        config.hostApi.spawnAoE = [modId = package.manifest.id](const std::string& profileId, const std::string& originJson) {
-            return ExternalModManager::Instance().WasmHostSpawnAoE(modId, profileId, originJson);
-        };
-        config.hostApi.applyMovementProfile =
-            [modId = package.manifest.id](const std::string& profileId, int32_t durationFrames) {
-                return ExternalModManager::Instance().WasmHostApplyMovementProfile(modId, profileId, durationFrames);
+            config.hostApi.raycast =
+                [modId = package.manifest.id](const std::string& queryJson, ExternalModWasmRaycastHit& outHit) {
+                    return ExternalModManager::Instance().WasmHostRaycast(modId, queryJson, outHit);
+                };
+            config.hostApi.raycastAll = [modId = package.manifest.id](const std::string& queryJson, int32_t outCapacity,
+                                                                      std::vector<ExternalModWasmRaycastHit>& outHits) {
+                return ExternalModManager::Instance().WasmHostRaycastAll(modId, queryJson, outCapacity, outHits);
             };
-        config.hostApi.applyImpulse = [modId = package.manifest.id](int32_t mode, float strength, float x, float y, float z) {
-            return ExternalModManager::Instance().WasmHostApplyImpulse(modId, mode, strength, x, y, z);
-        };
-        config.hostApi.getGroundInfo = [modId = package.manifest.id](ExternalModWasmGroundInfo& outInfo) {
-            return ExternalModManager::Instance().WasmHostGetGroundInfo(modId, outInfo);
-        };
-        config.hostApi.raycast =
-            [modId = package.manifest.id](const std::string& queryJson, ExternalModWasmRaycastHit& outHit) {
-                return ExternalModManager::Instance().WasmHostRaycast(modId, queryJson, outHit);
+            config.hostApi.queryPublicJson = [modId = package.manifest.id](const std::string& requestJson,
+                                                                           std::string& outJson) {
+                return ExternalModManager::Instance().WasmHostQueryPublicJson(modId, requestJson, outJson);
             };
-        config.hostApi.raycastAll = [modId = package.manifest.id](const std::string& queryJson, int32_t outCapacity,
-                                                                  std::vector<ExternalModWasmRaycastHit>& outHits) {
-            return ExternalModManager::Instance().WasmHostRaycastAll(modId, queryJson, outCapacity, outHits);
-        };
+            config.hostApi.callService =
+                [modId = package.manifest.id](const std::string& targetModId, const std::string& serviceId,
+                                              const std::string& requestJson, std::string& outJson) {
+                    return ExternalModManager::Instance().WasmHostCallService(modId, targetModId, serviceId, requestJson,
+                                                                             outJson);
+                };
+            config.hostApi.invokeActionJson = [modId = package.manifest.id](const std::string& actionJson,
+                                                                            std::string& outJson) {
+                return ExternalModManager::Instance().WasmHostInvokeActionJson(modId, actionJson, outJson);
+            };
 
-        if (!runtime.wasmRuntime->Initialize(wasmBytes, config, outError)) {
-            runtime.moduleCompileDiagnostics = outError;
+            if (!runtime.wasmRuntime->Initialize(wasmBytes, config, outError)) {
+                runtime.moduleCompileDiagnostics = outError;
+                return false;
+            }
+        }
+
+        if (runtime.kind == ExternalModRuntimeKind::Native || runtime.kind == ExternalModRuntimeKind::Hybrid) {
+            const auto nativeInteropIt = permissionPreview.find("nativeinterop");
+            const bool nativeInteropGranted =
+                nativeInteropIt != permissionPreview.end() ? nativeInteropIt->second : DefaultGrantForRuntimePermission("nativeinterop");
+            if (!nativeInteropGranted) {
+                outError = "Native runtime requires granted permission: nativeinterop";
+                return false;
+            }
+
+            const bool rawMode = runtime.nativeMode == ExternalModNativeMode::Raw;
+            if (rawMode) {
+                const auto rawInteropIt = permissionPreview.find("nativeinterop.raw");
+                const bool rawGranted = rawInteropIt != permissionPreview.end()
+                                            ? rawInteropIt->second
+                                            : DefaultGrantForRuntimePermission("nativeinterop.raw");
+                if (!rawGranted) {
+                    outError = "Native raw runtime requires granted permission: nativeinterop.raw";
+                    return false;
+                }
+            }
+
+            std::filesystem::path entryLibraryPath;
+            if (!IsSafePackageRelativePath(package.manifest.entryLibrary, entryLibraryPath, outError)) {
+                outError = "Invalid runtime.entryLibrary: " + outError;
+                return false;
+            }
+
+            bool loadedFromCache = false;
+            std::filesystem::path preparedLibraryPath;
+            if (!PreparePackageFileForHostAccess(package, entryLibraryPath, kMaxNativeLibraryBytes, "runtime.entryLibrary",
+                                                 preparedLibraryPath, loadedFromCache, outError)) {
+                return false;
+            }
+
+            runtime.nativeLibrarySourcePath = package.manifest.entryLibrary;
+            runtime.nativeLibraryLoadedPath = preparedLibraryPath.generic_string();
+            runtime.nativeLoadedFromCache = loadedFromCache;
+            runtime.nativeUnsafeRaw = rawMode;
+            runtime.nativeRuntime = std::make_unique<ExternalModNativeRuntime>();
+
+            ExternalModNativeRuntimeConfig nativeConfig;
+            nativeConfig.modId = package.manifest.id;
+            nativeConfig.runtimeType = package.manifest.runtimeType;
+            nativeConfig.apiVersion = package.manifest.apiVersion;
+            nativeConfig.abiVersion = package.manifest.runtimeAbiVersion;
+            nativeConfig.allowRawApi = rawMode;
+            nativeConfig.buildId = ResolveCurrentRuntimeBuildId();
+            nativeConfig.externalModManager = &ExternalModManager::Instance();
+            nativeConfig.log = [modId = package.manifest.id](int32_t level, const std::string& message) {
+                switch (level) {
+                    case 0:
+                        SPDLOG_DEBUG("[ExternalMods][native][{}] {}", modId, message);
+                        break;
+                    case 2:
+                        SPDLOG_WARN("[ExternalMods][native][{}] {}", modId, message);
+                        break;
+                    case 3:
+                        SPDLOG_ERROR("[ExternalMods][native][{}] {}", modId, message);
+                        break;
+                    case 1:
+                    default:
+                        SPDLOG_INFO("[ExternalMods][native][{}] {}", modId, message);
+                        break;
+                }
+            };
+            nativeConfig.showNotification = [modName = package.manifest.name.empty() ? package.manifest.id : package.manifest.name](
+                                                const std::string& message) {
+                Notification::Emit({
+                    .message = "[ExternalMods][" + modName + "] " + message,
+                    .remainingTime = 6.0f,
+                });
+            };
+            nativeConfig.hasPermission =
+                [manifest = package.manifest, permissionPreview](const std::string& permission) -> bool {
+                    if (!ManifestDeclaresRuntimePermission(manifest, permission)) {
+                        return false;
+                    }
+                    if (const auto it = permissionPreview.find(permission); it != permissionPreview.end()) {
+                        return it->second;
+                    }
+                    return DefaultGrantForRuntimePermission(permission);
+                };
+            nativeConfig.getCurrentScene = []() -> int32_t {
+                return gPlayState != nullptr ? static_cast<int32_t>(gPlayState->sceneNum) : -1;
+            };
+            nativeConfig.getCurrentRoom = []() -> int32_t {
+                return gPlayState != nullptr ? static_cast<int32_t>(gPlayState->roomCtx.curRoom.num) : -1;
+            };
+            nativeConfig.getAssetPath = [assetSources = runtime.assetSourceDefinitions](const std::string& assetId,
+                                                                                        std::string& outPath) -> bool {
+                outPath.clear();
+                const auto it = std::find_if(assetSources.begin(), assetSources.end(),
+                                             [&assetId](const ExternalModAssetSourceDefinition& definition) {
+                                                 return definition.id == assetId;
+                                             });
+                if (it == assetSources.end() || !it->hostAccess || it->preparedPath.empty()) {
+                    return false;
+                }
+                outPath = it->preparedPath;
+                return true;
+            };
+            nativeConfig.getAssetInfo = [assetSources = runtime.assetSourceDefinitions](const std::string& assetId,
+                                                                                        std::string& outKind,
+                                                                                        std::string& outFormat,
+                                                                                        uint64_t& outSizeBytes) -> bool {
+                outKind.clear();
+                outFormat.clear();
+                outSizeBytes = 0;
+                const auto it = std::find_if(assetSources.begin(), assetSources.end(),
+                                             [&assetId](const ExternalModAssetSourceDefinition& definition) {
+                                                 return definition.id == assetId;
+                                             });
+                if (it == assetSources.end()) {
+                    return false;
+                }
+                outKind = it->kind;
+                outFormat = it->format;
+                outSizeBytes = it->sizeBytes;
+                return !outKind.empty() && !outFormat.empty();
+            };
+            nativeConfig.queryPublicJson = [modId = package.manifest.id](const std::string& requestJson,
+                                                                         std::string& outJson) -> bool {
+                std::string error;
+                if (!ExternalModManager::Instance().QueryPublicModJson(modId, requestJson, outJson, error)) {
+                    if (!error.empty()) {
+                        SPDLOG_WARN("[ExternalMods][native][{}] queryPublicJson failed: {}", modId, error);
+                    }
+                    return false;
+                }
+                return true;
+            };
+            nativeConfig.callService =
+                [modId = package.manifest.id](const std::string& targetModId, const std::string& serviceId,
+                                              const std::string& requestJson, std::string& outJson) -> bool {
+                    std::string error;
+                    if (!ExternalModManager::Instance().CallPublicService(modId, targetModId, serviceId, requestJson,
+                                                                          outJson, error)) {
+                        if (!error.empty()) {
+                            SPDLOG_WARN("[ExternalMods][native][{}] callService failed: {}", modId, error);
+                        }
+                        return false;
+                    }
+                    return true;
+                };
+            nativeConfig.invokeActionJson = [modId = package.manifest.id](const std::string& actionJson,
+                                                                          std::string& outJson) -> bool {
+                std::string error;
+                if (!ExternalModManager::Instance().InvokeOwnActionJson(modId, actionJson, outJson, error)) {
+                    if (!error.empty()) {
+                        SPDLOG_WARN("[ExternalMods][native][{}] invokeActionJson failed: {}", modId, error);
+                    }
+                    return false;
+                }
+                return true;
+            };
+            nativeConfig.getPlayState = []() -> void* {
+                return gPlayState;
+            };
+            nativeConfig.getPlayer = []() -> void* {
+                return gPlayState != nullptr ? GET_PLAYER(gPlayState) : nullptr;
+            };
+            nativeConfig.getSaveContext = []() -> void* {
+                return &gSaveContext;
+            };
+            nativeConfig.resolveSymbol = [](const std::string& symbolName) -> void* {
+                if (symbolName == "gPlayState") {
+                    return gPlayState;
+                }
+                if (symbolName == "gSaveContext") {
+                    return &gSaveContext;
+                }
+                return nullptr;
+            };
+
+            if (!runtime.nativeRuntime->Initialize(preparedLibraryPath.generic_string(), nativeConfig, outError)) {
+                return false;
+            }
+
+            runtime.nativePluginName = runtime.nativeRuntime->GetPluginName();
+            runtime.nativePluginVersion = runtime.nativeRuntime->GetPluginVersion();
+            runtime.nativePluginAuthor = runtime.nativeRuntime->GetPluginAuthor();
+            runtime.nativePluginBuildId = runtime.nativeRuntime->GetPluginBuildId();
+            if (!runtime.nativePluginBuildId.empty() && runtime.nativeBuildIdPolicy == "match" &&
+                runtime.nativePluginBuildId != nativeConfig.buildId) {
+                outError = "Native runtime buildId mismatch";
+                return false;
+            }
+        }
+    }
+
+    if (package.manifest.settings.enabled && !package.manifest.settings.schemaFile.empty()) {
+        std::filesystem::path settingsSchemaPath;
+        if (!IsSafePackageRelativePath(package.manifest.settings.schemaFile, settingsSchemaPath, outError)) {
+            outError = "Invalid settings.schemaFile: " + outError;
             return false;
+        }
+
+        std::string settingsSchemaContent;
+        if (!ReadFileFromPackage(package, settingsSchemaPath, kMaxScriptBytes, settingsSchemaContent, outError)) {
+            outError = "Failed to read settings.schemaFile: " + outError;
+            return false;
+        }
+        if (!TryParseSettingsSchema(settingsSchemaContent, runtime.settingsSchema, outError)) {
+            return false;
+        }
+
+        const std::string defaultDomain = NormalizeSettingDomainToken(package.manifest.settings.defaultDomain);
+        if (defaultDomain != "global") {
+            const auto resolvedDefaultDomain =
+                defaultDomain == "save" ? ExternalModSettingDomain::Save : ExternalModSettingDomain::Session;
+            for (auto& group : runtime.settingsSchema.groups) {
+                for (auto& entry : group.entries) {
+                    if (entry.domain == ExternalModSettingDomain::Global) {
+                        entry.domain = resolvedDefaultDomain;
+                    }
+                }
+            }
         }
     }
 
     package.runtime = std::move(runtime);
+    EnsurePermissionStoreForRuntime(package);
+    if (RuntimeHasPersistentState(package.runtime)) {
+        LoadRuntimeStateForPackage(package);
+    }
+    if (package.manifest.settings.enabled) {
+        LoadSettingsStoreForPackage(package);
+    }
     return true;
 }
 
@@ -21249,6 +31357,12 @@ void ExternalModManager::UnmountAssetsForPackage(ExternalModPackage& package) {
                 SPDLOG_WARN("[ExternalMods] Failed to remove generated cache for {}: {}", package.manifest.id,
                             ec.message());
             }
+            ec.clear();
+            std::filesystem::remove_all(cacheRoot / "_native" / SanitizeModIdForPath(package.manifest.id), ec);
+            if (ec) {
+                SPDLOG_WARN("[ExternalMods] Failed to remove native cache for {}: {}", package.manifest.id,
+                            ec.message());
+            }
         }
     }
     package.runtime.generatedAssetPaths.clear();
@@ -21290,13 +31404,14 @@ bool ExternalModManager::MountAssetsForPackage(ExternalModPackage& package, std:
                 outError = "Invalid assets[" + std::to_string(i) + "]: " + outError;
                 return false;
             }
-            const auto fullAssetPath = package.sourcePath / assetRelativePath;
-            if (!std::filesystem::exists(fullAssetPath) || !std::filesystem::is_regular_file(fullAssetPath)) {
-                outError = "Asset not found: " + assetRelativePath.generic_string();
+            std::filesystem::path rootPath;
+            std::filesystem::path fullAssetPath;
+            if (!ResolvePackageFilePath(package, assetRelativePath, rootPath, fullAssetPath, outError)) {
+                outError = "Asset escaped package directory: " + assetRelativePath.generic_string();
                 return false;
             }
-            if (!IsPathWithinBase(package.sourcePath, fullAssetPath)) {
-                outError = "Asset escapes package directory: " + assetRelativePath.generic_string();
+            if (!std::filesystem::exists(fullAssetPath) || !std::filesystem::is_regular_file(fullAssetPath)) {
+                outError = "Asset not found: " + assetRelativePath.generic_string();
                 return false;
             }
             addPreparedAsset(fullAssetPath);
@@ -21320,7 +31435,8 @@ bool ExternalModManager::MountAssetsForPackage(ExternalModPackage& package, std:
             }
 
             std::vector<char> assetBytes;
-            if (!ReadFileFromZip(package.sourcePath, assetRelativePath, kMaxAssetBytes, assetBytes, outError)) {
+            if (!ReadFileFromZip(package.sourcePath, ResolveZipPathForPackage(package, assetRelativePath), kMaxAssetBytes,
+                                 assetBytes, outError)) {
                 outError = "Failed to extract assets[" + std::to_string(i) + "]: " + outError;
                 return false;
             }
@@ -21406,6 +31522,26 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
         const bool hasActorCapability =
             ManifestHasCapability(package.manifest, "actors.vm.v1") ||
             ManifestHasCapability(package.manifest, "actors.generic.v1");
+
+        if (const char* requiredPermission = ResolveRequiredRuntimePermissionForAction(action.type);
+            requiredPermission != nullptr) {
+            const std::string permission(requiredPermission);
+            const std::string actionLabel = DescribeActionForPermissionLog(action.type);
+            if (!ManifestDeclaresRuntimePermission(package.manifest, permission)) {
+                package.runtime.globalBlackboard["__sandbox_permission_denied"] =
+                    permission + ":" + actionLabel + ":manifest_missing_permission";
+                SPDLOG_WARN("[ExternalMods] Denied action {} for {}: manifest is missing permission '{}'",
+                            actionLabel, package.manifest.id, permission);
+                continue;
+            }
+            if (!IsRuntimePermissionGranted(package, permission)) {
+                package.runtime.globalBlackboard["__sandbox_permission_denied"] =
+                    permission + ":" + actionLabel + ":user_denied";
+                SPDLOG_WARN("[ExternalMods] Denied action {} for {}: permission '{}' was not granted",
+                            actionLabel, package.manifest.id, permission);
+                continue;
+            }
+        }
 
         switch (action.type) {
             case ExternalModActionType::ShowNotification:
@@ -23140,6 +33276,519 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
                         package.runtime.materialOverrides.end());
                 }
                 break;
+            case ExternalModActionType::PersistEnsureEntityGuid: {
+                std::string entityGuid = action.persistenceEntityGuid;
+                if (entityGuid.empty()) {
+                    entityGuid = package.manifest.id + ":entity_" + std::to_string(package.runtime.nextActorHandle++);
+                }
+                auto& entity = package.runtime.persistentEntities[entityGuid];
+                entity.entityGuid = entityGuid;
+                entity.scope = action.persistenceEntityScope.empty() ? "room" : action.persistenceEntityScope;
+                entity.sceneId = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->sceneNum) : -1;
+                entity.roomId = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->roomCtx.curRoom.num) : -1;
+                package.runtime.globalBlackboard["__persist_last_entity_guid"] = entityGuid;
+                package.runtime.persistentStateDirty = true;
+                break;
+            }
+            case ExternalModActionType::PersistSaveEntityState: {
+                std::string entityGuid = action.persistenceEntityGuid;
+                if (entityGuid.empty()) {
+                    const auto it = package.runtime.globalBlackboard.find("__persist_last_entity_guid");
+                    if (it != package.runtime.globalBlackboard.end()) {
+                        entityGuid = it->second;
+                    }
+                }
+                if (!entityGuid.empty()) {
+                    auto& entity = package.runtime.persistentEntities[entityGuid];
+                    entity.entityGuid = entityGuid;
+                    entity.sceneId = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->sceneNum) : -1;
+                    entity.roomId = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->roomCtx.curRoom.num) : -1;
+                    const std::string key = action.persistenceStateKey.empty() ? "__value" : action.persistenceStateKey;
+                    entity.values[key] = action.persistenceStateValue;
+                    package.runtime.persistentStateDirty = true;
+
+                    ExternalModHookEventContext context;
+                    context.scene = entity.sceneId;
+                    context.value = entityGuid;
+                    ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnPersistentEntitySaved, context,
+                                                                        "OnPersistentEntitySaved");
+                }
+                break;
+            }
+            case ExternalModActionType::PersistLoadEntityState: {
+                std::string entityGuid = action.persistenceEntityGuid;
+                if (entityGuid.empty()) {
+                    const auto it = package.runtime.globalBlackboard.find("__persist_last_entity_guid");
+                    if (it != package.runtime.globalBlackboard.end()) {
+                        entityGuid = it->second;
+                    }
+                }
+                if (entityGuid.empty()) {
+                    break;
+                }
+                const auto entityIt = package.runtime.persistentEntities.find(entityGuid);
+                if (entityIt == package.runtime.persistentEntities.end()) {
+                    break;
+                }
+                if (action.persistenceStateKey.empty()) {
+                    for (const auto& valuePair : entityIt->second.values) {
+                        package.runtime.globalBlackboard["persist.entity." + entityGuid + "." + valuePair.first] = valuePair.second;
+                    }
+                } else {
+                    const auto valueIt = entityIt->second.values.find(action.persistenceStateKey);
+                    if (valueIt != entityIt->second.values.end()) {
+                        package.runtime.globalBlackboard["persist.entity." + entityGuid + "." + action.persistenceStateKey] =
+                            valueIt->second;
+                    }
+                }
+                ExternalModHookEventContext context;
+                context.scene = entityIt->second.sceneId;
+                context.value = entityGuid;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnPersistentEntityLoaded, context,
+                                                                    "OnPersistentEntityLoaded");
+                break;
+            }
+            case ExternalModActionType::PersistDeleteEntityState: {
+                std::string entityGuid = action.persistenceEntityGuid;
+                if (entityGuid.empty()) {
+                    const auto it = package.runtime.globalBlackboard.find("__persist_last_entity_guid");
+                    if (it != package.runtime.globalBlackboard.end()) {
+                        entityGuid = it->second;
+                    }
+                }
+                if (!entityGuid.empty()) {
+                    package.runtime.persistentEntities.erase(entityGuid);
+                    package.runtime.persistentStateDirty = true;
+                }
+                break;
+            }
+            case ExternalModActionType::PersistSetDomainValue: {
+                const std::string domainId = ResolveProfileIdForMod(package.manifest.id, action.persistenceDomainId);
+                const std::string key = action.persistenceStateKey.empty() ? "__value" : action.persistenceStateKey;
+                package.runtime.persistentDomains[domainId][key] = action.persistenceStateValue;
+                package.runtime.globalBlackboard["persist.domain." + domainId + "." + key] = action.persistenceStateValue;
+                package.runtime.persistentStateDirty = true;
+                break;
+            }
+            case ExternalModActionType::PersistGetDomainValue: {
+                const std::string domainId = ResolveProfileIdForMod(package.manifest.id, action.persistenceDomainId);
+                const std::string key = action.persistenceStateKey.empty() ? "__value" : action.persistenceStateKey;
+                const auto domainIt = package.runtime.persistentDomains.find(domainId);
+                if (domainIt != package.runtime.persistentDomains.end()) {
+                    const auto valueIt = domainIt->second.find(key);
+                    if (valueIt != domainIt->second.end()) {
+                        package.runtime.globalBlackboard["persist.domain." + domainId + "." + key] = valueIt->second;
+                    }
+                }
+                break;
+            }
+            case ExternalModActionType::PersistRunMigrations: {
+                const std::string migrationIdFilter = action.migrationId.empty() ? "" : ResolveProfileIdForMod(package.manifest.id, action.migrationId);
+                for (const auto& migration : package.runtime.worldMigrationDefinitions) {
+                    if (!migrationIdFilter.empty() && migration.id != migrationIdFilter) {
+                        continue;
+                    }
+                    if (!migration.actions.empty()) {
+                        ExecuteActions(package, migration.actions, "persist.runMigrations");
+                    }
+                    ExternalModHookEventContext context;
+                    context.scene = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->sceneNum) : -1;
+                    context.value = migration.id;
+                    ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnPersistentDomainMigrated, context,
+                                                                        "OnPersistentDomainMigrated");
+                }
+                package.runtime.persistentStateDirty = true;
+                break;
+            }
+            case ExternalModActionType::WorldSpawnFromProfile: {
+                const std::string resolvedProfileId = ResolveProfileIdForMod(package.manifest.id, action.spawnProfileId);
+                const auto profileIt = std::find_if(package.runtime.worldSpawnProfiles.begin(), package.runtime.worldSpawnProfiles.end(),
+                                                    [&](const ExternalModWorldSpawnProfileDefinition& definition) {
+                                                        return definition.id == resolvedProfileId;
+                                                    });
+                if (profileIt == package.runtime.worldSpawnProfiles.end()) {
+                    DisableRuntime(package, "world.spawnFromProfile references unknown profile: " + resolvedProfileId);
+                    return;
+                }
+                ExternalModAction spawnAction;
+                spawnAction.type = ExternalModActionType::ActorsSpawnArchetype;
+                spawnAction.archetypeId = profileIt->actorArchetypeId;
+                spawnAction.spawnOrigin = "player_forward";
+                spawnAction.forwardDistance = std::max(40.0f, profileIt->minDistanceFromPlayer);
+                ExecuteActions(package, { spawnAction }, "world.spawnFromProfile");
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->sceneNum) : -1;
+                context.value = resolvedProfileId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnWorldSpawnProfileTick, context,
+                                                                    "OnWorldSpawnProfileTick");
+                break;
+            }
+            case ExternalModActionType::WorldTimeSetOverride: {
+                package.runtime.worldTimeSegment = action.timeSegmentId.empty() ? "day" : ToLower(action.timeSegmentId);
+                package.runtime.globalBlackboard["__world_time_segment"] = package.runtime.worldTimeSegment;
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->sceneNum) : -1;
+                context.value = package.runtime.worldTimeSegment;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnWorldTimeSegmentChanged, context,
+                                                                    "world.time.segmentChanged");
+                break;
+            }
+            case ExternalModActionType::WorldWeatherSetOverride: {
+                package.runtime.worldWeatherState = action.weatherProfileId.empty() ? "clear" : ToLower(action.weatherProfileId);
+                package.runtime.globalBlackboard["__world_weather_state"] = package.runtime.worldWeatherState;
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->sceneNum) : -1;
+                context.value = package.runtime.worldWeatherState;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnWorldWeatherChanged, context,
+                                                                    "world.weather.changed");
+                break;
+            }
+            case ExternalModActionType::NarrativeStartDialogue: {
+                const std::string resolvedDialogueId = ResolveProfileIdForMod(package.manifest.id, action.dialogueId);
+                const auto dialogueIt = std::find_if(package.runtime.narrativeDialogueDefinitions.begin(),
+                                                     package.runtime.narrativeDialogueDefinitions.end(),
+                                                     [&](const ExternalModNarrativeDialogueDefinition& definition) {
+                                                         return definition.id == resolvedDialogueId;
+                                                     });
+                if (dialogueIt == package.runtime.narrativeDialogueDefinitions.end()) {
+                    DisableRuntime(package, "narrative.startDialogue references unknown dialogueId: " + resolvedDialogueId);
+                    return;
+                }
+                package.runtime.activeDialogueId = resolvedDialogueId;
+                package.runtime.activeDialogueNodeId = dialogueIt->startNodeId;
+                package.runtime.globalBlackboard["__narrative_dialogue"] = resolvedDialogueId;
+                package.runtime.globalBlackboard["__narrative_dialogue_node"] = dialogueIt->startNodeId;
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->sceneNum) : -1;
+                context.value = resolvedDialogueId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnDialogueStarted, context,
+                                                                    "OnDialogueStarted");
+                break;
+            }
+            case ExternalModActionType::NarrativeChooseOption: {
+                if (package.runtime.activeDialogueId.empty()) {
+                    break;
+                }
+                const auto dialogueIt = std::find_if(package.runtime.narrativeDialogueDefinitions.begin(),
+                                                     package.runtime.narrativeDialogueDefinitions.end(),
+                                                     [&](const ExternalModNarrativeDialogueDefinition& definition) {
+                                                         return definition.id == package.runtime.activeDialogueId;
+                                                     });
+                if (dialogueIt == package.runtime.narrativeDialogueDefinitions.end()) {
+                    break;
+                }
+                const auto nodeIt = std::find_if(dialogueIt->nodes.begin(), dialogueIt->nodes.end(),
+                                                 [&](const ExternalModNarrativeDialogueNodeDefinition& node) {
+                                                     return node.id == package.runtime.activeDialogueNodeId;
+                                                 });
+                if (nodeIt == dialogueIt->nodes.end()) {
+                    break;
+                }
+                const auto optionIt = std::find_if(nodeIt->options.begin(), nodeIt->options.end(),
+                                                   [&](const ExternalModNarrativeDialogueOptionDefinition& option) {
+                                                       return option.id == action.dialogueOptionId;
+                                                   });
+                if (optionIt == nodeIt->options.end()) {
+                    break;
+                }
+                if (!optionIt->onChoose.empty()) {
+                    ExecuteActions(package, optionIt->onChoose, "narrative.chooseOption");
+                }
+                package.runtime.activeDialogueNodeId = optionIt->nextNodeId;
+                package.runtime.globalBlackboard["__narrative_dialogue_node"] = package.runtime.activeDialogueNodeId;
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->sceneNum) : -1;
+                context.value = optionIt->id;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnDialogueChoiceCommitted, context,
+                                                                    "OnDialogueChoiceCommitted");
+                break;
+            }
+            case ExternalModActionType::NarrativeAdvanceDialogue: {
+                if (package.runtime.activeDialogueId.empty()) {
+                    break;
+                }
+                const auto dialogueIt = std::find_if(package.runtime.narrativeDialogueDefinitions.begin(),
+                                                     package.runtime.narrativeDialogueDefinitions.end(),
+                                                     [&](const ExternalModNarrativeDialogueDefinition& definition) {
+                                                         return definition.id == package.runtime.activeDialogueId;
+                                                     });
+                if (dialogueIt == package.runtime.narrativeDialogueDefinitions.end()) {
+                    break;
+                }
+                const auto nodeIt = std::find_if(dialogueIt->nodes.begin(), dialogueIt->nodes.end(),
+                                                 [&](const ExternalModNarrativeDialogueNodeDefinition& node) {
+                                                     return node.id == package.runtime.activeDialogueNodeId;
+                                                 });
+                if (nodeIt == dialogueIt->nodes.end()) {
+                    break;
+                }
+                if (!nodeIt->onEnter.empty()) {
+                    ExecuteActions(package, nodeIt->onEnter, "narrative.advanceDialogue");
+                }
+                std::string nextNode = action.dialogueNodeId.empty() ? nodeIt->nextNodeId : action.dialogueNodeId;
+                if (!nextNode.empty()) {
+                    package.runtime.activeDialogueNodeId = nextNode;
+                    package.runtime.globalBlackboard["__narrative_dialogue_node"] = nextNode;
+                }
+                break;
+            }
+            case ExternalModActionType::NarrativeSetFlag:
+                package.runtime.narrativeFlags[action.variableKey] = action.variableValue.empty() ? "true" : action.variableValue;
+                package.runtime.globalBlackboard["narrative.flag." + action.variableKey] = package.runtime.narrativeFlags[action.variableKey];
+                package.runtime.persistentStateDirty = true;
+                break;
+            case ExternalModActionType::NarrativeClearFlag:
+                package.runtime.narrativeFlags.erase(action.variableKey);
+                package.runtime.globalBlackboard.erase("narrative.flag." + action.variableKey);
+                package.runtime.persistentStateDirty = true;
+                break;
+            case ExternalModActionType::NarrativeStartQuest: {
+                const std::string resolvedQuestId = ResolveProfileIdForMod(package.manifest.id, action.questId);
+                const auto questIt = std::find_if(package.runtime.narrativeQuestDefinitions.begin(),
+                                                  package.runtime.narrativeQuestDefinitions.end(),
+                                                  [&](const ExternalModNarrativeQuestDefinition& definition) {
+                                                      return definition.id == resolvedQuestId;
+                                                  });
+                if (questIt == package.runtime.narrativeQuestDefinitions.end()) {
+                    DisableRuntime(package, "narrative.startQuest references unknown questId: " + resolvedQuestId);
+                    return;
+                }
+                auto& questState = package.runtime.narrativeQuests[resolvedQuestId];
+                questState.questId = resolvedQuestId;
+                questState.state = "active";
+                for (const auto& objective : questIt->objectives) {
+                    questState.objectives[objective.id] = objective.state;
+                }
+                if (!questIt->onStart.empty()) {
+                    ExecuteActions(package, questIt->onStart, "narrative.startQuest");
+                }
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->sceneNum) : -1;
+                context.value = resolvedQuestId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnQuestStateChanged, context,
+                                                                    "OnQuestStateChanged");
+                package.runtime.persistentStateDirty = true;
+                break;
+            }
+            case ExternalModActionType::NarrativeUpdateObjective: {
+                const std::string resolvedQuestId = ResolveProfileIdForMod(package.manifest.id, action.questId);
+                auto questIt = package.runtime.narrativeQuests.find(resolvedQuestId);
+                if (questIt == package.runtime.narrativeQuests.end()) {
+                    break;
+                }
+                questIt->second.objectives[action.questObjectiveId] = action.questState.empty() ? "completed" : action.questState;
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->sceneNum) : -1;
+                context.value = resolvedQuestId + ":" + action.questObjectiveId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnQuestStateChanged, context,
+                                                                    "OnQuestStateChanged");
+                package.runtime.persistentStateDirty = true;
+                break;
+            }
+            case ExternalModActionType::NarrativeStartTimeline: {
+                const std::string resolvedTimelineId = ResolveProfileIdForMod(package.manifest.id, action.timelineId);
+                const auto timelineIt = std::find_if(package.runtime.narrativeTimelineDefinitions.begin(),
+                                                     package.runtime.narrativeTimelineDefinitions.end(),
+                                                     [&](const ExternalModNarrativeTimelineDefinition& definition) {
+                                                         return definition.id == resolvedTimelineId;
+                                                     });
+                if (timelineIt == package.runtime.narrativeTimelineDefinitions.end()) {
+                    DisableRuntime(package, "narrative.startTimeline references unknown timelineId: " + resolvedTimelineId);
+                    return;
+                }
+                ExternalModRuntime::NarrativeTimelineState timelineState;
+                timelineState.timelineId = resolvedTimelineId;
+                timelineState.durationFrames = std::max(0, timelineIt->durationFrames);
+                timelineState.skippable = timelineIt->skippable;
+                package.runtime.activeTimelines[resolvedTimelineId] = std::move(timelineState);
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->sceneNum) : -1;
+                context.value = resolvedTimelineId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnTimelineStarted, context,
+                                                                    "OnTimelineStarted");
+                break;
+            }
+            case ExternalModActionType::NarrativeSkipTimeline: {
+                std::string resolvedTimelineId = action.timelineId.empty() ? "" : ResolveProfileIdForMod(package.manifest.id, action.timelineId);
+                if (resolvedTimelineId.empty() && !package.runtime.activeTimelines.empty()) {
+                    resolvedTimelineId = package.runtime.activeTimelines.begin()->first;
+                }
+                if (resolvedTimelineId.empty()) {
+                    break;
+                }
+                const auto timelineDefIt = std::find_if(package.runtime.narrativeTimelineDefinitions.begin(),
+                                                        package.runtime.narrativeTimelineDefinitions.end(),
+                                                        [&](const ExternalModNarrativeTimelineDefinition& definition) {
+                                                            return definition.id == resolvedTimelineId;
+                                                        });
+                if (timelineDefIt != package.runtime.narrativeTimelineDefinitions.end() && !timelineDefIt->onSkipped.empty()) {
+                    ExecuteActions(package, timelineDefIt->onSkipped, "narrative.skipTimeline");
+                }
+                package.runtime.activeTimelines.erase(resolvedTimelineId);
+                ExternalModHookEventContext context;
+                context.scene = gPlayState != nullptr ? static_cast<int16_t>(gPlayState->sceneNum) : -1;
+                context.value = resolvedTimelineId;
+                ExternalModManager::Instance().DispatchExtendedHook(ExternalModHookType::OnTimelineSkipped, context,
+                                                                    "OnTimelineSkipped");
+                break;
+            }
+            case ExternalModActionType::DevReloadAll: {
+                package.runtime.globalBlackboard["__dev_reload_requested"] = "all";
+                package.runtime.hotReloadCooldownMs = 0;
+                break;
+            }
+            case ExternalModActionType::DevReloadTarget: {
+                package.runtime.globalBlackboard["__dev_reload_requested"] =
+                    action.variableValue.empty() ? "target" : action.variableValue;
+                package.runtime.hotReloadCooldownMs = 0;
+                break;
+            }
+            case ExternalModActionType::DevConsoleExec: {
+                const std::string resolvedCommandId = ResolveProfileIdForMod(package.manifest.id, action.consoleCommandId);
+                const auto commandIt = std::find_if(package.runtime.devConsoleDefinitions.begin(),
+                                                    package.runtime.devConsoleDefinitions.end(),
+                                                    [&](const ExternalModDevConsoleCommandDefinition& definition) {
+                                                        return definition.id == resolvedCommandId;
+                                                    });
+                if (commandIt == package.runtime.devConsoleDefinitions.end()) {
+                    DisableRuntime(package, "dev.console.exec references unknown commandId: " + resolvedCommandId);
+                    return;
+                }
+                if (!commandIt->actions.empty()) {
+                    ExecuteActions(package, commandIt->actions, "dev.console.exec");
+                }
+                break;
+            }
+            case ExternalModActionType::SettingsGet: {
+                const std::string storeKey = action.variableKey.empty() ? "__settings_value" : action.variableKey;
+                std::string settingValue;
+                if (ExternalModManager::Instance().GetModSettingValue(package.manifest.id, action.settingsKey,
+                                                                     action.settingsDomain, settingValue)) {
+                    package.runtime.globalBlackboard[storeKey] = settingValue;
+                } else {
+                    package.runtime.globalBlackboard.erase(storeKey);
+                }
+                break;
+            }
+            case ExternalModActionType::SettingsSet: {
+                std::string settingError;
+                if (!ExternalModManager::Instance().SetModSettingValue(package.manifest.id, action.settingsKey,
+                                                                       action.settingsValue, action.settingsDomain,
+                                                                       action.settingsApplyMode, settingError)) {
+                    DisableRuntime(package, "settings.set failed: " + settingError);
+                    return;
+                }
+                break;
+            }
+            case ExternalModActionType::SettingsReset: {
+                std::string settingError;
+                if (!ExternalModManager::Instance().ResetModSettingValue(package.manifest.id, action.settingsKey,
+                                                                         action.settingsDomain, action.settingsResetAll,
+                                                                         settingError)) {
+                    DisableRuntime(package, "settings.reset failed: " + settingError);
+                    return;
+                }
+                break;
+            }
+            case ExternalModActionType::SettingsList: {
+                const std::string storeKey = action.variableKey.empty() ? "__settings_list" : action.variableKey;
+                nlohmann::json payload = nlohmann::json::object();
+                if (!action.settingsDomain.empty()) {
+                    std::string domainValue;
+                    const auto domainToken = NormalizeSettingDomainToken(action.settingsDomain);
+                    const auto targetDomain = domainToken == "save"    ? ExternalModSettingDomain::Save
+                                              : domainToken == "session" ? ExternalModSettingDomain::Session
+                                                                         : ExternalModSettingDomain::Global;
+                    const auto* store = ResolveSettingsStoreByDomain(package.runtime, targetDomain);
+                    payload[domainToken] = store != nullptr ? nlohmann::json(*store) : nlohmann::json::object();
+                } else {
+                    payload["global"] = nlohmann::json(package.runtime.settingsGlobalValues);
+                    payload["save"] = nlohmann::json(package.runtime.settingsSaveValues);
+                    payload["session"] = nlohmann::json(package.runtime.settingsSessionValues);
+                }
+                package.runtime.globalBlackboard[storeKey] = payload.dump();
+                break;
+            }
+            case ExternalModActionType::SetResourceValue:
+                if (!ExternalModManager::Instance().mPlayerResourcesRuntime ||
+                    !ExternalModManager::Instance().mPlayerResourcesRuntime->SetResourceValue(
+                        package, action.resourceId, action.floatValue,
+                        BuildPlayerResourceSettingsResolver(ExternalModManager::Instance()), triggerName)) {
+                    DisableRuntime(package, "setResourceValue failed for resource: " + action.resourceId);
+                    return;
+                }
+                break;
+            case ExternalModActionType::AddResourceValue:
+                if (!ExternalModManager::Instance().mPlayerResourcesRuntime ||
+                    !ExternalModManager::Instance().mPlayerResourcesRuntime->AddResourceValue(
+                        package, action.resourceId, action.floatValue,
+                        BuildPlayerResourceSettingsResolver(ExternalModManager::Instance()), triggerName)) {
+                    DisableRuntime(package, "addResourceValue failed for resource: " + action.resourceId);
+                    return;
+                }
+                break;
+            case ExternalModActionType::ConsumeResource:
+                if (!ExternalModManager::Instance().mPlayerResourcesRuntime ||
+                    !ExternalModManager::Instance().mPlayerResourcesRuntime->ConsumeResource(
+                        package, action.resourceId, action.floatValue,
+                        BuildPlayerResourceSettingsResolver(ExternalModManager::Instance()), triggerName)) {
+                    DisableRuntime(package, "consumeResource failed for resource: " + action.resourceId);
+                    return;
+                }
+                break;
+            case ExternalModActionType::RefillResource:
+                if (!ExternalModManager::Instance().mPlayerResourcesRuntime ||
+                    !ExternalModManager::Instance().mPlayerResourcesRuntime->RefillResource(
+                        package, action.resourceId, action.floatValue, action.hasFloatValue,
+                        BuildPlayerResourceSettingsResolver(ExternalModManager::Instance()), triggerName)) {
+                    DisableRuntime(package, "refillResource failed for resource: " + action.resourceId);
+                    return;
+                }
+                break;
+            case ExternalModActionType::SetResourceCapacity:
+                if (!ExternalModManager::Instance().mPlayerResourcesRuntime ||
+                    !ExternalModManager::Instance().mPlayerResourcesRuntime->SetResourceCapacity(
+                        package, action.resourceId, action.floatValue,
+                        BuildPlayerResourceSettingsResolver(ExternalModManager::Instance()), triggerName)) {
+                    DisableRuntime(package, "setResourceCapacity failed for resource: " + action.resourceId);
+                    return;
+                }
+                break;
+            case ExternalModActionType::GrantConsumableStack:
+                if (!ExternalModManager::Instance().GrantConsumableStack(
+                        package, action.consumableId, static_cast<int32_t>(std::round(action.hasFloatValue ? action.floatValue : 1.0f)),
+                        triggerName)) {
+                    DisableRuntime(package, "grantConsumableStack failed for consumable: " + action.consumableId);
+                    return;
+                }
+                break;
+            case ExternalModActionType::ConsumeConsumableStack:
+                if (!ExternalModManager::Instance().ConsumeConsumableStack(
+                        package, action.consumableId, static_cast<int32_t>(std::round(action.hasFloatValue ? action.floatValue : 1.0f)),
+                        triggerName, nullptr)) {
+                    DisableRuntime(package, "consumeConsumableStack failed for consumable: " + action.consumableId);
+                    return;
+                }
+                break;
+            case ExternalModActionType::FillActiveBottleContent: {
+                auto* player = gPlayState != nullptr ? GET_PLAYER(gPlayState) : nullptr;
+                int32_t placeholderItemId = ITEM_MILK_BOTTLE;
+                bool filled = false;
+                if (player != nullptr) {
+                    for (const auto& definition : package.runtime.playerConsumableDefinitions) {
+                        if (definition.id == action.consumableId && definition.storageMode == ExternalModPlayerConsumableStorageMode::BottleContent &&
+                            ToLower(definition.fillSource) == "water") {
+                            filled = ExternalModManager::Instance().TryFillBottleFromWater(gPlayState, player, placeholderItemId);
+                            break;
+                        }
+                    }
+                }
+                if (!filled) {
+                    DisableRuntime(package, "fillActiveBottleContent failed for consumable: " + action.consumableId);
+                    return;
+                }
+                break;
+            }
             case ExternalModActionType::InvokeWasm: {
                 if (!package.runtime.wasmRuntime) {
                     DisableRuntime(package, "invokeWasm requested but runtime is unavailable");
@@ -23161,6 +33810,13 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
 }
 
 void ExternalModManager::DisableRuntime(ExternalModPackage& package, const std::string& reason) {
+    if (package.runtime.settingsGlobalDirty || package.runtime.settingsSaveDirty) {
+        PersistSettingsStoreForPackage(package);
+    }
+    if (package.runtime.persistentStateDirty && RuntimeHasPersistentState(package.runtime)) {
+        PersistRuntimeStateForPackage(package);
+        package.runtime.persistentStateDirty = false;
+    }
     ClearStatusEffects(package.runtime, gPlayState, false);
     package.runtime.activeAoEs.clear();
     package.runtime.activeStates.clear();
@@ -23187,9 +33843,30 @@ void ExternalModManager::DisableRuntime(ExternalModPackage& package, const std::
     ClearSurfState(package.runtime);
     package.runtime.wasmTargetHandles.clear();
     package.runtime.wasmNextTargetHandle = 1;
+    if (package.runtime.nativeRuntime) {
+        package.runtime.nativeRuntime->Shutdown();
+    }
+    package.runtime.wasmRuntime.reset();
+    package.runtime.nativeRuntime.reset();
     package.runtime.enabled = false;
     package.valid = false;
-    package.error = reason;
+
+    RuntimeQuarantineRecord quarantineRecord{};
+    std::string quarantinePersistError;
+    const bool quarantinePersisted =
+        RegisterRuntimeFailureForMod(package.manifest.id, reason, &quarantineRecord, &quarantinePersistError);
+    if (!quarantinePersisted && !quarantinePersistError.empty()) {
+        SPDLOG_WARN("[ExternalMods] Failed updating quarantine record for {}: {}", package.manifest.id,
+                    quarantinePersistError);
+    }
+
+    if (quarantineRecord.quarantined) {
+        package.error = "Quarantined after runtime failures (" + std::to_string(quarantineRecord.failureCount) + "): " +
+                        reason + ". Use Clear Quarantine in External Mods UI to retry.";
+    } else {
+        package.error = reason;
+    }
+
     auto& manager = ExternalModManager::Instance();
     if (manager.mAimSelectState.active && manager.mAimSelectState.modId == package.manifest.id) {
         manager.ClearAimSelectState(true);
@@ -23249,6 +33926,13 @@ void ExternalModManager::DispatchExtendedHook(ExternalModHookType hookType, cons
 
             subscription.cooldownRemaining = subscription.cooldownFrames;
             package.runtime.hookCallsThisFrame++;
+        }
+
+        if (package.runtime.enabled && package.runtime.nativeRuntime) {
+            std::string nativeError;
+            if (!package.runtime.nativeRuntime->OnHook(hookType, context, nativeError)) {
+                DisableRuntime(package, "Native hook dispatch failed: " + nativeError);
+            }
         }
     }
 }
@@ -23377,10 +34061,12 @@ void ExternalModManager::UnregisterHooks() {
     if (mWorldGraphicsRuntime) {
         mWorldGraphicsRuntime->Reset(gPlayState);
     }
+    if (mPlayerResourcesRuntime) {
+        mPlayerResourcesRuntime->Reset(gPlayState);
+    }
 }
 
 void ExternalModManager::OnLoadGame(int32_t fileNum) {
-    (void)fileNum;
     if (mWorldGraphicsRuntime) {
         mWorldGraphicsRuntime->Reset(gPlayState);
     }
@@ -23394,6 +34080,9 @@ void ExternalModManager::OnLoadGame(int32_t fileNum) {
         package.runtime.behaviorStepsThisFrame = 0;
 
         try {
+            if (package.manifest.settings.enabled) {
+                LoadSettingsStoreForPackage(package);
+            }
             ClearStatusEffects(package.runtime, gPlayState, false);
             ClearSurfState(package.runtime);
             package.runtime.activeAoEs.clear();
@@ -23446,6 +34135,37 @@ void ExternalModManager::OnLoadGame(int32_t fileNum) {
             package.runtime.switchSnapshotInitialized = false;
             package.runtime.switchSnapshot.fill(0);
 
+            if (RuntimeHasPersistentState(package.runtime)) {
+                LoadRuntimeStateForPackage(package);
+            }
+            if (mPlayerResourcesRuntime) {
+                mPlayerResourcesRuntime->OnLoadGame(package);
+            }
+            if (package.runtime.worldSeed == 0) {
+                int32_t seedOffset = 0;
+                for (const auto& seedDefinition : package.runtime.worldSeedingDefinitions) {
+                    seedOffset += seedDefinition.seedOffset;
+                }
+                const uint32_t fileSeed = static_cast<uint32_t>(std::max(0, fileNum + 1)) * 2654435761u;
+                const uint32_t modSeed = static_cast<uint32_t>(std::hash<std::string>{}(package.manifest.id));
+                package.runtime.worldSeed = static_cast<int32_t>((fileSeed ^ modSeed) + static_cast<uint32_t>(seedOffset));
+                if (package.runtime.worldSeed == 0) {
+                    package.runtime.worldSeed = 1;
+                }
+            }
+            package.runtime.globalBlackboard["__world_seed"] = std::to_string(package.runtime.worldSeed);
+            package.runtime.globalBlackboard["__world_time_segment"] =
+                package.runtime.worldTimeSegment.empty() ? "day" : package.runtime.worldTimeSegment;
+            package.runtime.globalBlackboard["__world_weather_state"] =
+                package.runtime.worldWeatherState.empty() ? "clear" : package.runtime.worldWeatherState;
+            if (package.runtime.nativeRuntime && !package.runtime.nativeRuntime->IsStarted()) {
+                std::string nativeError;
+                if (!package.runtime.nativeRuntime->Start(nativeError)) {
+                    DisableRuntime(package, "Native runtime start failed: " + nativeError);
+                    continue;
+                }
+            }
+
             ExecuteActions(package, package.runtime.onGameLoadedActions, "onGameLoaded");
         } catch (const std::exception& ex) {
             DisableRuntime(package, std::string("Unhandled exception on onGameLoaded: ") + ex.what());
@@ -23475,6 +34195,22 @@ void ExternalModManager::OnExitGame(int32_t fileNum) {
         context.scene = static_cast<int16_t>(gPlayState->sceneNum);
     }
     DispatchExtendedHook(ExternalModHookType::OnExitGame, context, "OnExitGame");
+
+    for (auto& package : mPackages) {
+        if (!package.runtime.enabled) {
+            continue;
+        }
+        if (package.runtime.settingsGlobalDirty || package.runtime.settingsSaveDirty) {
+            PersistSettingsStoreForPackage(package);
+        }
+        if (package.runtime.persistentStateDirty && RuntimeHasPersistentState(package.runtime)) {
+            PersistRuntimeStateForPackage(package);
+            package.runtime.persistentStateDirty = false;
+        }
+        if (package.runtime.nativeRuntime) {
+            package.runtime.nativeRuntime->Stop();
+        }
+    }
 
     if (mPersistentInventoryDirty) {
         MarkPersistentInventoryDirty();
@@ -23528,6 +34264,21 @@ void ExternalModManager::OnSceneInit(int16_t sceneNum) {
             package.runtime.lastIsNight = false;
             package.runtime.switchSnapshotInitialized = false;
             package.runtime.switchSnapshot.fill(0);
+            if (RuntimeHasPersistentState(package.runtime)) {
+                LoadRuntimeStateForPackage(package);
+            }
+            if (mPlayerResourcesRuntime) {
+                mPlayerResourcesRuntime->OnSceneInit(package);
+            }
+            if (!package.runtime.pendingSceneReloadSettings.empty()) {
+                for (const auto& [settingKey, settingValue] : package.runtime.pendingSceneReloadSettings) {
+                    const auto* entry = FindSettingSchemaEntry(package.runtime.settingsSchema, settingKey);
+                    const auto domain = ResolveEffectiveSettingDomain(package.manifest, entry, std::string{});
+                    DispatchSettingsChangedHookForPackage(package, settingKey, domain,
+                                                          ExternalModSettingApplyMode::SceneReload, settingValue);
+                }
+                package.runtime.pendingSceneReloadSettings.clear();
+            }
 
             for (const auto& actorDefinition : package.runtime.actorDefinitions) {
                 if (actorDefinition.sceneId != sceneNum) {
@@ -23725,6 +34476,16 @@ void ExternalModManager::OnPlayerUpdate() {
             if (selectedSurfPackage != nullptr) {
                 TickSurfState(*selectedSurfPackage, gPlayState, player);
             }
+
+            if (mPlayerResourcesRuntime) {
+                const auto resolver = BuildPlayerResourceSettingsResolver(*this);
+                for (auto& package : mPackages) {
+                    if (!package.runtime.enabled || package.runtime.playerResourceDefinitions.empty()) {
+                        continue;
+                    }
+                    mPlayerResourcesRuntime->TickPackage(package, gPlayState, player, resolver);
+                }
+            }
         }
     }
 
@@ -23742,6 +34503,8 @@ void ExternalModManager::OnPlayDrawBegin() {
 }
 
 void ExternalModManager::OnPlayDrawEnd() {
+    DrawPrefabVisuals(gPlayState);
+
     if (mWorldGraphicsRuntime) {
         mWorldGraphicsRuntime->OnPlayDrawEnd(gPlayState);
     }
@@ -23751,7 +34514,7 @@ void ExternalModManager::OnPlayDrawEnd() {
         renderInspectorCooldown--;
     }
 
-    if (!mWorldGraphicsRuntime || renderInspectorCooldown > 0) {
+    if (!mWorldGraphicsRuntime || renderInspectorCooldown > 0 || !IsRenderInspectorDebugGateActive()) {
         return;
     }
 
@@ -23761,8 +34524,8 @@ void ExternalModManager::OnPlayDrawEnd() {
         }
         bool anyVisible = false;
         for (const auto& inspector : package.runtime.renderInspectorDefinitions) {
-            const auto visibilityIt = package.runtime.debugOverlayVisibility.find(inspector.id);
-            if (visibilityIt != package.runtime.debugOverlayVisibility.end() && visibilityIt->second) {
+            bool visible = false;
+            if (GetRenderInspectorOverlayVisible(package.manifest.id, inspector.id, visible) && visible) {
                 anyVisible = true;
                 break;
             }
@@ -23797,7 +34560,19 @@ void ExternalModManager::OnGameFrameUpdate() {
     auto* input = &gPlayState->state.input[0];
     const bool interactPressed = MatchPressedButtonMask(input->cur.button, input->prev.button, BTN_A);
 
+    for (auto& package : mPackages) {
+        if (!package.runtime.enabled || package.runtime.playerConsumableDefinitions.empty()) {
+            continue;
+        }
+        SyncInventoryBackedConsumablesForPackage(package, gPlayState, player);
+    }
+
     ProcessAssignedActionButtons(gPlayState, player, input);
+
+    bool hasPendingReloadRequest = false;
+    std::string pendingReloadTarget = "all";
+    int32_t pendingReloadPriority = std::numeric_limits<int32_t>::min();
+    std::string pendingReloadModId;
 
     for (auto& package : mPackages) {
         if (!package.runtime.enabled) {
@@ -23812,10 +34587,20 @@ void ExternalModManager::OnGameFrameUpdate() {
         if (package.runtime.wasmRuntime) {
             package.runtime.wasmRuntime->BeginFrame();
         }
+        if (package.runtime.nativeRuntime) {
+            std::string nativeError;
+            if (!package.runtime.nativeRuntime->BeginFrame(nativeError)) {
+                DisableRuntime(package, "Native runtime frame callback failed: " + nativeError);
+                continue;
+            }
+        }
         for (auto& hookSubscription : package.runtime.hookSubscriptions) {
             if (hookSubscription.cooldownRemaining > 0) {
                 hookSubscription.cooldownRemaining--;
             }
+        }
+        if (package.runtime.hotReloadCooldownMs > 0) {
+            package.runtime.hotReloadCooldownMs = std::max(0, package.runtime.hotReloadCooldownMs - 16);
         }
 
         for (auto it = package.runtime.spellCooldownsById.begin(); it != package.runtime.spellCooldownsById.end();) {
@@ -23905,6 +34690,22 @@ void ExternalModManager::OnGameFrameUpdate() {
                 trigger.wasInside = inside;
             }
 
+            std::erase_if(package.runtime.inputTriggers, [&](const ExternalModInputActionTrigger& inputTrigger) {
+                const auto bindingIt = std::find_if(package.runtime.inputBindings.begin(), package.runtime.inputBindings.end(),
+                                                    [&](const ExternalModInputBinding& binding) {
+                                                        return binding.id == inputTrigger.bindingId;
+                                                    });
+                if (bindingIt != package.runtime.inputBindings.end()) {
+                    return false;
+                }
+
+                AddPackageIssue(package, ExternalModIssueSeverity::Error, "V52_REF_UNKNOWN_INPUT_BINDING",
+                                "onInput references unknown binding: " + inputTrigger.bindingId, "scripts/init.json",
+                                "core.input.v1", inputTrigger.bindingId,
+                                "Add the binding to inputDefinitions or remove the onInput trigger.");
+                return true;
+            });
+
             for (auto& inputTrigger : package.runtime.inputTriggers) {
                 if (inputTrigger.cooldownRemaining > 0) {
                     inputTrigger.cooldownRemaining--;
@@ -23915,8 +34716,7 @@ void ExternalModManager::OnGameFrameUpdate() {
                                                         return binding.id == inputTrigger.bindingId;
                                                     });
                 if (bindingIt == package.runtime.inputBindings.end()) {
-                    DisableRuntime(package, "onInput references unknown binding at runtime: " + inputTrigger.bindingId);
-                    break;
+                    continue;
                 }
 
                 const auto cvarName = BuildBindingCVarName(package.manifest.id, bindingIt->id);
@@ -24111,6 +34911,24 @@ void ExternalModManager::OnGameFrameUpdate() {
             const int16_t currentRoomNum = static_cast<int16_t>(gPlayState->roomCtx.curRoom.num);
             const bool roomChanged = package.runtime.lastSceneSeen != sceneNum || package.runtime.lastRoomSeen != currentRoomNum;
             const int16_t previousRoomNum = package.runtime.lastRoomSeen;
+
+            if (roomChanged && RuntimeHasPersistentState(package.runtime)) {
+                bool autoSaveOnRoomExit = package.runtime.worldPersistenceDefinitions.empty();
+                bool autoLoadOnRoomEnter = package.runtime.worldPersistenceDefinitions.empty();
+                for (const auto& persistenceDefinition : package.runtime.worldPersistenceDefinitions) {
+                    autoSaveOnRoomExit = autoSaveOnRoomExit || persistenceDefinition.autoSaveOnRoomExit;
+                    autoLoadOnRoomEnter = autoLoadOnRoomEnter || persistenceDefinition.autoLoadOnRoomEnter;
+                }
+
+                if (autoSaveOnRoomExit && package.runtime.persistentStateDirty) {
+                    PersistRuntimeStateForPackage(package);
+                    package.runtime.persistentStateDirty = false;
+                }
+                if (autoLoadOnRoomEnter) {
+                    LoadRuntimeStateForPackage(package);
+                }
+            }
+
             package.runtime.lastSceneSeen = sceneNum;
             package.runtime.lastRoomSeen = currentRoomNum;
 
@@ -24132,6 +34950,27 @@ void ExternalModManager::OnGameFrameUpdate() {
             const bool skyboxChanged =
                 package.runtime.lastSkyboxSeen == -1 ? false : (package.runtime.lastSkyboxSeen != skyboxId);
             package.runtime.lastSkyboxSeen = skyboxId;
+
+            const std::string currentTimeSegment = package.runtime.worldTimeSegment.empty()
+                                                       ? std::string("day")
+                                                       : ToLower(package.runtime.worldTimeSegment);
+            const std::string currentWeatherState = package.runtime.worldWeatherState.empty()
+                                                        ? std::string("clear")
+                                                        : ToLower(package.runtime.worldWeatherState);
+            const std::string previousTimeSegment =
+                package.runtime.globalBlackboard.contains("__world_time_segment_last")
+                    ? package.runtime.globalBlackboard["__world_time_segment_last"]
+                    : "";
+            const std::string previousWeatherState =
+                package.runtime.globalBlackboard.contains("__world_weather_state_last")
+                    ? package.runtime.globalBlackboard["__world_weather_state_last"]
+                    : "";
+            const bool worldTimeSegmentChanged = !previousTimeSegment.empty() && previousTimeSegment != currentTimeSegment;
+            const bool worldWeatherChanged = !previousWeatherState.empty() && previousWeatherState != currentWeatherState;
+            package.runtime.globalBlackboard["__world_time_segment_last"] = currentTimeSegment;
+            package.runtime.globalBlackboard["__world_weather_state_last"] = currentWeatherState;
+            package.runtime.globalBlackboard["__world_time_segment"] = currentTimeSegment;
+            package.runtime.globalBlackboard["__world_weather_state"] = currentWeatherState;
 
             ExternalModHookEventContext overworldTickContext;
             overworldTickContext.scene = sceneNum;
@@ -24162,6 +35001,19 @@ void ExternalModManager::OnGameFrameUpdate() {
                 skyboxContext.value = std::to_string(skyboxId);
                 DispatchExtendedHook(ExternalModHookType::OnWorldSkyboxChanged, skyboxContext, "OnWorldSkyboxChanged");
             }
+            if (worldTimeSegmentChanged) {
+                ExternalModHookEventContext timeSegmentContext;
+                timeSegmentContext.scene = sceneNum;
+                timeSegmentContext.value = currentTimeSegment;
+                DispatchExtendedHook(ExternalModHookType::OnWorldTimeSegmentChanged, timeSegmentContext,
+                                     "world.time.segmentChanged");
+            }
+            if (worldWeatherChanged) {
+                ExternalModHookEventContext weatherContext;
+                weatherContext.scene = sceneNum;
+                weatherContext.value = currentWeatherState;
+                DispatchExtendedHook(ExternalModHookType::OnWorldWeatherChanged, weatherContext, "world.weather.changed");
+            }
 
             bool switchFlagChanged = false;
             int32_t changedSwitchFlag = -1;
@@ -24185,6 +35037,118 @@ void ExternalModManager::OnGameFrameUpdate() {
             if (switchFlagChanged && changedSwitchFlag >= 0) {
                 package.runtime.globalBlackboard["__switchFlag"] = std::to_string(changedSwitchFlag);
                 package.runtime.globalBlackboard["__switchValue"] = changedSwitchValue ? "1" : "0";
+            }
+
+            for (auto timelineIt = package.runtime.activeTimelines.begin();
+                 timelineIt != package.runtime.activeTimelines.end();) {
+                auto& timelineState = timelineIt->second;
+                const auto timelineDefinitionIt =
+                    std::find_if(package.runtime.narrativeTimelineDefinitions.begin(),
+                                 package.runtime.narrativeTimelineDefinitions.end(),
+                                 [&](const ExternalModNarrativeTimelineDefinition& definition) {
+                                     return definition.id == timelineState.timelineId;
+                                 });
+                if (timelineDefinitionIt == package.runtime.narrativeTimelineDefinitions.end()) {
+                    timelineIt = package.runtime.activeTimelines.erase(timelineIt);
+                    continue;
+                }
+
+                const int32_t previousFrame = timelineState.frame;
+                timelineState.frame = std::max(0, timelineState.frame + 1);
+                for (const auto& track : timelineDefinitionIt->tracks) {
+                    if (track.atFrame > previousFrame && track.atFrame <= timelineState.frame && !track.actions.empty()) {
+                        ExecuteActions(package, track.actions, "narrative.timeline.track");
+                        if (!package.runtime.enabled) {
+                            break;
+                        }
+                    }
+                }
+                if (!package.runtime.enabled) {
+                    break;
+                }
+
+                bool hasFutureTrack = false;
+                for (const auto& track : timelineDefinitionIt->tracks) {
+                    if (track.atFrame > timelineState.frame) {
+                        hasFutureTrack = true;
+                        break;
+                    }
+                }
+                const bool timelineCompleted =
+                    timelineState.durationFrames > 0 ? (timelineState.frame >= timelineState.durationFrames) : !hasFutureTrack;
+                if (timelineCompleted) {
+                    if (!timelineDefinitionIt->onCompleted.empty()) {
+                        ExecuteActions(package, timelineDefinitionIt->onCompleted, "narrative.timeline.completed");
+                        if (!package.runtime.enabled) {
+                            break;
+                        }
+                    }
+                    ExternalModHookEventContext context;
+                    context.scene = sceneNum;
+                    context.value = timelineState.timelineId;
+                    DispatchExtendedHook(ExternalModHookType::OnTimelineCompleted, context, "OnTimelineCompleted");
+                    timelineIt = package.runtime.activeTimelines.erase(timelineIt);
+                    continue;
+                }
+
+                ++timelineIt;
+            }
+            if (!package.runtime.enabled) {
+                continue;
+            }
+
+            for (const auto& spawnProfile : package.runtime.worldSpawnProfiles) {
+                const std::string resolvedArchetypeId =
+                    ResolveProfileIdForMod(package.manifest.id, spawnProfile.actorArchetypeId);
+                if (resolvedArchetypeId.empty()) {
+                    continue;
+                }
+
+                int32_t activeCount = 0;
+                for (const auto& instance : package.runtime.actorInstances) {
+                    if (!instance.active || instance.sceneId != sceneNum || instance.definitionId != resolvedArchetypeId) {
+                        continue;
+                    }
+                    activeCount++;
+                }
+                if (activeCount >= std::max(0, spawnProfile.maxActive)) {
+                    continue;
+                }
+
+                const std::string cooldownKey = "__world_spawn_cooldown." + spawnProfile.id;
+                int32_t cooldownRemaining = 0;
+                if (const auto cooldownIt = package.runtime.globalBlackboard.find(cooldownKey);
+                    cooldownIt != package.runtime.globalBlackboard.end()) {
+                    try {
+                        cooldownRemaining = std::max(0, std::stoi(cooldownIt->second));
+                    } catch (...) {
+                        cooldownRemaining = 0;
+                    }
+                }
+                if (cooldownRemaining > 0) {
+                    package.runtime.globalBlackboard[cooldownKey] = std::to_string(std::max(0, cooldownRemaining - 1));
+                    continue;
+                }
+
+                ExternalModAction spawnAction;
+                spawnAction.type = ExternalModActionType::ActorsSpawnArchetype;
+                spawnAction.archetypeId = resolvedArchetypeId;
+                spawnAction.spawnOrigin = "player_forward";
+                spawnAction.forwardDistance =
+                    std::clamp(spawnProfile.minDistanceFromPlayer, 40.0f, std::max(spawnProfile.maxDistanceFromPlayer, 40.0f));
+                ExecuteActions(package, { spawnAction }, "world.spawnProfile.auto");
+                if (!package.runtime.enabled) {
+                    break;
+                }
+                package.runtime.globalBlackboard[cooldownKey] = std::to_string(std::max(1, spawnProfile.cooldownFrames));
+
+                ExternalModHookEventContext context;
+                context.scene = sceneNum;
+                context.value = spawnProfile.id;
+                DispatchExtendedHook(ExternalModHookType::OnWorldSpawnProfileTick, context, "OnWorldSpawnProfileTick");
+            }
+            if (!package.runtime.enabled) {
+                continue;
             }
 
             for (auto& instance : package.runtime.actorInstances) {
@@ -24355,10 +35319,59 @@ void ExternalModManager::OnGameFrameUpdate() {
                 package.runtime.wasmCallsThisFrame = package.runtime.wasmRuntime->GetCallsThisFrame();
                 package.runtime.wasmBudgetDropsThisFrame = package.runtime.wasmRuntime->GetBudgetDropsThisFrame();
             }
+            if (package.runtime.wasmBudgetDropsThisFrame > 0) {
+                ExternalModHookEventContext context;
+                context.scene = sceneNum;
+                context.value = std::to_string(package.runtime.wasmBudgetDropsThisFrame);
+                DispatchExtendedHook(ExternalModHookType::OnSandboxBudgetExceeded, context, "OnSandboxBudgetExceeded");
+            }
+            if (const auto permissionDeniedIt = package.runtime.globalBlackboard.find("__sandbox_permission_denied");
+                permissionDeniedIt != package.runtime.globalBlackboard.end() && !permissionDeniedIt->second.empty()) {
+                ExternalModHookEventContext context;
+                context.scene = sceneNum;
+                context.value = permissionDeniedIt->second;
+                DispatchExtendedHook(ExternalModHookType::OnSandboxPermissionDenied, context, "OnSandboxPermissionDenied");
+                package.runtime.globalBlackboard.erase(permissionDeniedIt);
+            }
+
+            if (package.runtime.hotReloadEnabled && package.runtime.hotReloadCooldownMs <= 0) {
+                const auto reloadRequestIt = package.runtime.globalBlackboard.find("__dev_reload_requested");
+                if (reloadRequestIt != package.runtime.globalBlackboard.end()) {
+                    const std::string target = reloadRequestIt->second.empty() ? "all" : ToLower(reloadRequestIt->second);
+                    const bool shouldReplaceRequest = !hasPendingReloadRequest ||
+                                                      package.manifest.loadPriority > pendingReloadPriority ||
+                                                      (package.manifest.loadPriority == pendingReloadPriority &&
+                                                       package.manifest.id < pendingReloadModId);
+                    if (shouldReplaceRequest) {
+                        hasPendingReloadRequest = true;
+                        pendingReloadTarget = target;
+                        pendingReloadPriority = package.manifest.loadPriority;
+                        pendingReloadModId = package.manifest.id;
+                    }
+                    package.runtime.hotReloadCooldownMs = std::max(50, package.runtime.hotReloadDebounceMs);
+                    package.runtime.globalBlackboard.erase(reloadRequestIt);
+                }
+            }
         } catch (const std::exception& ex) {
             DisableRuntime(package, std::string("Unhandled exception on onFrame: ") + ex.what());
         } catch (...) {
             DisableRuntime(package, "Unhandled exception on onFrame");
+        }
+    }
+
+    if (hasPendingReloadRequest) {
+        std::string reloadError;
+        const bool reloadOk = ReloadPackages(reloadError);
+        ExternalModHookEventContext reloadContext;
+        reloadContext.scene = sceneNum;
+        reloadContext.value = pendingReloadTarget;
+        if (reloadOk && reloadError.empty()) {
+            DispatchExtendedHook(ExternalModHookType::OnHotReloadApplied, reloadContext, "OnHotReloadApplied");
+        } else {
+            if (!reloadError.empty()) {
+                reloadContext.value += ":" + reloadError;
+            }
+            DispatchExtendedHook(ExternalModHookType::OnHotReloadFailed, reloadContext, "OnHotReloadFailed");
         }
     }
 
@@ -24597,6 +35610,13 @@ void ExternalModManager::OnPlayDestroy() {
         mWorldGraphicsRuntime->Reset(gPlayState);
     }
     for (auto& package : mPackages) {
+        if (mPlayerResourcesRuntime) {
+            mPlayerResourcesRuntime->OnPlayDestroy(package);
+        }
+        if (package.runtime.persistentStateDirty && RuntimeHasPersistentState(package.runtime)) {
+            PersistRuntimeStateForPackage(package);
+            package.runtime.persistentStateDirty = false;
+        }
         ClearStatusEffects(package.runtime, gPlayState, false);
         ClearSurfState(package.runtime);
         package.runtime.activeAoEs.clear();
@@ -24739,6 +35759,85 @@ int32_t ExternalMods_IsAimOverShoulderEnabled(void) {
     return SOH::ExternalModManager::Instance().IsAimOverShoulderEnabled() ? 1 : 0;
 }
 
+int32_t ExternalMods_ShouldUseAimOverShoulderBattleMovement(PlayState* play, Player* player, int32_t heldItemAction) {
+    return SOH::ExternalModManager::Instance().ShouldUseAimOverShoulderBattleMovement(play, player, heldItemAction)
+               ? 1
+               : 0;
+}
+
+int32_t ExternalMods_TryConsumePlayerResourceActionStart(PlayState* play, Player* player, const char* actionTag) {
+    return SOH::ExternalModManager::Instance().TryConsumePlayerResourceActionStart(
+               play, player, actionTag != nullptr ? actionTag : "")
+               ? 1
+               : 0;
+}
+
+int32_t ExternalMods_TickPlayerResourceAction(PlayState* play, Player* player, const char* actionTag,
+                                              float deltaSeconds) {
+    return SOH::ExternalModManager::Instance().TickPlayerResourceAction(
+               play, player, actionTag != nullptr ? actionTag : "", deltaSeconds)
+               ? 1
+               : 0;
+}
+
+int32_t ExternalMods_IsPlayerResourceActionInputActive(PlayState* play, Player* player, const char* actionTag,
+                                                       int32_t triggerType) {
+    return SOH::ExternalModManager::Instance().IsPlayerResourceActionInputActive(
+               play, player, actionTag != nullptr ? actionTag : "",
+               static_cast<SOH::ExternalModInputTriggerType>(triggerType))
+               ? 1
+               : 0;
+}
+
+float ExternalMods_GetPlayerResourceMoveSpeedMultiplier(PlayState* play, Player* player) {
+    return SOH::ExternalModManager::Instance().GetPlayerResourceMoveSpeedMultiplier(play, player);
+}
+
+int32_t ExternalMods_IsPlayerResourceSprintBlocked(PlayState* play, Player* player) {
+    return SOH::ExternalModManager::Instance().IsPlayerResourceSprintBlocked(play, player) ? 1 : 0;
+}
+
+int32_t ExternalMods_GetPlayerResourceRingViewCount(PlayState* play, Player* player) {
+    return SOH::ExternalModManager::Instance().GetPlayerResourceRingViewCount(play, player);
+}
+
+int32_t ExternalMods_GetPlayerResourceRingView(PlayState* play, Player* player, int32_t index,
+                                               ExternalModsResourceRingView* outView) {
+    if (outView == nullptr) {
+        return 0;
+    }
+    return SOH::ExternalModManager::Instance().GetPlayerResourceRingView(play, player, index, *outView) ? 1 : 0;
+}
+
+int32_t ExternalMods_TryFillBottleFromWater(PlayState* play, Player* player, int32_t* outPlaceholderItemId) {
+    int32_t placeholderItemId = ITEM_MILK_BOTTLE;
+    const bool filled = SOH::ExternalModManager::Instance().TryFillBottleFromWater(play, player, placeholderItemId);
+    if (outPlaceholderItemId != nullptr) {
+        *outPlaceholderItemId = placeholderItemId;
+    }
+    return filled ? 1 : 0;
+}
+
+int32_t ExternalMods_IsHeldBottleCustomContentActive(PlayState* play, Player* player) {
+    return SOH::ExternalModManager::Instance().IsHeldBottleCustomContentActive(play, player) ? 1 : 0;
+}
+
+int32_t ExternalMods_ConsumeHeldBottleCustomContent(PlayState* play, Player* player) {
+    return SOH::ExternalModManager::Instance().ConsumeHeldBottleCustomContent(play, player) ? 1 : 0;
+}
+
+int32_t ExternalMods_IsHeldInventoryConsumableActive(PlayState* play, Player* player) {
+    return SOH::ExternalModManager::Instance().IsHeldInventoryConsumableActive(play, player) ? 1 : 0;
+}
+
+int32_t ExternalMods_ConsumeHeldInventoryConsumable(PlayState* play, Player* player) {
+    return SOH::ExternalModManager::Instance().ConsumeHeldInventoryConsumable(play, player) ? 1 : 0;
+}
+
+int32_t ExternalMods_TryHandleGrassDrop(PlayState* play, float x, float y, float z, int32_t grassType, int32_t dropParams) {
+    return SOH::ExternalModManager::Instance().TryHandleGrassDrop(play, x, y, z, grassType, dropParams) ? 1 : 0;
+}
+
 int32_t ExternalMods_DrawAimReticleIfActive(PlayState* play, Player* player, int32_t context) {
     SOH::ExternalModAimCameraContext aimContext = SOH::ExternalModAimCameraContext::CUp;
     switch (context) {
@@ -24788,21 +35887,27 @@ int32_t ExternalMods_DrawCustomEquippedSlingshotModel(PlayState* play) {
 }
 
 const char* gfx_external_mods_resolve_material_albedo_override(const char* texturePath) {
-    static thread_local std::string resolvedPath;
-    resolvedPath.clear();
-    if (texturePath == nullptr || texturePath[0] == '\0' || gPlayState == nullptr ||
-        !SOH::ExternalModManager::Instance().TryResolveMaterialAlbedoOverridePath(
-            texturePath, static_cast<int16_t>(gPlayState->sceneNum),
-            static_cast<int16_t>(gPlayState->roomCtx.curRoom.num), resolvedPath)) {
+    static thread_local std::string resolvedOverridePath;
+    resolvedOverridePath.clear();
+
+    if (texturePath == nullptr || texturePath[0] == '\0' || gPlayState == nullptr) {
         return nullptr;
     }
-    return resolvedPath.c_str();
+
+    if (!SOH::ExternalModManager::Instance().TryResolveMaterialAlbedoOverridePath(
+            texturePath, static_cast<int16_t>(gPlayState->sceneNum),
+            static_cast<int16_t>(gPlayState->roomCtx.curRoom.num), resolvedOverridePath)) {
+        return nullptr;
+    }
+
+    return resolvedOverridePath.c_str();
 }
 
 uint32_t gfx_external_mods_get_material_fallback_generation_flags(const char* texturePath) {
     if (texturePath == nullptr || texturePath[0] == '\0' || gPlayState == nullptr) {
         return 0;
     }
+
     return SOH::ExternalModManager::Instance().GetMaterialFallbackGenerationFlags(
         texturePath, static_cast<int16_t>(gPlayState->sceneNum), static_cast<int16_t>(gPlayState->roomCtx.curRoom.num));
 }
@@ -24811,6 +35916,7 @@ float gfx_external_mods_get_material_fallback_normal_scale(const char* texturePa
     if (texturePath == nullptr || texturePath[0] == '\0' || gPlayState == nullptr) {
         return 1.0f;
     }
+
     return SOH::ExternalModManager::Instance().GetMaterialFallbackNormalScale(
         texturePath, static_cast<int16_t>(gPlayState->sceneNum), static_cast<int16_t>(gPlayState->roomCtx.curRoom.num));
 }

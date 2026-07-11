@@ -21,6 +21,7 @@ class ExternalModWorldGraphicsRuntime {
     void OnPlayDrawEnd(::PlayState* play);
     void Reset(::PlayState* play);
     std::string BuildInspectorSummary() const;
+    bool IsVolumetricsDebugActive() const;
 
   private:
     struct Impl;

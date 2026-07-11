@@ -914,7 +914,7 @@ bool CVarColorPicker(const char* label, const char* cvarName, Color_RGBA8 defaul
                               UIWidgets::ButtonOptions({ { .tooltip = "Resets this color to its default value" } })
                                   .Color(themeColor)
                                   .Size(UIWidgets::Sizes::Inline))) {
-            // TODO: Remove for next minor or major version, temporary fix for already migrated configs to 3 for 9.0.0
+            // Clear legacy split-channel keys, but avoid forcing a block reload during draw.
             CVarClear((std::string(cvarName) + ".R").c_str());
             CVarClear((std::string(cvarName) + ".G").c_str());
             CVarClear((std::string(cvarName) + ".B").c_str());
