@@ -930,3 +930,9 @@ This file is the fixed, append-only plan ledger for this repository.
   - x64/Release/soh.exe
   - libultraship
   - docs/EXTERNAL_MOD_DATA_DRIVEN_REFERENCE.md
+
+## [PLN-20260225-0014][UPDATE] 2026-07-11T18:19:49Z
+- status: in_progress
+- note: Execucao retomada no worktree limpo apos auditoria: completar M4 e M6 com runtimes dedicados, corrigir gates M11, criar matriz deterministica M12 e validar Release sem contaminar o checkout principal.
+- refs:
+  - plan.md,soh/soh/Enhancements/external-mods,tools/external_mods,docs/examples/external_mods

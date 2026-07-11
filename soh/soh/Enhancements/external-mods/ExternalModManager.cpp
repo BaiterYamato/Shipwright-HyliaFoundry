@@ -17765,6 +17765,9 @@ void ExternalModManager::Initialize() {
     if (!mItemStateRuntime) {
         mItemStateRuntime = std::make_unique<ExternalModItemRuntime>();
     }
+    if (!mEffectRuntime) {
+        mEffectRuntime = std::make_unique<ExternalModEffectRuntime>();
+    }
     mAimCameraState.overShoulderEnabled =
         CVarGetInteger(kAimCameraOverShoulderCVar, mAimCameraState.overShoulderEnabled ? 1 : 0) != 0;
 
@@ -21886,6 +21889,168 @@ bool ExternalModManager::TryParseItemUseProfiles(const std::string& content, int
         outDefinitions.push_back(std::move(definition));
     }
 
+    return true;
+}
+
+bool ExternalModManager::TryParseEffectGraphDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModEffectGraphDefinition>& outDefinitions,
+    std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "effectGraphDefinitions requires apiVersion 4";
+        return false;
+    }
+    nlohmann::json json = nlohmann::json::parse(content, nullptr, false);
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1 || !json.contains("graphs") || !json["graphs"].is_array()) {
+        outError = "effect_graphs.json must use schemaVersion 1 and contain graphs[]";
+        return false;
+    }
+    if (json["graphs"].size() > 128) {
+        outError = "effect_graphs.json exceeds the 128-graph limit";
+        return false;
+    }
+
+    std::unordered_set<std::string> graphIds;
+    for (size_t graphIndex = 0; graphIndex < json["graphs"].size(); ++graphIndex) {
+        const auto& graphJson = json["graphs"][graphIndex];
+        ExternalModEffectGraphDefinition graph;
+        if (!graphJson.is_object() || !ValidateRequiredString(graphJson, "id", graph.id, outError) ||
+            !IsNamespacedCatalogId(graph.id) ||
+            !ValidateRequiredString(graphJson, "entryNodeId", graph.entryNodeId, outError) ||
+            !graphJson.contains("nodes") || !graphJson["nodes"].is_array()) {
+            outError = "graphs[" + std::to_string(graphIndex) + "] has an invalid id, entryNodeId, or nodes[]";
+            return false;
+        }
+        if (!graphIds.insert(graph.id).second || graphJson["nodes"].empty() || graphJson["nodes"].size() > 64) {
+            outError = "graphs[" + std::to_string(graphIndex) + "] must have a unique id and 1..64 nodes";
+            return false;
+        }
+
+        std::unordered_set<std::string> nodeIds;
+        for (size_t nodeIndex = 0; nodeIndex < graphJson["nodes"].size(); ++nodeIndex) {
+            const auto& nodeJson = graphJson["nodes"][nodeIndex];
+            ExternalModEffectGraphNode node;
+            if (!nodeJson.is_object() || !ValidateRequiredString(nodeJson, "id", node.id, outError) ||
+                !nodeIds.insert(node.id).second) {
+                outError = "graphs[" + std::to_string(graphIndex) + "].nodes[" + std::to_string(nodeIndex) +
+                           "] must have a unique id";
+                return false;
+            }
+            if (nodeJson.contains("effects")) {
+                if (!nodeJson["effects"].is_array() || nodeJson["effects"].size() > 32) {
+                    outError = "effect graph node effects must be an array with at most 32 entries";
+                    return false;
+                }
+                for (size_t effectIndex = 0; effectIndex < nodeJson["effects"].size(); ++effectIndex) {
+                    ExternalModUseProfileEffect effect;
+                    const std::string path = "graphs[" + std::to_string(graphIndex) + "].nodes[" +
+                                             std::to_string(nodeIndex) + "].effects[" +
+                                             std::to_string(effectIndex) + "]";
+                    if (!TryParseUseProfileEffectObject(nodeJson["effects"][effectIndex], path, effect, outError)) {
+                        return false;
+                    }
+                    node.effects.push_back(std::move(effect));
+                }
+            }
+            if (nodeJson.contains("next")) {
+                if (!nodeJson["next"].is_array()) {
+                    outError = "effect graph node next must be an array";
+                    return false;
+                }
+                for (const auto& next : nodeJson["next"]) {
+                    if (!next.is_string()) {
+                        outError = "effect graph node next entries must be strings";
+                        return false;
+                    }
+                    node.next.push_back(next.get<std::string>());
+                }
+            }
+            graph.nodes.push_back(std::move(node));
+        }
+        if (!nodeIds.contains(graph.entryNodeId)) {
+            outError = "effect graph entryNodeId references an unknown node: " + graph.entryNodeId;
+            return false;
+        }
+
+        std::unordered_map<std::string, size_t> indegree;
+        for (const auto& node : graph.nodes) indegree[node.id] = 0;
+        for (const auto& node : graph.nodes) {
+            for (const auto& next : node.next) {
+                if (!indegree.contains(next)) {
+                    outError = "effect graph node references unknown next node: " + next;
+                    return false;
+                }
+                ++indegree[next];
+            }
+        }
+        std::vector<std::string> ready;
+        for (const auto& [nodeId, degree] : indegree) if (degree == 0) ready.push_back(nodeId);
+        size_t visited = 0;
+        while (!ready.empty()) {
+            const auto nodeId = ready.back();
+            ready.pop_back();
+            ++visited;
+            const auto nodeIt = std::find_if(graph.nodes.begin(), graph.nodes.end(),
+                                             [&](const auto& node) { return node.id == nodeId; });
+            for (const auto& next : nodeIt->next) if (--indegree[next] == 0) ready.push_back(next);
+        }
+        if (visited != graph.nodes.size()) {
+            outError = "effect graph must be acyclic: " + graph.id;
+            return false;
+        }
+        outDefinitions.push_back(std::move(graph));
+    }
+    return true;
+}
+
+bool ExternalModManager::TryParseCombatHitRuleDefinitions(
+    const std::string& content, int32_t apiVersion, std::vector<ExternalModCombatHitRuleDefinition>& outDefinitions,
+    std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "combatHitRuleDefinitions requires apiVersion 4";
+        return false;
+    }
+    nlohmann::json json = nlohmann::json::parse(content, nullptr, false);
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1 || !json.contains("rules") || !json["rules"].is_array()) {
+        outError = "hit_rules.json must use schemaVersion 1 and contain rules[]";
+        return false;
+    }
+    std::unordered_set<std::string> ids;
+    for (size_t i = 0; i < json["rules"].size(); ++i) {
+        const auto& ruleJson = json["rules"][i];
+        ExternalModCombatHitRuleDefinition rule;
+        if (!ruleJson.is_object() || !ValidateRequiredString(ruleJson, "id", rule.id, outError) ||
+            !IsNamespacedCatalogId(rule.id) || !ids.insert(rule.id).second ||
+            !ValidateRequiredString(ruleJson, "graphId", rule.graphId, outError) ||
+            !IsNamespacedCatalogId(rule.graphId)) {
+            outError = "rules[" + std::to_string(i) + "] has an invalid/duplicate id or graphId";
+            return false;
+        }
+        if (ruleJson.contains("trigger")) {
+            if (!ruleJson["trigger"].is_string()) return false;
+            rule.trigger = ToLower(ruleJson["trigger"].get<std::string>());
+        }
+        if (rule.trigger != "hammer_ground_impact") {
+            outError = "rules[" + std::to_string(i) + "].trigger is unsupported";
+            return false;
+        }
+        if (ruleJson.contains("itemId")) {
+            if (!ruleJson["itemId"].is_string()) return false;
+            rule.itemId = ruleJson["itemId"].get<std::string>();
+        }
+        if (ruleJson.contains("priority")) {
+            if (!ruleJson["priority"].is_number_integer()) return false;
+            rule.priority = std::clamp(ruleJson["priority"].get<int32_t>(), -1000, 1000);
+        }
+        if (ruleJson.contains("stopPropagation")) {
+            if (!ruleJson["stopPropagation"].is_boolean()) return false;
+            rule.stopPropagation = ruleJson["stopPropagation"].get<bool>();
+        }
+        outDefinitions.push_back(std::move(rule));
+    }
     return true;
 }
 
@@ -29086,6 +29251,50 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             }
         }
 
+        if (!package.manifest.effectGraphDefinitions.empty()) {
+            std::filesystem::path graphPath;
+            if (!IsSafePackageRelativePath(package.manifest.effectGraphDefinitions, graphPath, outError)) {
+                outError = "effectGraphDefinitions invalid path: " + outError;
+                return false;
+            }
+            std::string graphContent;
+            if (!ReadFileFromPackage(package, graphPath, kMaxEffectGraphDefinitionBytes, graphContent, outError) ||
+                !TryParseEffectGraphDefinitions(graphContent, runtime.apiVersion, runtime.effectGraphDefinitions,
+                                                outError)) {
+                outError = "effects.graph.v2 file=" + package.manifest.effectGraphDefinitions + " reason=" + outError;
+                return false;
+            }
+        }
+
+        if (!package.manifest.combatHitRuleDefinitions.empty()) {
+            std::filesystem::path hitRulesPath;
+            if (!IsSafePackageRelativePath(package.manifest.combatHitRuleDefinitions, hitRulesPath, outError)) {
+                outError = "combatHitRuleDefinitions invalid path: " + outError;
+                return false;
+            }
+            std::string hitRulesContent;
+            if (!ReadFileFromPackage(package, hitRulesPath, kMaxCombatHitRulesBytes, hitRulesContent, outError) ||
+                !TryParseCombatHitRuleDefinitions(hitRulesContent, runtime.apiVersion,
+                                                  runtime.combatHitRuleDefinitions, outError)) {
+                outError = "combat.hit_rules.v2 file=" + package.manifest.combatHitRuleDefinitions +
+                           " reason=" + outError;
+                return false;
+            }
+            for (const auto& rule : runtime.combatHitRuleDefinitions) {
+                if (std::none_of(runtime.effectGraphDefinitions.begin(), runtime.effectGraphDefinitions.end(),
+                                 [&](const auto& graph) { return graph.id == rule.graphId; })) {
+                    outError = "combat hit rule references unknown graphId: " + rule.graphId;
+                    return false;
+                }
+                if (!rule.itemId.empty() &&
+                    std::none_of(runtime.itemDefinitions.begin(), runtime.itemDefinitions.end(),
+                                 [&](const auto& item) { return item.id == rule.itemId; })) {
+                    outError = "combat hit rule references unknown itemId: " + rule.itemId;
+                    return false;
+                }
+            }
+        }
+
         for (const auto& inputTrigger : runtime.inputTriggers) {
             const auto bindingIt = std::find_if(runtime.inputBindings.begin(), runtime.inputBindings.end(),
                                                 [&inputTrigger](const ExternalModInputBinding& binding) {
@@ -35678,6 +35887,7 @@ bool ExternalModManager::OnHammerGroundImpact(PlayState* play, Player* player, f
     std::string selectedModId;
     const int32_t heldItemId = player->heldItemId;
     bool stateMachineHandled = false;
+    bool effectGraphHandled = false;
 
     if (mItemStateRuntime) {
         for (auto& package : mPackages) {
@@ -35708,6 +35918,45 @@ bool ExternalModManager::OnHammerGroundImpact(PlayState* play, Player* player, f
         }
     }
 
+    if (mEffectRuntime) {
+        for (auto& package : mPackages) {
+            if (!package.runtime.enabled || package.runtime.combatHitRuleDefinitions.empty()) {
+                continue;
+            }
+            const ExternalModItemDefinition* sourceItem = nullptr;
+            for (const auto& item : package.runtime.itemDefinitions) {
+                if (item.granted && ItemDefinitionMatchesUseItem(item, heldItemId)) {
+                    sourceItem = &item;
+                    break;
+                }
+            }
+
+            auto& runtime = package.runtime;
+            runtime.hasEffectImpactPosition = true;
+            runtime.effectImpactPosX = impactX;
+            runtime.effectImpactPosY = impactY;
+            runtime.effectImpactPosZ = impactZ;
+            bool packageHandled = false;
+            std::string graphError;
+            const std::vector<Actor*> targets;
+            const bool ok = mEffectRuntime->DispatchHit(
+                package, "hammer_ground_impact", sourceItem == nullptr ? "" : sourceItem->id,
+                [&](const ExternalModEffectGraphDefinition&, const ExternalModEffectGraphNode& node,
+                    std::string& dispatchError) {
+                    return ExecuteUseProfileEffects(package, node.effects, targets, play, player, sourceItem,
+                                                    dispatchError);
+                },
+                packageHandled, graphError);
+            runtime.hasEffectImpactPosition = false;
+            runtime.effectImpactPosX = runtime.effectImpactPosY = runtime.effectImpactPosZ = 0.0f;
+            if (!ok) {
+                DisableRuntime(package, "combat.hit_rules.v2 dispatch failed: " + graphError);
+                continue;
+            }
+            effectGraphHandled = effectGraphHandled || packageHandled;
+        }
+    }
+
     for (auto& package : mPackages) {
         if (!package.runtime.enabled) {
             continue;
@@ -35733,7 +35982,7 @@ bool ExternalModManager::OnHammerGroundImpact(PlayState* play, Player* player, f
     }
 
     if (selectedPackage == nullptr || selectedItem == nullptr) {
-        return stateMachineHandled;
+        return stateMachineHandled || effectGraphHandled;
     }
 
     auto& runtime = selectedPackage->runtime;
@@ -35772,7 +36021,7 @@ bool ExternalModManager::OnHammerGroundImpact(PlayState* play, Player* player, f
 
     const bool handledShockwave = runtime.useProfileSpawnedShockwave;
     clearImpactContext();
-    return handledShockwave || stateMachineHandled;
+    return handledShockwave || stateMachineHandled || effectGraphHandled;
 }
 
 void ExternalModManager::OnPlayerUseItem(void* player, int32_t itemId, bool* allowVanilla) {

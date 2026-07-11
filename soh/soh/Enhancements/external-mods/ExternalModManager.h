@@ -15,6 +15,7 @@ struct Player;
 #include "ExternalModTypes.h"
 #include "ExternalModInterop.h"
 #include "ExternalModItemRuntime.h"
+#include "ExternalModEffectRuntime.h"
 #include "ExternalModWorldGraphicsRuntime.h"
 #include "ExternalModPlayerResourcesRuntime.h"
 
@@ -193,6 +194,7 @@ class ExternalModManager {
     std::unique_ptr<ExternalModWorldGraphicsRuntime> mWorldGraphicsRuntime;
     std::unique_ptr<ExternalModPlayerResourcesRuntime> mPlayerResourcesRuntime;
     std::unique_ptr<ExternalModItemRuntime> mItemStateRuntime;
+    std::unique_ptr<ExternalModEffectRuntime> mEffectRuntime;
 
     static bool TryParseManifest(const std::string& content, ExternalModManifest& outManifest, std::string& outError);
     static bool TryParseEntryScript(const std::string& content, int32_t apiVersion, ExternalModRuntime& outRuntime,
@@ -203,6 +205,12 @@ class ExternalModManager {
                                              const std::string& modId,
                                              std::vector<ExternalModItemStateMachineDefinition>& outDefinitions,
                                              std::string& outError);
+    static bool TryParseEffectGraphDefinitions(const std::string& content, int32_t apiVersion,
+                                               std::vector<ExternalModEffectGraphDefinition>& outDefinitions,
+                                               std::string& outError);
+    static bool TryParseCombatHitRuleDefinitions(const std::string& content, int32_t apiVersion,
+                                                 std::vector<ExternalModCombatHitRuleDefinition>& outDefinitions,
+                                                 std::string& outError);
     static bool TryParseInputDefinitions(const std::string& content, std::vector<ExternalModInputBinding>& outBindings,
                                          std::vector<ExternalModCameraHotkeyDefinition>& outCameraHotkeys,
                                          std::vector<ExternalModHotkeyDefinition>& outHotkeys,

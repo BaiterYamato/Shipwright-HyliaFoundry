@@ -731,6 +731,25 @@ INSTALL(FILES $<TARGET_PDB_FILE:soh> DESTINATION ./debug COMPONENT ship)
 INSTALL(FILES ${CMAKE_BINARY_DIR}/soh/soh.o2r DESTINATION . COMPONENT ship)
 endif()
 
+option(SOH_BUILD_WASM_FUEL_TESTS "Build the focused external-mod WASM instruction fuel test" OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND SOH_BUILD_WASM_FUEL_TESTS)
+    enable_testing()
+    add_executable(external_mod_wasm_fuel_test
+        tests/ExternalModWasmRuntimeFuelTest.cpp
+        soh/Enhancements/external-mods/ExternalModWasmRuntime.cpp
+    )
+    target_include_directories(external_mod_wasm_fuel_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/external-mods
+    )
+    target_compile_definitions(external_mod_wasm_fuel_test PRIVATE SOH_HAS_WABT=1)
+    target_compile_options(external_mod_wasm_fuel_test PRIVATE /EHsc)
+    set_property(TARGET external_mod_wasm_fuel_test PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+    )
+    set_property(TARGET external_mod_wasm_fuel_test PROPERTY LINK_LIBRARIES wabt::wabt)
+    add_test(NAME external_mod_wasm_fuel COMMAND external_mod_wasm_fuel_test)
+endif()
+
 find_program(CURL NAMES curl DOC "Path to the curl program.  Used to download files.")
 execute_process(COMMAND ${CURL} -sSfL https://raw.githubusercontent.com/mdqinc/SDL_GameControllerDB/master/gamecontrollerdb.txt -o ${CMAKE_BINARY_DIR}/gamecontrollerdb.txt OUTPUT_VARIABLE RESULT)
 

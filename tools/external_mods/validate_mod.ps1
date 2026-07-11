@@ -373,6 +373,41 @@ foreach ($modDir in $mods) {
         }
     }
 
+    if (($manifest.PSObject.Properties.Name -contains "effectGraphDefinitions") -and
+        ($manifest.PSObject.Properties.Name -contains "combatHitRuleDefinitions")) {
+        try {
+            $graphsJson = Get-Content -LiteralPath (Join-Path $modDir "$($manifest.effectGraphDefinitions)") -Raw | ConvertFrom-Json
+            $rulesJson = Get-Content -LiteralPath (Join-Path $modDir "$($manifest.combatHitRuleDefinitions)") -Raw | ConvertFrom-Json
+            if ($graphsJson.schemaVersion -ne 1 -or $rulesJson.schemaVersion -ne 1) {
+                throw "effect graphs and hit rules must use schemaVersion 1"
+            }
+            $graphIds = @($graphsJson.graphs | ForEach-Object { "$($_.id)" })
+            foreach ($graph in @($graphsJson.graphs)) {
+                $nodeIds = @($graph.nodes | ForEach-Object { "$($_.id)" })
+                if ($nodeIds.Count -eq 0 -or $nodeIds.Count -gt 64 -or $nodeIds -notcontains "$($graph.entryNodeId)") {
+                    throw "graph '$($graph.id)' must have 1..64 nodes and a valid entryNodeId"
+                }
+                foreach ($node in @($graph.nodes)) {
+                    foreach ($next in @($node.next)) {
+                        if ($nodeIds -notcontains "$next") { throw "graph '$($graph.id)' references unknown node '$next'" }
+                    }
+                }
+            }
+            foreach ($rule in @($rulesJson.rules)) {
+                if ($graphIds -notcontains "$($rule.graphId)") {
+                    throw "hit rule '$($rule.id)' references unknown graph '$($rule.graphId)'"
+                }
+                if ("$($rule.trigger)" -ne "hammer_ground_impact") {
+                    throw "hit rule '$($rule.id)' has unsupported trigger '$($rule.trigger)'"
+                }
+            }
+        }
+        catch {
+            Write-Host "[validate_mod] $modId M6 contract validation failed: $($_.Exception.Message)" -ForegroundColor Red
+            $failed++
+        }
+    }
+
     if (($manifest.PSObject.Properties.Name -contains "lightingDefinitions") -and
         (($manifest.PSObject.Properties.Name -contains "sceneProfileDefinitions") -or
          ($manifest.PSObject.Properties.Name -contains "roomProfileDefinitions"))) {

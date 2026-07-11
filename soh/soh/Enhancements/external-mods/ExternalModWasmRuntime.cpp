@@ -21,6 +21,8 @@ namespace {
 constexpr std::array<uint8_t, 4> kWasmMagic = { 0x00, 0x61, 0x73, 0x6D };
 constexpr std::array<uint8_t, 4> kWasmVersion = { 0x01, 0x00, 0x00, 0x00 };
 constexpr size_t kMaxArgs = 16;
+constexpr uint64_t kMinInstructionsPerCall = 1000;
+constexpr uint64_t kMaxInstructionsPerCall = 5000000;
 
 bool IsSafeExportName(const std::string& name) {
     if (name.empty() || name.size() > 64) {
@@ -54,6 +56,8 @@ void ExternalModWasmRuntime::BeginFrame() {
     mCallsThisFrame = 0;
     mBudgetDropsThisFrame = 0;
     mFrameSpentMs = 0;
+    mInstructionsThisFrame = 0;
+    mFuelExhaustionsThisFrame = 0;
 }
 
 int32_t ExternalModWasmRuntime::GetCallsThisFrame() const {
@@ -64,16 +68,37 @@ int32_t ExternalModWasmRuntime::GetBudgetDropsThisFrame() const {
     return mBudgetDropsThisFrame;
 }
 
+uint64_t ExternalModWasmRuntime::GetInstructionsThisFrame() const {
+    return mInstructionsThisFrame;
+}
+
+int32_t ExternalModWasmRuntime::GetFuelExhaustionsThisFrame() const {
+    return mFuelExhaustionsThisFrame;
+}
+
+bool ExternalModWasmRuntime::IsQuarantined() const {
+    return mQuarantined;
+}
+
+const std::unordered_map<std::string, ExternalModWasmExportTelemetry>&
+ExternalModWasmRuntime::GetExportTelemetry() const {
+    return mExportTelemetry;
+}
+
 bool ExternalModWasmRuntime::Initialize(const std::vector<uint8_t>& moduleBytes, const ExternalModWasmConfig& config,
                                         std::string& outError) {
     mInitialized = false;
     mModuleBytes.clear();
     mImpl.reset();
+    mQuarantined = false;
+    mExportTelemetry.clear();
 
     mConfig = config;
     mConfig.maxMemoryKb = std::clamp(config.maxMemoryKb, 64, 4096);
     mConfig.maxCallMs = std::clamp(config.maxCallMs, 1, 4);
     mConfig.maxFrameBudgetMs = std::clamp(config.maxFrameBudgetMs, 1, 8);
+    mConfig.maxInstructionsPerCall =
+        std::clamp(config.maxInstructionsPerCall, kMinInstructionsPerCall, kMaxInstructionsPerCall);
 
     BeginFrame();
 
@@ -557,6 +582,10 @@ bool ExternalModWasmRuntime::Initialize(const std::vector<uint8_t>& moduleBytes,
 
 bool ExternalModWasmRuntime::InvokeExport(const std::string& exportName, const std::vector<int32_t>& args,
                                           std::string& outError) {
+    if (mQuarantined) {
+        outError = "WASM runtime quarantined after instruction fuel exhaustion: mod=" + mConfig.modId;
+        return false;
+    }
     if (!mInitialized) {
         outError = "WASM runtime not initialized";
         return false;
@@ -637,7 +666,41 @@ bool ExternalModWasmRuntime::InvokeExport(const std::string& exportName, const s
 
     Values results(type.results.size());
     Trap::Ptr trap;
-    if (Failed(func->Call(*mImpl->store, params, results, &trap))) {
+    uint64_t instructionsExecuted = 0;
+    bool fuelExhausted = false;
+    wabt::Result callResult = wabt::Result::Ok;
+    if (func->kind() == ObjectKind::DefinedFunc) {
+        auto* definedFunc = wabt::cast<DefinedFunc>(func.get());
+        callResult = definedFunc->CallWithInstructionLimit(*mImpl->store, params, results,
+                                                           mConfig.maxInstructionsPerCall, &instructionsExecuted,
+                                                           &fuelExhausted, &trap);
+    } else {
+        callResult = func->Call(*mImpl->store, params, results, &trap);
+    }
+
+    auto& exportTelemetry = mExportTelemetry[exportName];
+    ++exportTelemetry.calls;
+    exportTelemetry.lastInstructions = instructionsExecuted;
+    exportTelemetry.instructions += instructionsExecuted;
+    mInstructionsThisFrame += instructionsExecuted;
+
+    if (fuelExhausted) {
+        ++exportTelemetry.fuelExhaustions;
+        ++mFuelExhaustionsThisFrame;
+        ++mBudgetDropsThisFrame;
+        ++mCallsThisFrame;
+        mQuarantined = true;
+        mInitialized = false;
+        trap.reset();
+        func.reset();
+        mImpl.reset();
+        outError = "WASM instruction fuel exhausted: mod=" + mConfig.modId + ", export=" + exportName +
+                   ", consumed=" + std::to_string(instructionsExecuted) +
+                   ", limit=" + std::to_string(mConfig.maxInstructionsPerCall) + "; runtime quarantined";
+        return false;
+    }
+
+    if (Failed(callResult)) {
         outError = trap ? trap->message() : "WASM export call failed";
         return false;
     }

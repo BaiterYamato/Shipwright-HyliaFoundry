@@ -27,6 +27,8 @@
     "itemUseProfiles":  "items/use_profiles.json",
     "movementDefinitions":  "movement/movement_profiles.json",
     "cameraDefinitions":  "camera/camera_profiles.json",
+    "effectGraphDefinitions":  "effects/effect_graphs.json",
+    "combatHitRuleDefinitions":  "combat/hit_rules.json",
     "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
     "releaseChannels":  [
                             "stable"
@@ -40,6 +42,8 @@
                          "items.use_profiles.v1",
                          "movement.profiles.v1",
                          "camera.aim_profiles.v2",
+                         "effects.graph.v2",
+                         "combat.hit_rules.v2",
                          "world.queries.v1"
                      ],
     "capabilityRationales":  {
@@ -51,6 +55,8 @@
                                  "items.use_profiles.v1":  "Declares items.use_profiles.v1 as part of Demo Combat AI Showcase in the framework-first API v4 catalog.",
                                  "movement.profiles.v1":  "Declares movement.profiles.v1 as part of Demo Combat AI Showcase in the framework-first API v4 catalog.",
                                  "camera.aim_profiles.v2":  "Declares camera.aim_profiles.v2 as part of Demo Combat AI Showcase in the framework-first API v4 catalog.",
+                                 "effects.graph.v2":  "Executes a bounded deterministic effect graph after the hammer impact hook.",
+                                 "combat.hit_rules.v2":  "Maps hammer ground impacts to the demo effect graph.",
                                  "world.queries.v1":  "Declares world.queries.v1 as part of Demo Combat AI Showcase in the framework-first API v4 catalog."
                              },
     "dependencies":  [

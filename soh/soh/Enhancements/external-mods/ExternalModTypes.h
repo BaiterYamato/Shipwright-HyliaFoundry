@@ -1209,6 +1209,27 @@ enum class ExternalModPlayerConsumableStorageMode {
     BottleContent,
 };
 
+struct ExternalModEffectGraphNode {
+    std::string id;
+    std::vector<ExternalModUseProfileEffect> effects;
+    std::vector<std::string> next;
+};
+
+struct ExternalModEffectGraphDefinition {
+    std::string id;
+    std::string entryNodeId;
+    std::vector<ExternalModEffectGraphNode> nodes;
+};
+
+struct ExternalModCombatHitRuleDefinition {
+    std::string id;
+    std::string trigger = "hammer_ground_impact";
+    std::string itemId;
+    std::string graphId;
+    int32_t priority = 0;
+    bool stopPropagation = false;
+};
+
 enum class ExternalModItemStateEvent {
     Select,
     Deselect,
@@ -2080,6 +2101,8 @@ struct ExternalModRuntime {
     std::vector<ExternalModDamageProfile> damageProfiles;
     std::vector<ExternalModTargetingProfile> targetingProfiles;
     std::vector<ExternalModItemUseProfile> itemUseProfiles;
+    std::vector<ExternalModEffectGraphDefinition> effectGraphDefinitions;
+    std::vector<ExternalModCombatHitRuleDefinition> combatHitRuleDefinitions;
     std::vector<ExternalModProjectileProfile> projectileProfiles;
     std::vector<ExternalModAoEProfile> aoeProfiles;
     std::vector<ExternalModMovementProfile> movementProfiles;

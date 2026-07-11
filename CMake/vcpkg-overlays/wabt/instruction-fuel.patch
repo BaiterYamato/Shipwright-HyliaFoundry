@@ -1,0 +1,135 @@
+diff --git a/include/wabt/interp/interp.h b/include/wabt/interp/interp.h
+index 468d3b71..9f485d16 100644
+--- a/include/wabt/interp/interp.h
++++ b/include/wabt/interp/interp.h
+@@ -766,6 +766,13 @@ class DefinedFunc : public Func {
+ 
+   Ref instance() const;
+   const FuncDesc& desc() const;
++  Result CallWithInstructionLimit(Store&,
++                                  const Values& params,
++                                  Values& results,
++                                  u64 max_instructions,
++                                  u64* out_instructions_executed,
++                                  bool* out_exhausted,
++                                  Trap::Ptr* out_trap);
+ 
+  protected:
+   Result DoCall(Thread& thread,
+@@ -1106,6 +1113,9 @@ class Thread {
+ 
+   RunResult Run(Trap::Ptr* out_trap);
+   RunResult Run(int num_instructions, Trap::Ptr* out_trap);
++  RunResult Run(int num_instructions,
++                int* out_instructions_executed,
++                Trap::Ptr* out_trap);
+   RunResult Step(Trap::Ptr* out_trap);
+ 
+   Store& store();
+diff --git a/src/interp/interp.cc b/src/interp/interp.cc
+index a843da9d..7df46f61 100644
+--- a/src/interp/interp.cc
++++ b/src/interp/interp.cc
+@@ -18,6 +18,7 @@
+ #include <algorithm>
+ #include <cassert>
+ #include <cinttypes>
++#include <limits>
+ 
+ #include "wabt/interp/interp-math.h"
+ 
+@@ -303,4 +303,69 @@ Result DefinedFunc::DoCall(Thread& thread,
+   return Result::Ok;
+ }
+ 
++Result DefinedFunc::CallWithInstructionLimit(
++    Store& store,
++    const Values& params,
++    Values& results,
++    u64 max_instructions,
++    u64* out_instructions_executed,
++    bool* out_exhausted,
++    Trap::Ptr* out_trap) {
++  assert(params.size() == type_.params.size());
++  if (out_instructions_executed) {
++    *out_instructions_executed = 0;
++  }
++  if (out_exhausted) {
++    *out_exhausted = false;
++  }
++
++  Thread thread(store);
++  thread.PushValues(type_.params, params);
++  RunResult run_result = thread.PushCall(*this, out_trap);
++  if (run_result == RunResult::Trap) {
++    return Result::Error;
++  }
++
++  u64 remaining = max_instructions;
++  u64 executed_total = 0;
++  while (remaining > 0) {
++    const int chunk = static_cast<int>(std::min<u64>(
++        remaining, static_cast<u64>(std::numeric_limits<int>::max())));
++    int executed_chunk = 0;
++    run_result = thread.Run(chunk, &executed_chunk, out_trap);
++    executed_total += static_cast<u64>(executed_chunk);
++    remaining -= static_cast<u64>(executed_chunk);
++
++    if (run_result == RunResult::Trap) {
++      if (out_instructions_executed) {
++        *out_instructions_executed = executed_total;
++      }
++      return Result::Error;
++    }
++    if (run_result == RunResult::Exception) {
++      *out_trap = Trap::New(store, "uncaught exception");
++      if (out_instructions_executed) {
++        *out_instructions_executed = executed_total;
++      }
++      return Result::Error;
++    }
++    if (run_result == RunResult::Return) {
++      thread.PopValues(type_.results, &results);
++      if (out_instructions_executed) {
++        *out_instructions_executed = executed_total;
++      }
++      return Result::Ok;
++    }
++  }
++
++  if (out_instructions_executed) {
++    *out_instructions_executed = executed_total;
++  }
++  if (out_exhausted) {
++    *out_exhausted = true;
++  }
++  *out_trap = Trap::New(store, "instruction limit exceeded");
++  return Result::Error;
++}
++
+ //// HostFunc ////
+@@ -850,12 +915,24 @@ RunResult Thread::Run(Trap::Ptr* out_trap) {
+ }
+ 
+ RunResult Thread::Run(int num_instructions, Trap::Ptr* out_trap) {
++  return Run(num_instructions, nullptr, out_trap);
++}
++
++RunResult Thread::Run(int num_instructions,
++                      int* out_instructions_executed,
++                      Trap::Ptr* out_trap) {
++  if (out_instructions_executed) {
++    *out_instructions_executed = 0;
++  }
+   DefinedFunc::Ptr func{store_, frames_.back().func};
+   for (; num_instructions > 0; --num_instructions) {
+     auto result = StepInternal(out_trap);
++    if (out_instructions_executed) {
++      ++*out_instructions_executed;
++    }
+     if (result != RunResult::Ok) {
+       return result;
+     }
+   }
+   return RunResult::Ok;
+ }

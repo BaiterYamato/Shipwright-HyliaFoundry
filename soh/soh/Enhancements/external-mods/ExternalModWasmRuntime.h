@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace SOH {
@@ -48,7 +49,15 @@ struct ExternalModWasmConfig {
     int32_t maxMemoryKb = 1024;
     int32_t maxCallMs = 2;
     int32_t maxFrameBudgetMs = 2;
+    uint64_t maxInstructionsPerCall = 100000;
     ExternalModWasmHostApi hostApi;
+};
+
+struct ExternalModWasmExportTelemetry {
+    uint64_t calls = 0;
+    uint64_t instructions = 0;
+    uint64_t lastInstructions = 0;
+    uint64_t fuelExhaustions = 0;
 };
 
 class ExternalModWasmRuntime {
@@ -65,6 +74,10 @@ class ExternalModWasmRuntime {
     void BeginFrame();
     int32_t GetCallsThisFrame() const;
     int32_t GetBudgetDropsThisFrame() const;
+    uint64_t GetInstructionsThisFrame() const;
+    int32_t GetFuelExhaustionsThisFrame() const;
+    bool IsQuarantined() const;
+    const std::unordered_map<std::string, ExternalModWasmExportTelemetry>& GetExportTelemetry() const;
 
   private:
     ExternalModWasmConfig mConfig;
@@ -73,6 +86,10 @@ class ExternalModWasmRuntime {
     int32_t mCallsThisFrame = 0;
     int32_t mBudgetDropsThisFrame = 0;
     int32_t mFrameSpentMs = 0;
+    uint64_t mInstructionsThisFrame = 0;
+    int32_t mFuelExhaustionsThisFrame = 0;
+    bool mQuarantined = false;
+    std::unordered_map<std::string, ExternalModWasmExportTelemetry> mExportTelemetry;
 
     struct Impl;
     std::unique_ptr<Impl> mImpl;

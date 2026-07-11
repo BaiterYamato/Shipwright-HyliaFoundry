@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "graphs": [
+    {
+      "id": "com.sylian.demo.combat_ai_showcase:hammer_impact_graph",
+      "entryNodeId": "impact",
+      "nodes": [
+        {
+          "id": "impact",
+          "effects": [
+            {
+              "action": "spawnShockwave",
+              "shockwaveOrigin": "impact",
+              "shockwavePrimColor": [255, 170, 48, 255],
+              "shockwaveEnvColor": [120, 40, 8, 255],
+              "shockwaveLife": 12
+            }
+          ],
+          "next": []
+        }
+      ]
+    }
+  ]
+}

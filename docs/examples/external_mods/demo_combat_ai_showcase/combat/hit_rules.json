@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "id": "com.sylian.demo.combat_ai_showcase:hammer_impact",
+      "trigger": "hammer_ground_impact",
+      "graphId": "com.sylian.demo.combat_ai_showcase:hammer_impact_graph",
+      "priority": 100,
+      "stopPropagation": true
+    }
+  ]
+}
