@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "overlays": [
+    {
+      "id": "com.sylian.framework.combat_ai:runtime",
+      "type": "combat_ai"
+    }
+  ]
+}

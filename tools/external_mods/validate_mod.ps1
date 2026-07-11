@@ -66,6 +66,7 @@ function Resolve-CapabilityPathMap {
         "world.scenes.v1" = "sceneProfileDefinitions"
         "world.rooms.v1" = "roomProfileDefinitions"
         "assets.packs.v2" = "assetPackDefinitions"
+        "assets.raw.v1" = "assetSourceDefinitions"
         "debug.render_inspector.v1" = "renderInspectorDefinitions"
         "editor.runtime.v1" = "editorRuntimeDefinitions"
         "editor.ui.v1" = "editorUiDefinitions"
@@ -153,9 +154,20 @@ foreach ($modDir in $mods) {
     if ($hasRuntime -and ($manifest.runtime.PSObject.Properties.Name -contains "type")) {
         $runtimeType = "$($manifest.runtime.type)"
     }
-    if (-not $hasRuntime -or $runtimeType -ne "wasm3-v1") {
-        Write-Error "[validate_mod] $modId runtime.type must be wasm3-v1"
+    if (-not $hasRuntime -or $runtimeType -notin @("wasm3-v1", "hybrid-v1", "native-v1", "data-only")) {
+        Write-Error "[validate_mod] $modId runtime.type must be wasm3-v1|hybrid-v1|native-v1|data-only"
         $failed++
+        continue
+    }
+
+    if ($runtimeType -eq "data-only") {
+        foreach ($jsonFile in @(Get-ChildItem -LiteralPath $modDir -File -Recurse -Filter "*.json")) {
+            try { $null = Get-Content -LiteralPath $jsonFile.FullName -Raw | ConvertFrom-Json }
+            catch {
+                Write-Host "[validate_mod] $modId invalid json: $($jsonFile.FullName)" -ForegroundColor Red
+                $failed++
+            }
+        }
         continue
     }
 
@@ -193,6 +205,39 @@ foreach ($modDir in $mods) {
         Write-Error "[validate_mod] $modId entryScript apiVersion mismatch (manifest=$($manifest.apiVersion), script=$($entryJson.apiVersion))"
         $failed++
         continue
+    }
+
+    $knownInputBindings = @()
+    if (($manifest.PSObject.Properties.Name -contains "inputDefinitions") -and
+        -not [string]::IsNullOrWhiteSpace("$($manifest.inputDefinitions)")) {
+        $inputPath = Join-Path $modDir "$($manifest.inputDefinitions)"
+        if (Test-Path -LiteralPath $inputPath) {
+            try {
+                $inputJson = Get-Content -LiteralPath $inputPath -Raw | ConvertFrom-Json
+                $knownInputBindings = @($inputJson.bindings | ForEach-Object { "$($_.id)" } | Where-Object {
+                    -not [string]::IsNullOrWhiteSpace($_)
+                })
+            }
+            catch { }
+        }
+    }
+    if ($entryJson.PSObject.Properties.Name -contains "onInput") {
+        $inputIndex = 0
+        foreach ($trigger in @($entryJson.onInput)) {
+            $bindingId = if ($null -ne $trigger -and ($trigger.PSObject.Properties.Name -contains "binding")) {
+                "$($trigger.binding)"
+            }
+            elseif ($null -ne $trigger -and ($trigger.PSObject.Properties.Name -contains "bindingId")) {
+                "$($trigger.bindingId)"
+            }
+            else { "" }
+
+            if (-not [string]::IsNullOrWhiteSpace($bindingId) -and $knownInputBindings -notcontains $bindingId) {
+                Write-Host "[validate_mod] $modId onInput[$inputIndex] references unknown input binding: $bindingId" -ForegroundColor Red
+                $failed++
+            }
+            $inputIndex++
+        }
     }
 
     if ($manifest.PSObject.Properties.Name -contains "dependencies") {
@@ -297,9 +342,10 @@ foreach ($modDir in $mods) {
             continue
         }
 
+        $parsedCapabilityJson = $null
         if ($absolute.ToLowerInvariant().EndsWith(".json")) {
             try {
-                $null = Get-Content -Path $absolute -Raw | ConvertFrom-Json
+                $parsedCapabilityJson = Get-Content -Path $absolute -Raw | ConvertFrom-Json
             } catch {
                 Write-Error "[validate_mod] $modId invalid json in ${relative}: $($_.Exception.Message)"
                 $failed++
@@ -307,8 +353,54 @@ foreach ($modDir in $mods) {
             }
         }
 
+        if ($cap -eq "assets.raw.v1" -and $null -ne $parsedCapabilityJson -and
+            ($parsedCapabilityJson.PSObject.Properties.Name -contains "sources")) {
+            $sourceIndex = 0
+            foreach ($source in @($parsedCapabilityJson.sources)) {
+                $kind = if ($null -ne $source -and ($source.PSObject.Properties.Name -contains "kind")) {
+                    "$($source.kind)".Trim().ToLowerInvariant()
+                } else { "" }
+                if ($kind -notin @("image", "audio", "model", "data", "archive")) {
+                    Write-Host "[validate_mod] $modId ${relative} sources[$sourceIndex].kind '$kind' is not canonical; expected image|audio|model|data|archive" -ForegroundColor Red
+                    $failed++
+                }
+                $sourceIndex++
+            }
+        }
+
         if ($VerboseOutput) {
             Write-Host "[validate_mod] $modId OK -> $cap ($relative)"
+        }
+    }
+
+    if (($manifest.PSObject.Properties.Name -contains "lightingDefinitions") -and
+        (($manifest.PSObject.Properties.Name -contains "sceneProfileDefinitions") -or
+         ($manifest.PSObject.Properties.Name -contains "roomProfileDefinitions"))) {
+        try {
+            $lightingPath = Join-Path $modDir "$($manifest.lightingDefinitions)"
+            $lightingJson = Get-Content -LiteralPath $lightingPath -Raw | ConvertFrom-Json
+            $knownLightingIds = @($lightingJson.profiles | ForEach-Object { "$($_.id)" })
+
+            foreach ($profileField in @("sceneProfileDefinitions", "roomProfileDefinitions")) {
+                if (-not ($manifest.PSObject.Properties.Name -contains $profileField)) { continue }
+                $profilePath = Join-Path $modDir "$($manifest.$profileField)"
+                $profileJson = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+                $profileIndex = 0
+                foreach ($profile in @($profileJson.profiles)) {
+                    if ($null -ne $profile -and ($profile.PSObject.Properties.Name -contains "skylightProfileId")) {
+                        $lightingId = "$($profile.skylightProfileId)"
+                        if (-not [string]::IsNullOrWhiteSpace($lightingId) -and $knownLightingIds -notcontains $lightingId) {
+                            Write-Host "[validate_mod] $modId $profileField profiles[$profileIndex] references unknown skylightProfileId: $lightingId" -ForegroundColor Red
+                            $failed++
+                        }
+                    }
+                    $profileIndex++
+                }
+            }
+        }
+        catch {
+            Write-Host "[validate_mod] $modId lighting reference validation failed: $($_.Exception.Message)" -ForegroundColor Red
+            $failed++
         }
     }
 }

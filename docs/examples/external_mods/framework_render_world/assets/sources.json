@@ -4,14 +4,14 @@
     {
       "id": "com.example.lanterna_test:lanterna_quad_obj",
       "path": "assets/lanterna_square.obj",
-      "kind": "mesh",
+      "kind": "model",
       "format": "obj",
       "hostAccess": true
     },
     {
       "id": "com.example.lanterna_test:lanterna_quad_texture",
       "path": "assets/lanterna_placeholder.png",
-      "kind": "texture",
+      "kind": "image",
       "format": "png",
       "hostAccess": true
     }

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "overlays": [
+    {
+      "id": "com.sylian.framework.render_world:materials",
+      "enabledByDefault": false,
+      "showMaterialUnderCursor": true,
+      "showLightBudget": true,
+      "showPostFxState": true
+    }
+  ]
+}

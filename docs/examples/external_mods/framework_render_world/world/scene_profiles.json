@@ -5,7 +5,7 @@
       "id": "com.sylian.world_profiles:field_day",
       "sceneId": 81,
       "postFxPresetId": "com.sylian.world_profiles:overworld_godrays",
-      "skylightProfileId": "com.sylian.world_profiles:sky_white",
+      "skylightProfileId": "com.sylian.lighting_kit:sky_white",
       "ambientColor": [
         0.52,
         0.54,

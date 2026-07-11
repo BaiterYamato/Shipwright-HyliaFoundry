@@ -83,6 +83,8 @@ graphs/
 
 # Build results
 [Dd]ebug/
+!docs/examples/external_mods/**/debug/
+!docs/examples/external_mods/**/debug/*.json
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
