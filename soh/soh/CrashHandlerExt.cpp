@@ -2,7 +2,6 @@
 #include "variables.h"
 #include "z64.h"
 #include "z64actor.h"
-#include <string.h>
 #include <stdio.h>
 #include <array>
 #include "soh/ActorDB.h"
@@ -82,7 +81,6 @@ static void CrashHandler_WriteActorData(char* buffer, size_t* pos) {
         append_line(buffer, pos, "  <actor context unavailable>");
         return;
     }
-
     for (unsigned int i = 0; i < ACTORCAT_MAX; i++) {
         if (*pos >= kCrashHandlerBufferLimit - 1) {
             return;

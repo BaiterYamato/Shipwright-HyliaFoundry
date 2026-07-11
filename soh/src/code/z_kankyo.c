@@ -336,7 +336,7 @@ void Environment_Init(PlayState* play2, EnvironmentContext* envCtx, s32 unused) 
     play->envCtx.unk_F2[0] = 0;
 
     if (gSaveContext.retainWeatherMode != 0) {
-        if (((void)0, gSaveContext.sceneSetupIndex) < 4) {
+        if (((void)0, gSaveContext.sceneLayer) < 4) {
             switch (gWeatherMode) {
                 case 1:
                     envCtx->unk_17 = 1;
@@ -936,7 +936,7 @@ void Environment_Update(PlayState* play, EnvironmentContext* envCtx, LightContex
         }
 
         //! @bug `gTimeIncrement` is unsigned, it can't be negative
-        if (((((void)0, gSaveContext.sceneSetupIndex) >= 5 || gTimeIncrement != 0) &&
+        if (((((void)0, gSaveContext.sceneLayer) >= 5 || gTimeIncrement != 0) &&
              ((void)0, gSaveContext.dayTime) > gSaveContext.skyboxTime) ||
             (((void)0, gSaveContext.dayTime) < 0xAAB || gTimeIncrement < 0)) {
             gSaveContext.skyboxTime = ((void)0, gSaveContext.dayTime);
@@ -1321,8 +1321,7 @@ void Environment_DrawSunAndMoon(PlayState* play) {
         play->envCtx.sunPos.z = +(Math_CosS(((void)0, gSaveContext.dayTime) - 0x8000) * 20.0f) * 25.0f;
     }
 
-    if (gSaveContext.entranceIndex != ENTR_HYRULE_FIELD_PAST_BRIDGE_SPAWN ||
-        ((void)0, gSaveContext.sceneSetupIndex) != 5) {
+    if (gSaveContext.entranceIndex != ENTR_HYRULE_FIELD_PAST_BRIDGE_SPAWN || ((void)0, gSaveContext.sceneLayer) != 5) {
         Matrix_Translate(play->view.eye.x + play->envCtx.sunPos.x, play->view.eye.y + play->envCtx.sunPos.y,
                          play->view.eye.z + play->envCtx.sunPos.z, MTXMODE_NEW);
 
@@ -2011,11 +2010,11 @@ void Environment_PlaySceneSequence(PlayState* play) {
         osSyncPrintf("\n\n\nBGM設定game_play->sound_info.BGM=[%d] old_bgm=[%d]\n\n", play->sequenceCtx.seqId,
                      ((void)0, gSaveContext.seqId));
         if (((void)0, gSaveContext.seqId) != play->sequenceCtx.seqId) {
-            func_800F5550(play->sequenceCtx.seqId);
+            Audio_PlaySceneSequence(play->sequenceCtx.seqId);
         }
     } else if (((void)0, gSaveContext.dayTime) > 0x4AAA && ((void)0, gSaveContext.dayTime) < 0xB71D) {
         if (((void)0, gSaveContext.seqId) != play->sequenceCtx.seqId) {
-            func_800F5550(play->sequenceCtx.seqId);
+            Audio_PlaySceneSequence(play->sequenceCtx.seqId);
         }
 
         play->envCtx.unk_E0 = 1;
@@ -2050,7 +2049,7 @@ void func_80075B44(PlayState* play) {
                                              CHANNEL_IO_PORT_1, 0);
             if (play->envCtx.unk_EE[0] == 0 && play->envCtx.unk_F2[0] == 0) {
                 osSyncPrintf("\n\n\nNa_StartMorinigBgm\n\n");
-                func_800F5510(play->sequenceCtx.seqId);
+                Audio_PlayMorningSceneSequence(play->sequenceCtx.seqId);
             }
             play->envCtx.unk_E0++;
             break;
@@ -2427,8 +2426,8 @@ void Environment_DrawSandstorm(PlayState* play, u8 sandstormState) {
     gDPSetPrimColor(POLY_XLU_DISP++, 0, 0x80, primColor.r, primColor.g, primColor.b, play->envCtx.sandstormPrimA);
     gDPSetEnvColor(POLY_XLU_DISP++, envColor.r, envColor.g, envColor.b, play->envCtx.sandstormEnvA);
     gSPSegment(POLY_XLU_DISP++, 0x08,
-               Gfx_TwoTexScroll(play->state.gfxCtx, 0, (u32)sp96 % 0x1000, 0, 0x200, 0x20, 1, (u32)sp94 % 0x1000,
-                                0xFFF - ((u32)sp92 % 0x1000), 0x100, 0x40));
+               Gfx_TwoTexScrollEx(play->state.gfxCtx, 0, (u32)sp96 % 0x1000, 0, 0x200, 0x20, 1, (u32)sp94 % 0x1000,
+                                  0xFFF - ((u32)sp92 % 0x1000), 0x100, 0x40, sp98, 0, sp98 * 1.5f, -sp98));
     gDPSetTextureLUT(POLY_XLU_DISP++, G_TT_NONE);
 
     gSPDisplayList(POLY_XLU_DISP++, gFieldSandstormDL);

@@ -65,6 +65,10 @@ class ExternalModManager {
     void HandlePendingSceneLoadFailure(const ExternalModPendingSceneLoadRequest& request, const std::string& error);
     void LoadPersistentInventoryState();
     void SavePersistentInventoryState() const;
+    bool TryResolveMaterialAlbedoOverridePath(const std::string& texturePath, int16_t sceneId, int16_t roomId,
+                                              std::string& outOverridePath) const;
+    uint32_t GetMaterialFallbackGenerationFlags(const std::string& texturePath, int16_t sceneId, int16_t roomId) const;
+    float GetMaterialFallbackNormalScale(const std::string& texturePath, int16_t sceneId, int16_t roomId) const;
 
   private:
     struct ExtraInventoryCell {

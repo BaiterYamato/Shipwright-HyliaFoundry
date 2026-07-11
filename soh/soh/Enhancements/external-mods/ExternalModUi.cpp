@@ -11,6 +11,7 @@
 #include <ship/Context.h>
 
 #include "ExternalModManager.h"
+#include "soh/cvar_prefixes.h"
 #include "soh/Notification/Notification.h"
 #include "soh/OTRGlobals.h"
 #include "soh/SohGui/UIWidgets.hpp"
@@ -251,7 +252,7 @@ std::string JoinEnabledPackList(const std::vector<std::string>& values) {
 void PersistEnabledPackOrder(const std::vector<std::string>& enabledOrder) {
     const std::string value = JoinEnabledPackList(enabledOrder);
     CVarSetString(CVAR_SETTING("EnabledMods"), value.c_str());
-    if (auto context = Ship::Context::GetInstance(); context != nullptr && context->GetWindow() != nullptr &&
+    if (auto context = Ship::Context::GetRawInstance(); context != nullptr && context->GetWindow() != nullptr &&
                                                      context->GetWindow()->GetGui() != nullptr) {
         context->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
     }
@@ -451,7 +452,7 @@ void DrawExternalModPackageRow(ExternalModPackage& package, const ExternalModUiP
     if (ImGui::Checkbox((std::string("Enable##") + package.manifest.id).c_str(), &modEnabled)) {
         CVarSetInteger(enabledCVar.c_str(), modEnabled ? 1 : 0);
         package.runtime.enabled = manifestValid && modEnabled;
-        if (auto context = Ship::Context::GetInstance(); context != nullptr && context->GetWindow() != nullptr &&
+        if (auto context = Ship::Context::GetRawInstance(); context != nullptr && context->GetWindow() != nullptr &&
                                                          context->GetWindow()->GetGui() != nullptr) {
             context->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
         }
@@ -574,7 +575,7 @@ void DrawExternalModControlsSection() {
     ImGui::TextDisabled("Toggle and bindings are saved. Use Reload External Mods after editing ZIP/pasta manifests or scripts.");
 
     if (ImGui::Button("Open Extra Inventory (I)")) {
-        if (auto context = Ship::Context::GetInstance(); context != nullptr && context->GetWindow() != nullptr &&
+        if (auto context = Ship::Context::GetRawInstance(); context != nullptr && context->GetWindow() != nullptr &&
                                                      context->GetWindow()->GetGui() != nullptr) {
             if (auto window = context->GetWindow()->GetGui()->GetGuiWindow("External Mod Inventory"); window != nullptr) {
                 window->ToggleVisibility();

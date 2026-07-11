@@ -153,7 +153,7 @@ void EnFloormas_Init(Actor* thisx, PlayState* play2) {
         // spawn first small floormaster
         this->actor.parent =
             Actor_Spawn(&play->actorCtx, play, ACTOR_EN_FLOORMAS, this->actor.world.pos.x, this->actor.world.pos.y,
-                        this->actor.world.pos.z, 0, 0, 0, invisble + SPAWN_SMALL, true);
+                        this->actor.world.pos.z, 0, 0, 0, invisble + SPAWN_SMALL);
         if (this->actor.parent == NULL) {
             Actor_Kill(&this->actor);
             return;
@@ -161,7 +161,7 @@ void EnFloormas_Init(Actor* thisx, PlayState* play2) {
         // spawn 2nd small floormaster
         this->actor.child =
             Actor_Spawn(&play->actorCtx, play, ACTOR_EN_FLOORMAS, this->actor.world.pos.x, this->actor.world.pos.y,
-                        this->actor.world.pos.z, 0, 0, 0, invisble + SPAWN_SMALL, true);
+                        this->actor.world.pos.z, 0, 0, 0, invisble + SPAWN_SMALL);
         if (this->actor.child == NULL) {
             Actor_Kill(this->actor.parent);
             Actor_Kill(&this->actor);
@@ -588,7 +588,7 @@ void EnFloormas_Slide(EnFloormas* this, PlayState* play) {
 
     func_800286CC(play, &pos, &velocity, &accel, 450, 100);
 
-    func_8002F974(&this->actor, NA_SE_EN_FLOORMASTER_SLIDING);
+    Actor_PlaySfx_Flagged(&this->actor, NA_SE_EN_FLOORMASTER_SLIDING);
 }
 
 void EnFloormas_Charge(EnFloormas* this, PlayState* play) {
@@ -935,7 +935,7 @@ void EnFloormas_Merge(EnFloormas* this, PlayState* play) {
             }
         }
     }
-    func_8002F974(&this->actor, NA_SE_EN_FLOORMASTER_RESTORE - SFX_FLAG);
+    Actor_PlaySfx_Flagged(&this->actor, NA_SE_EN_FLOORMASTER_RESTORE - SFX_FLAG);
 }
 
 void EnFloormas_SmWait(EnFloormas* this, PlayState* play) {

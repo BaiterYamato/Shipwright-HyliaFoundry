@@ -165,7 +165,7 @@ class ExternalModsInMemoryArchive final : public Ship::Archive {
     }
 
     std::shared_ptr<Ship::File> LoadFile(uint64_t hash) override {
-        auto* path = Ship::Context::GetInstance()->GetResourceManager()->GetArchiveManager()->HashToString(hash);
+        auto* path = Ship::Context::GetRawInstance()->GetResourceManager()->GetArchiveManager()->HashToString(hash);
         if (path == nullptr) {
             return nullptr;
         }

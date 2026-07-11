@@ -223,7 +223,7 @@ int16_t ResolveSceneIdForEntranceIndex(int16_t entranceIndex) {
         return index >= 0 && index < static_cast<int32_t>(ARRAY_COUNT(gEntranceTable));
     };
 
-    const int32_t setupAdjustedIndex = static_cast<int32_t>(entranceIndex) + static_cast<int32_t>(gSaveContext.sceneSetupIndex);
+    const int32_t setupAdjustedIndex = static_cast<int32_t>(entranceIndex) + static_cast<int32_t>(gSaveContext.sceneLayer);
     if (isValidEntranceIndex(setupAdjustedIndex)) {
         return gEntranceTable[setupAdjustedIndex].scene;
     }
@@ -350,11 +350,11 @@ const ExternalModAimCameraProfile& GetCoreDefaultAimCameraProfile() {
         ExternalModAimCameraProfile p;
         p.id = kCoreDefaultAimCameraProfileId;
         p.contextsMask = 0x1F;
-        p.cUpFirstPersonMode = CAM_MODE_FIRSTPERSON;
-        p.bowFirstPersonMode = CAM_MODE_BOWARROW;
+        p.cUpFirstPersonMode = CAM_MODE_FIRST_PERSON;
+        p.bowFirstPersonMode = CAM_MODE_AIM_ADULT;
         p.hookshotFirstPersonMode = CAM_MODE_HOOKSHOT;
-        p.slingshotFirstPersonMode = CAM_MODE_SLINGSHOT;
-        p.boomerangFirstPersonMode = CAM_MODE_BOWARROW;
+        p.slingshotFirstPersonMode = CAM_MODE_AIM_CHILD;
+        p.boomerangFirstPersonMode = CAM_MODE_AIM_BOOMERANG;
         p.cUpOverShoulderMode = CAM_MODE_BOWARROWZ;
         p.bowOverShoulderMode = CAM_MODE_BOWARROWZ;
         p.hookshotOverShoulderMode = CAM_MODE_BOWARROWZ;
@@ -420,6 +420,73 @@ const TDefinition* FindDefinitionAcrossPackages(const std::vector<ExternalModPac
         *outOwnerPackage = bestPackage;
     }
     return bestDefinition;
+}
+
+bool MatchesMaterialBind(const ExternalModMaterialDefinition::Bind& bind, const std::string& texturePath,
+                         int16_t sceneId, int16_t roomId) {
+    return bind.otrPath == texturePath && (!bind.hasSceneId || bind.sceneId == sceneId) &&
+           (!bind.hasRoomId || bind.roomId == roomId);
+}
+
+bool MaterialMatchesTexturePath(const ExternalModMaterialDefinition& material, const std::string& texturePath,
+                                int16_t sceneId, int16_t roomId) {
+    if (!material.bindOtrPath.empty() && material.bindOtrPath == texturePath) {
+        return true;
+    }
+    return std::any_of(material.binds.begin(), material.binds.end(), [&](const auto& bind) {
+        return MatchesMaterialBind(bind, texturePath, sceneId, roomId);
+    });
+}
+
+const ExternalModMaterialDefinition* ResolveEffectiveMaterialForTexturePath(
+    const std::vector<ExternalModPackage>& packages, const std::string& texturePath, int16_t sceneId, int16_t roomId) {
+    if (texturePath.empty()) {
+        return nullptr;
+    }
+
+    const ExternalModMaterialDefinition* selectedMaterial = nullptr;
+    const ExternalModPackage* selectedPackage = nullptr;
+    auto consider = [&](const ExternalModPackage& package, const ExternalModMaterialDefinition* material) {
+        if (material != nullptr && IsHigherPriorityProvider(&package, selectedPackage)) {
+            selectedPackage = &package;
+            selectedMaterial = material;
+        }
+    };
+
+    for (const auto& package : packages) {
+        if (!package.valid || !package.runtime.enabled) {
+            continue;
+        }
+        for (const auto& overrideState : package.runtime.materialOverrides) {
+            const auto* material = FindDefinitionAcrossPackages<ExternalModMaterialDefinition>(
+                packages, overrideState.materialId,
+                [](const ExternalModRuntime& runtime) -> const std::vector<ExternalModMaterialDefinition>& {
+                    return runtime.materialDefinitions;
+                });
+            const bool matches = material != nullptr &&
+                                 (!overrideState.match.empty()
+                                      ? overrideState.match == texturePath
+                                      : MaterialMatchesTexturePath(*material, texturePath, sceneId, roomId));
+            if (matches) {
+                consider(package, material);
+            }
+        }
+    }
+    if (selectedMaterial != nullptr) {
+        return selectedMaterial;
+    }
+
+    for (const auto& package : packages) {
+        if (!package.valid || !package.runtime.enabled) {
+            continue;
+        }
+        for (const auto& material : package.runtime.materialDefinitions) {
+            if (MaterialMatchesTexturePath(material, texturePath, sceneId, roomId)) {
+                consider(package, &material);
+            }
+        }
+    }
+    return selectedMaterial;
 }
 
 std::string GetProfileOwnerModId(const std::string& profileId, const std::string& fallbackModId) {
@@ -580,11 +647,11 @@ bool ParseAimCameraModeToken(const std::string& value, ExternalModAimCameraMode&
 bool ParseCameraModeTypeToken(const std::string& value, int16_t& outMode) {
     const auto normalized = ToLower(value);
     if (normalized == "firstperson" || normalized == "first_person") {
-        outMode = CAM_MODE_FIRSTPERSON;
+        outMode = CAM_MODE_FIRST_PERSON;
         return true;
     }
     if (normalized == "bowarrow" || normalized == "bow_arrow") {
-        outMode = CAM_MODE_BOWARROW;
+        outMode = CAM_MODE_AIM_ADULT;
         return true;
     }
     if (normalized == "bowarrowz" || normalized == "bow_arrow_z" || normalized == "bowarrow_z") {
@@ -596,11 +663,11 @@ bool ParseCameraModeTypeToken(const std::string& value, int16_t& outMode) {
         return true;
     }
     if (normalized == "slingshot") {
-        outMode = CAM_MODE_SLINGSHOT;
+        outMode = CAM_MODE_AIM_CHILD;
         return true;
     }
     if (normalized == "boomerang") {
-        outMode = CAM_MODE_BOWARROW;
+        outMode = CAM_MODE_AIM_BOOMERANG;
         return true;
     }
     return false;
@@ -637,7 +704,7 @@ int16_t GetCameraModeForContext(const ExternalModAimCameraProfile& profile, Exte
         case ExternalModAimCameraContext::Boomerang:
             return profile.boomerangFirstPersonMode;
         default:
-            return CAM_MODE_FIRSTPERSON;
+            return CAM_MODE_FIRST_PERSON;
     }
 }
 
@@ -1861,7 +1928,7 @@ class ExternalModsInMemoryArchive final : public Ship::Archive {
     }
 
     std::shared_ptr<Ship::File> LoadFile(uint64_t hash) override {
-        auto* path = Ship::Context::GetInstance()->GetResourceManager()->GetArchiveManager()->HashToString(hash);
+        auto* path = Ship::Context::GetRawInstance()->GetResourceManager()->GetArchiveManager()->HashToString(hash);
         if (path == nullptr) {
             return nullptr;
         }
@@ -7222,7 +7289,7 @@ bool DrawCustomItemDefinitionModel(PlayState* play, const ExternalModItemDefinit
                                resolvedFilter == ExternalModModelTextureFilter::Point ? G_TF_POINT : G_TF_BILERP);
             const std::string debugKey = definition.sourceModId + "|" + definition.id + "|" + definition.modelDisplayList;
             if (gExternalModDisplayListDrawDebugLogs.insert(debugKey).second) {
-                auto displayListResource = Ship::Context::GetInstance()->GetResourceManager()->LoadResource(
+                auto displayListResource = Ship::Context::GetRawInstance()->GetResourceManager()->LoadResource(
                     definition.modelDisplayList.c_str());
                 if (displayListResource != nullptr && displayListResource->GetInitData() != nullptr &&
                     displayListResource->GetInitData()->Type == static_cast<uint32_t>(Fast::ResourceType::DisplayList)) {
@@ -7379,7 +7446,7 @@ bool PatchHookshotTextureInDisplayList(const HookshotDisplayListTarget& target, 
     }
 
     auto resource = std::static_pointer_cast<Fast::DisplayList>(
-        Ship::Context::GetInstance()->GetResourceManager()->LoadResource(target.displayListPath));
+        Ship::Context::GetRawInstance()->GetResourceManager()->LoadResource(target.displayListPath));
     if (resource == nullptr) {
         return false;
     }
@@ -8081,7 +8148,7 @@ void SpawnStatusVisualPreset(ExternalModRuntime& runtime, PlayState* play, Actor
                 Vec3f spawnPos = anchorActor->world.pos;
                 spawnPos.y += 10.0f;
                 Actor* spawnedFx = Actor_Spawn(&play->actorCtx, play, actorId, spawnPos.x, spawnPos.y, spawnPos.z, 0,
-                                               anchorActor->shape.rot.y, 0, 0, true);
+                                               anchorActor->shape.rot.y, 0, 0);
                 const std::string fxKey = fxAction.fxStoreKey.empty()
                                               ? "__status_fx_actor_" + std::to_string(runtime.nextFxHandle)
                                               : fxAction.fxStoreKey;
@@ -10535,6 +10602,39 @@ const std::vector<ExternalModPackage>& ExternalModManager::GetPackages() const {
     return mPackages;
 }
 
+bool ExternalModManager::TryResolveMaterialAlbedoOverridePath(const std::string& texturePath, int16_t sceneId,
+                                                              int16_t roomId, std::string& outOverridePath) const {
+    outOverridePath.clear();
+    const auto* material = ResolveEffectiveMaterialForTexturePath(mPackages, texturePath, sceneId, roomId);
+    if (material == nullptr || material->mapAlbedoAsset.empty()) {
+        return false;
+    }
+    outOverridePath = material->mapAlbedoAsset;
+    return true;
+}
+
+uint32_t ExternalModManager::GetMaterialFallbackGenerationFlags(const std::string& texturePath, int16_t sceneId,
+                                                                int16_t roomId) const {
+    const auto* material = ResolveEffectiveMaterialForTexturePath(mPackages, texturePath, sceneId, roomId);
+    if (material == nullptr) {
+        return 0;
+    }
+    uint32_t flags = 0;
+    if (material->mapNormalAsset.empty()) {
+        flags |= 1u << 0;
+    }
+    if (material->mapOrmAsset.empty()) {
+        flags |= 1u << 1;
+    }
+    return flags;
+}
+
+float ExternalModManager::GetMaterialFallbackNormalScale(const std::string& texturePath, int16_t sceneId,
+                                                         int16_t roomId) const {
+    const auto* material = ResolveEffectiveMaterialForTexturePath(mPackages, texturePath, sceneId, roomId);
+    return material == nullptr ? 1.0f : std::clamp(material->normalScale, 0.0f, 8.0f);
+}
+
 bool ExternalModManager::TryConsumePendingSceneLoadRequest(int16_t sceneId, ExternalModPendingSceneLoadRequest& outRequest) {
     if (!mPendingSceneLoadRequest.pending) {
         return false;
@@ -10615,7 +10715,7 @@ void ExternalModManager::ApplyDefaultKeyboardMappingsForPackage(const ExternalMo
         return;
     }
 
-    auto context = Ship::Context::GetInstance();
+    auto context = Ship::Context::GetRawInstance();
     if (context == nullptr || context->GetControlDeck() == nullptr) {
         return;
     }
@@ -10984,7 +11084,7 @@ bool ExternalModManager::IsAimMouseFireHeld(::PlayState* play, ::Player* player,
         return false;
     }
 
-    auto ctx = Ship::Context::GetInstance();
+    auto ctx = Ship::Context::GetRawInstance();
     if (ctx == nullptr || ctx->GetWindow() == nullptr) {
         if (allowFrameLog) {
             SPDLOG_DEBUG("[ExternalMods] Aim mouse-fire rejected: missing window context");
@@ -12689,7 +12789,7 @@ void ExternalModManager::Initialize() {
     ApplyModHookshotTextureOverrides(mPackages);
 
     {
-        auto context = Ship::Context::GetInstance();
+        auto context = Ship::Context::GetRawInstance();
         if (context != nullptr && context->GetResourceManager() != nullptr &&
             context->GetResourceManager()->GetArchiveManager() != nullptr) {
             auto archiveManager = context->GetResourceManager()->GetArchiveManager();
@@ -21117,7 +21217,7 @@ bool ExternalModManager::IsSafePackageRelativePath(const std::string& pathValue,
 
 void ExternalModManager::UnmountAssetsForPackage(ExternalModPackage& package) {
     if (!package.mountedAssets.empty()) {
-        auto context = Ship::Context::GetInstance();
+        auto context = Ship::Context::GetRawInstance();
         if (context != nullptr && context->GetResourceManager() != nullptr &&
             context->GetResourceManager()->GetArchiveManager() != nullptr) {
             auto archiveManager = context->GetResourceManager()->GetArchiveManager();
@@ -21263,7 +21363,7 @@ bool ExternalModManager::MountAssetsForPackage(ExternalModPackage& package, std:
         addPreparedGeneratedAsset(generatedArchive);
     }
 
-    auto context = Ship::Context::GetInstance();
+    auto context = Ship::Context::GetRawInstance();
     if (context == nullptr || context->GetResourceManager() == nullptr ||
         context->GetResourceManager()->GetArchiveManager() == nullptr) {
         outError = "Archive manager unavailable";
@@ -21436,7 +21536,7 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
                     if (kusaPlayer != nullptr) {
                         const Vec3f kusaPos = kusaPlayer->actor.world.pos;
                         Actor_Spawn(&gPlayState->actorCtx, gPlayState, ACTOR_EN_KUSA, kusaPos.x, kusaPos.y, kusaPos.z, 0,
-                                    kusaPlayer->actor.shape.rot.y, 0, 0, true);
+                                    kusaPlayer->actor.shape.rot.y, 0, 0);
                     }
                 }
                 break;
@@ -22081,7 +22181,7 @@ void ExternalModManager::ExecuteActions(ExternalModPackage& package, const std::
                 Vec3f spawnPos = fxAnchorActor->world.pos;
                 spawnPos.y += 10.0f;
                 Actor* spawnedFx = Actor_Spawn(&gPlayState->actorCtx, gPlayState, actorId, spawnPos.x, spawnPos.y,
-                                               spawnPos.z, 0, fxAnchorActor->shape.rot.y, 0, 0, true);
+                                               spawnPos.z, 0, fxAnchorActor->shape.rot.y, 0, 0);
                 const std::string fxKey = action.fxStoreKey.empty()
                                               ? "__fx_actor_" + std::to_string(package.runtime.nextFxHandle)
                                               : action.fxStoreKey;
@@ -24685,5 +24785,33 @@ int32_t ExternalMods_HasCustomEquippedSlingshotModel(void) {
 
 int32_t ExternalMods_DrawCustomEquippedSlingshotModel(PlayState* play) {
     return SOH::ExternalModManager::Instance().DrawCustomEquippedSlingshotModel(play) ? 1 : 0;
+}
+
+const char* gfx_external_mods_resolve_material_albedo_override(const char* texturePath) {
+    static thread_local std::string resolvedPath;
+    resolvedPath.clear();
+    if (texturePath == nullptr || texturePath[0] == '\0' || gPlayState == nullptr ||
+        !SOH::ExternalModManager::Instance().TryResolveMaterialAlbedoOverridePath(
+            texturePath, static_cast<int16_t>(gPlayState->sceneNum),
+            static_cast<int16_t>(gPlayState->roomCtx.curRoom.num), resolvedPath)) {
+        return nullptr;
+    }
+    return resolvedPath.c_str();
+}
+
+uint32_t gfx_external_mods_get_material_fallback_generation_flags(const char* texturePath) {
+    if (texturePath == nullptr || texturePath[0] == '\0' || gPlayState == nullptr) {
+        return 0;
+    }
+    return SOH::ExternalModManager::Instance().GetMaterialFallbackGenerationFlags(
+        texturePath, static_cast<int16_t>(gPlayState->sceneNum), static_cast<int16_t>(gPlayState->roomCtx.curRoom.num));
+}
+
+float gfx_external_mods_get_material_fallback_normal_scale(const char* texturePath) {
+    if (texturePath == nullptr || texturePath[0] == '\0' || gPlayState == nullptr) {
+        return 1.0f;
+    }
+    return SOH::ExternalModManager::Instance().GetMaterialFallbackNormalScale(
+        texturePath, static_cast<int16_t>(gPlayState->sceneNum), static_cast<int16_t>(gPlayState->roomCtx.curRoom.num));
 }
 }

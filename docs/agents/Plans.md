@@ -922,3 +922,11 @@ This file is the fixed, append-only plan ledger for this repository.
   - docs/agents/project_state.md
   - docs/EXTERNAL_MOD_DATA_DRIVEN_REFERENCE.md
   - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
+
+## [PLN-20260711-0001][UPDATE] 2026-07-11T08:23:28Z
+- status: done
+- note: Graphify 0.9.12 atualizado; upstream db41e1b5f mesclado; conflitos resolvidos; libultraship SSAO portado em c6bf48b7; build Release e validators API v4 aprovados.
+- refs:
+  - x64/Release/soh.exe
+  - libultraship
+  - docs/EXTERNAL_MOD_DATA_DRIVEN_REFERENCE.md

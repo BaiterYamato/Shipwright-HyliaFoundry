@@ -1,5 +1,7 @@
 #include "SohInputEditorWindow.h"
+#include <ship/controller/controldeck/ControlDeck.h>
 #include <ship/utils/StringHelper.h>
+#include <libultraship/libultra.h>
 #include <fast/Fast3dWindow.h>
 #include "soh/OTRGlobals.h"
 #include "soh/SohGui/SohMenu.h"
@@ -17,6 +19,7 @@ using namespace UIWidgets;
 static WidgetInfo freeLook;
 static WidgetInfo mouseControl;
 static WidgetInfo mouseAutoCapture;
+static WidgetInfo mouseDisableThirdPerson;
 static WidgetInfo rightStickOcarina;
 static WidgetInfo dpadOcarina;
 static WidgetInfo dpadPause;
@@ -89,10 +92,10 @@ void SohInputEditorWindow::UpdateElement() {
     }
 
     if (mInputEditorPopupOpen && ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
-        Ship::Context::GetInstance()->GetControlDeck()->BlockGameInput(INPUT_EDITOR_WINDOW_GAME_INPUT_BLOCK_ID);
+        Ship::Context::GetRawInstance()->GetControlDeck()->BlockGameInput(INPUT_EDITOR_WINDOW_GAME_INPUT_BLOCK_ID);
 
         // continue to block input for a third of a second after getting the mapping
-        mGameInputBlockTimer = ImGui::GetIO().Framerate / 3;
+        mGameInputBlockTimer = static_cast<s32>(ImGui::GetIO().Framerate / 3);
 
         if (mMappingInputBlockTimer != INT32_MAX) {
             mMappingInputBlockTimer--;
@@ -101,24 +104,24 @@ void SohInputEditorWindow::UpdateElement() {
             }
         }
 
-        Ship::Context::GetInstance()->GetWindow()->GetGui()->BlockGamepadNavigation();
+        Ship::Context::GetRawInstance()->GetWindow()->GetGui()->BlockGamepadNavigation();
     } else {
         if (mGameInputBlockTimer != INT32_MAX) {
             mGameInputBlockTimer--;
             if (mGameInputBlockTimer <= 0) {
-                Ship::Context::GetInstance()->GetControlDeck()->UnblockGameInput(
+                Ship::Context::GetRawInstance()->GetControlDeck()->UnblockGameInput(
                     INPUT_EDITOR_WINDOW_GAME_INPUT_BLOCK_ID);
                 mGameInputBlockTimer = INT32_MAX;
             }
         }
 
-        if (Ship::Context::GetInstance()->GetWindow()->GetGui()->GamepadNavigationEnabled()) {
-            mMappingInputBlockTimer = ImGui::GetIO().Framerate / 3;
+        if (Ship::Context::GetRawInstance()->GetWindow()->GetGui()->GamepadNavigationEnabled()) {
+            mMappingInputBlockTimer = static_cast<s32>(ImGui::GetIO().Framerate / 3);
         } else {
             mMappingInputBlockTimer = INT32_MAX;
         }
 
-        Ship::Context::GetInstance()->GetWindow()->GetGui()->UnblockGamepadNavigation();
+        Ship::Context::GetRawInstance()->GetWindow()->GetGui()->UnblockGamepadNavigation();
     }
 }
 
@@ -257,7 +260,7 @@ void SohInputEditorWindow::DrawButtonLineAddMappingButton(uint8_t port, N64Butto
             ImGui::CloseCurrentPopup();
         }
         // todo: figure out why optional params (using id = "" in the definition) wasn't working
-        if (mMappingInputBlockTimer == INT32_MAX && Ship::Context::GetInstance()
+        if (mMappingInputBlockTimer == INT32_MAX && Ship::Context::GetRawInstance()
                                                         ->GetControlDeck()
                                                         ->GetControllerByPort(port)
                                                         ->GetButton(bitmask)
@@ -270,7 +273,7 @@ void SohInputEditorWindow::DrawButtonLineAddMappingButton(uint8_t port, N64Butto
 }
 
 void SohInputEditorWindow::DrawButtonLineEditMappingButton(uint8_t port, N64ButtonMask bitmask, std::string id) {
-    auto mapping = Ship::Context::GetInstance()
+    auto mapping = Ship::Context::GetRawInstance()
                        ->GetControlDeck()
                        ->GetControllerByPort(port)
                        ->GetButton(bitmask)
@@ -320,7 +323,7 @@ void SohInputEditorWindow::DrawButtonLineEditMappingButton(uint8_t port, N64Butt
             mInputEditorPopupOpen = false;
             ImGui::CloseCurrentPopup();
         }
-        if (mMappingInputBlockTimer == INT32_MAX && Ship::Context::GetInstance()
+        if (mMappingInputBlockTimer == INT32_MAX && Ship::Context::GetRawInstance()
                                                         ->GetControlDeck()
                                                         ->GetControllerByPort(port)
                                                         ->GetButton(bitmask)
@@ -358,9 +361,9 @@ void SohInputEditorWindow::DrawButtonLineEditMappingButton(uint8_t port, N64Butt
         if (ImGui::BeginPopup(popupId.c_str())) {
             mInputEditorPopupOpen = true;
             ImGui::Text("Axis Threshold\n\nThe extent to which the joystick\nmust be moved or the trigger\npressed to "
-                        "initiate the assigned\nbutton action.\n\n");
+                        "initiate the assigned\nbutton action.");
 
-            auto globalSettings = Ship::Context::GetInstance()->GetControlDeck()->GetGlobalSDLDeviceSettings();
+            auto globalSettings = Ship::Context::GetRawInstance()->GetControlDeck()->GetGlobalSDLDeviceSettings();
 
             if (sdlAxisDirectionToButtonMapping->AxisIsStick()) {
                 ImGui::Text("Stick axis threshold:");
@@ -455,7 +458,7 @@ void SohInputEditorWindow::DrawButtonLineEditMappingButton(uint8_t port, N64Butt
     ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(1.0f, 0.5f));
     if (ImGui::Button(StringHelper::Sprintf("%s###removeButtonMappingButton%s", ICON_FA_TIMES, id.c_str()).c_str(),
                       ImVec2(ImGui::CalcTextSize(ICON_FA_TIMES).x + SCALE_IMGUI_SIZE(10.0f), 0.0f))) {
-        Ship::Context::GetInstance()
+        Ship::Context::GetRawInstance()
             ->GetControlDeck()
             ->GetControllerByPort(port)
             ->GetButton(bitmask)
@@ -501,7 +504,7 @@ void SohInputEditorWindow::DrawStickDirectionLineAddMappingButton(uint8_t port, 
         }
         if (stick == Ship::LEFT) {
             if (mMappingInputBlockTimer == INT32_MAX &&
-                Ship::Context::GetInstance()
+                Ship::Context::GetRawInstance()
                     ->GetControlDeck()
                     ->GetControllerByPort(port)
                     ->GetLeftStick()
@@ -511,7 +514,7 @@ void SohInputEditorWindow::DrawStickDirectionLineAddMappingButton(uint8_t port, 
             }
         } else {
             if (mMappingInputBlockTimer == INT32_MAX &&
-                Ship::Context::GetInstance()
+                Ship::Context::GetRawInstance()
                     ->GetControlDeck()
                     ->GetControllerByPort(port)
                     ->GetRightStick()
@@ -527,13 +530,13 @@ void SohInputEditorWindow::DrawStickDirectionLineEditMappingButton(uint8_t port,
                                                                    Ship::Direction direction, std::string id) {
     std::shared_ptr<Ship::ControllerAxisDirectionMapping> mapping = nullptr;
     if (stick == Ship::LEFT) {
-        mapping = Ship::Context::GetInstance()
+        mapping = Ship::Context::GetRawInstance()
                       ->GetControlDeck()
                       ->GetControllerByPort(port)
                       ->GetLeftStick()
                       ->GetAxisDirectionMappingById(direction, id);
     } else {
-        mapping = Ship::Context::GetInstance()
+        mapping = Ship::Context::GetRawInstance()
                       ->GetControlDeck()
                       ->GetControllerByPort(port)
                       ->GetRightStick()
@@ -588,7 +591,7 @@ void SohInputEditorWindow::DrawStickDirectionLineEditMappingButton(uint8_t port,
 
         if (stick == Ship::LEFT) {
             if (mMappingInputBlockTimer == INT32_MAX &&
-                Ship::Context::GetInstance()
+                Ship::Context::GetRawInstance()
                     ->GetControlDeck()
                     ->GetControllerByPort(port)
                     ->GetLeftStick()
@@ -598,7 +601,7 @@ void SohInputEditorWindow::DrawStickDirectionLineEditMappingButton(uint8_t port,
             }
         } else {
             if (mMappingInputBlockTimer == INT32_MAX &&
-                Ship::Context::GetInstance()
+                Ship::Context::GetRawInstance()
                     ->GetControlDeck()
                     ->GetControllerByPort(port)
                     ->GetRightStick()
@@ -618,13 +621,13 @@ void SohInputEditorWindow::DrawStickDirectionLineEditMappingButton(uint8_t port,
             StringHelper::Sprintf("%s###removeStickDirectionMappingButton%s", ICON_FA_TIMES, id.c_str()).c_str(),
             ImVec2(ImGui::CalcTextSize(ICON_FA_TIMES).x + SCALE_IMGUI_SIZE(10.0f), 0.0f))) {
         if (stick == Ship::LEFT) {
-            Ship::Context::GetInstance()
+            Ship::Context::GetRawInstance()
                 ->GetControlDeck()
                 ->GetControllerByPort(port)
                 ->GetLeftStick()
                 ->ClearAxisDirectionMapping(direction, id);
         } else {
-            Ship::Context::GetInstance()
+            Ship::Context::GetRawInstance()
                 ->GetControlDeck()
                 ->GetControllerByPort(port)
                 ->GetRightStick()
@@ -658,9 +661,9 @@ void SohInputEditorWindow::DrawStickSection(uint8_t port, uint8_t stick, int32_t
     static int8_t sX, sY;
     std::shared_ptr<Ship::ControllerStick> controllerStick = nullptr;
     if (stick == Ship::LEFT) {
-        controllerStick = Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(port)->GetLeftStick();
+        controllerStick = Ship::Context::GetRawInstance()->GetControlDeck()->GetControllerByPort(port)->GetLeftStick();
     } else {
-        controllerStick = Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(port)->GetRightStick();
+        controllerStick = Ship::Context::GetRawInstance()->GetControlDeck()->GetControllerByPort(port)->GetRightStick();
     }
     controllerStick->Process(sX, sY);
     DrawAnalogPreview(StringHelper::Sprintf("##AnalogPreview%d", id).c_str(), ImVec2(sX, sY));
@@ -802,7 +805,7 @@ void SohInputEditorWindow::UpdateBitmaskToMappingIds(uint8_t port) {
     // todo: do we need this now that ControllerButton exists?
 
     for (auto [bitmask, button] :
-         Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(port)->GetAllButtons()) {
+         Ship::Context::GetRawInstance()->GetControlDeck()->GetControllerByPort(port)->GetAllButtons()) {
         for (auto [id, mapping] : button->GetAllButtonMappings()) {
             // using a vector here instead of a set because i want newly added mappings
             // to go to the end of the list instead of autosorting
@@ -818,10 +821,11 @@ void SohInputEditorWindow::UpdateStickDirectionToMappingIds(uint8_t port) {
     // todo: do we need this?
     for (auto stick :
          { std::make_pair<uint8_t, std::shared_ptr<Ship::ControllerStick>>(
-               Ship::LEFT, Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(port)->GetLeftStick()),
+               Ship::LEFT,
+               Ship::Context::GetRawInstance()->GetControlDeck()->GetControllerByPort(port)->GetLeftStick()),
            std::make_pair<uint8_t, std::shared_ptr<Ship::ControllerStick>>(
                Ship::RIGHT,
-               Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(port)->GetRightStick()) }) {
+               Ship::Context::GetRawInstance()->GetControlDeck()->GetControllerByPort(port)->GetRightStick()) }) {
         for (auto direction : { Ship::LEFT, Ship::RIGHT, Ship::UP, Ship::DOWN }) {
             for (auto [id, mapping] : stick.second->GetAllAxisDirectionMappingByDirection(direction)) {
                 // using a vector here instead of a set because i want newly added mappings
@@ -841,7 +845,8 @@ void SohInputEditorWindow::DrawRemoveRumbleMappingButton(uint8_t port, std::stri
     ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(1.0f, 0.5f));
     if (ImGui::Button(StringHelper::Sprintf("%s###removeRumbleMapping%s", ICON_FA_TIMES, id.c_str()).c_str(),
                       ImVec2(SCALE_IMGUI_SIZE(20.0f), SCALE_IMGUI_SIZE(20.0f)))) {
-        Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(port)->GetRumble()->ClearRumbleMapping(id);
+        Ship::Context::GetRawInstance()->GetControlDeck()->GetControllerByPort(port)->GetRumble()->ClearRumbleMapping(
+            id);
     }
     ImGui::PopStyleVar();
 }
@@ -864,7 +869,7 @@ void SohInputEditorWindow::DrawAddRumbleMappingButton(uint8_t port) {
             ImGui::CloseCurrentPopup();
         }
 
-        if (mMappingInputBlockTimer == INT32_MAX && Ship::Context::GetInstance()
+        if (mMappingInputBlockTimer == INT32_MAX && Ship::Context::GetRawInstance()
                                                         ->GetControlDeck()
                                                         ->GetControllerByPort(port)
                                                         ->GetRumble()
@@ -881,7 +886,7 @@ bool SohInputEditorWindow::TestingRumble() {
 }
 
 void SohInputEditorWindow::DrawRumbleSection(uint8_t port) {
-    for (auto [id, mapping] : Ship::Context::GetInstance()
+    for (auto [id, mapping] : Ship::Context::GetRawInstance()
                                   ->GetControlDeck()
                                   ->GetControllerByPort(port)
                                   ->GetRumble()
@@ -918,7 +923,7 @@ void SohInputEditorWindow::DrawRumbleSection(uint8_t port) {
                 mRumbleMappingToTest->StopRumble();
                 mRumbleMappingToTest = nullptr;
             } else {
-                mRumbleTimer = ImGui::GetIO().Framerate;
+                mRumbleTimer = static_cast<s32>(ImGui::GetIO().Framerate);
                 mRumbleMappingToTest = mapping;
             }
         }
@@ -1024,7 +1029,7 @@ void SohInputEditorWindow::DrawRemoveLEDMappingButton(uint8_t port, std::string 
     ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(1.0f, 0.5f));
     if (ImGui::Button(StringHelper::Sprintf("%s###removeLEDMapping%s", ICON_FA_TIMES, id.c_str()).c_str(),
                       ImVec2(SCALE_IMGUI_SIZE(20.0f), SCALE_IMGUI_SIZE(20.0f)))) {
-        Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(port)->GetLED()->ClearLEDMapping(id);
+        Ship::Context::GetRawInstance()->GetControlDeck()->GetControllerByPort(port)->GetLED()->ClearLEDMapping(id);
     }
     ImGui::PopStyleVar();
 }
@@ -1047,7 +1052,7 @@ void SohInputEditorWindow::DrawAddLEDMappingButton(uint8_t port) {
             ImGui::CloseCurrentPopup();
         }
 
-        if (mMappingInputBlockTimer == INT32_MAX && Ship::Context::GetInstance()
+        if (mMappingInputBlockTimer == INT32_MAX && Ship::Context::GetRawInstance()
                                                         ->GetControlDeck()
                                                         ->GetControllerByPort(port)
                                                         ->GetLED()
@@ -1061,7 +1066,7 @@ void SohInputEditorWindow::DrawAddLEDMappingButton(uint8_t port) {
 
 void SohInputEditorWindow::DrawLEDSection(uint8_t port) {
     for (auto [id, mapping] :
-         Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(port)->GetLED()->GetAllLEDMappings()) {
+         Ship::Context::GetRawInstance()->GetControlDeck()->GetControllerByPort(port)->GetLED()->GetAllLEDMappings()) {
         ImGui::AlignTextToFramePadding();
         ImGui::SetNextItemOpen(true, ImGuiCond_Once);
         auto open = ImGui::TreeNode(
@@ -1112,12 +1117,12 @@ void SohInputEditorWindow::DrawLEDSection(uint8_t port) {
                     if (ImGui::ColorEdit3("", (float*)&colorVec,
                                           ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
                         Color_RGB8 color;
-                        color.r = colorVec.x * 255.0;
-                        color.g = colorVec.y * 255.0;
-                        color.b = colorVec.z * 255.0;
+                        color.r = static_cast<u8>(colorVec.x * 255.0);
+                        color.g = static_cast<u8>(colorVec.y * 255.0);
+                        color.b = static_cast<u8>(colorVec.z * 255.0);
 
                         CVarSetColor24(CVAR_SETTING("LEDPort1Color"), color);
-                        Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
+                        Ship::Context::GetRawInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
                     }
                     ImGui::SameLine();
                     ImGui::Text("Custom Color");
@@ -1153,7 +1158,7 @@ void SohInputEditorWindow::DrawRemoveGyroMappingButton(uint8_t port, std::string
     ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(1.0f, 0.5f));
     if (ImGui::Button(StringHelper::Sprintf("%s###removeGyroMapping%s", ICON_FA_TIMES, id.c_str()).c_str(),
                       ImVec2(SCALE_IMGUI_SIZE(20.0f), SCALE_IMGUI_SIZE(20.0f)))) {
-        Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(port)->GetGyro()->ClearGyroMapping();
+        Ship::Context::GetRawInstance()->GetControlDeck()->GetControllerByPort(port)->GetGyro()->ClearGyroMapping();
     }
     ImGui::PopStyleVar();
 }
@@ -1176,7 +1181,7 @@ void SohInputEditorWindow::DrawAddGyroMappingButton(uint8_t port) {
             ImGui::CloseCurrentPopup();
         }
 
-        if (mMappingInputBlockTimer == INT32_MAX && Ship::Context::GetInstance()
+        if (mMappingInputBlockTimer == INT32_MAX && Ship::Context::GetRawInstance()
                                                         ->GetControlDeck()
                                                         ->GetControllerByPort(port)
                                                         ->GetGyro()
@@ -1190,7 +1195,7 @@ void SohInputEditorWindow::DrawAddGyroMappingButton(uint8_t port) {
 
 void SohInputEditorWindow::DrawGyroSection(uint8_t port) {
     auto mapping =
-        Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(port)->GetGyro()->GetGyroMapping();
+        Ship::Context::GetRawInstance()->GetControlDeck()->GetControllerByPort(port)->GetGyro()->GetGyroMapping();
     if (mapping != nullptr) {
         auto id = mapping->GetGyroMappingId();
         ImGui::AlignTextToFramePadding();
@@ -1334,7 +1339,7 @@ void SohInputEditorWindow::DrawMapping(CustomButtonMap& mapping, float labelWidt
             }
             if (ImGui::Selectable(i->second, i->first == currentButton)) {
                 CVarSetInteger(mapping.cVarName, i->first);
-                Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
+                Ship::Context::GetRawInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
             }
         }
         ImGui::EndCombo();
@@ -1346,8 +1351,9 @@ void SohInputEditorWindow::DrawOcarinaControlPanel() {
     ImGui::SetCursorPos(ImVec2(cursor.x, cursor.y + 5));
 
     CheckboxOptions checkOpt = CheckboxOptions().Color(THEME_COLOR);
-    SohGui::mSohMenu->MenuDrawItem(dpadOcarina, ImGui::GetContentRegionAvail().x, THEME_COLOR);
-    SohGui::mSohMenu->MenuDrawItem(rightStickOcarina, ImGui::GetContentRegionAvail().x, THEME_COLOR);
+    SohGui::mSohMenu->MenuDrawItem(dpadOcarina, static_cast<uint32_t>(ImGui::GetContentRegionAvail().x), THEME_COLOR);
+    SohGui::mSohMenu->MenuDrawItem(rightStickOcarina, static_cast<uint32_t>(ImGui::GetContentRegionAvail().x),
+                                   THEME_COLOR);
     CVarCheckbox("Customize Ocarina Controls", CVAR_SETTING("CustomOcarina.Enabled"), checkOpt);
 
     if (!CVarGetInteger(CVAR_SETTING("CustomOcarina.Enabled"), 0)) {
@@ -1379,10 +1385,15 @@ void SohInputEditorWindow::DrawOcarinaControlPanel() {
 void SohInputEditorWindow::DrawCameraControlPanel() {
     ImVec2 cursor = ImGui::GetCursorPos();
     ImGui::SetCursorPos(ImVec2(cursor.x + 5, cursor.y + 5));
-    SohGui::mSohMenu->MenuDrawItem(mouseControl, ImGui::GetContentRegionAvail().x, THEME_COLOR);
+    SohGui::mSohMenu->MenuDrawItem(mouseControl, static_cast<uint32_t>(ImGui::GetContentRegionAvail().x), THEME_COLOR);
     cursor = ImGui::GetCursorPos();
     ImGui::SetCursorPos(ImVec2(cursor.x + 5, cursor.y + 5));
-    SohGui::mSohMenu->MenuDrawItem(mouseAutoCapture, ImGui::GetContentRegionAvail().x, THEME_COLOR);
+    SohGui::mSohMenu->MenuDrawItem(mouseAutoCapture, static_cast<uint32_t>(ImGui::GetContentRegionAvail().x),
+                                   THEME_COLOR);
+    cursor = ImGui::GetCursorPos();
+    ImGui::SetCursorPos(ImVec2(cursor.x + 5, cursor.y + 5));
+    SohGui::mSohMenu->MenuDrawItem(mouseDisableThirdPerson, static_cast<uint32_t>(ImGui::GetContentRegionAvail().x),
+                                   THEME_COLOR);
 
     Ship::GuiWindow::BeginGroupPanel("Aiming/First-Person Camera", ImGui::GetContentRegionAvail());
     CVarCheckbox("Right Stick Aiming", CVAR_SETTING("Controls.RightStickAim"),
@@ -1421,7 +1432,7 @@ void SohInputEditorWindow::DrawCameraControlPanel() {
         if (!CVarGetInteger(CVAR_SETTING("FirstPersonCameraSensitivity.Enabled"), 0)) {
             CVarClear(CVAR_SETTING("FirstPersonCameraSensitivity.X"));
             CVarClear(CVAR_SETTING("FirstPersonCameraSensitivity.Y"));
-            Ship::Context::GetInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
+            Ship::Context::GetRawInstance()->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
         }
     }
     if (CVarGetInteger(CVAR_SETTING("FirstPersonCameraSensitivity.Enabled"), 0)) {
@@ -1450,7 +1461,7 @@ void SohInputEditorWindow::DrawCameraControlPanel() {
     ImGui::SetCursorPos(ImVec2(cursor.x + 5, cursor.y + 5));
     Ship::GuiWindow::BeginGroupPanel("Third-Person Camera", ImGui::GetContentRegionAvail());
 
-    SohGui::mSohMenu->MenuDrawItem(freeLook, ImGui::GetContentRegionAvail().x, THEME_COLOR);
+    SohGui::mSohMenu->MenuDrawItem(freeLook, static_cast<uint32_t>(ImGui::GetContentRegionAvail().x), THEME_COLOR);
     CVarCheckbox("Invert Camera X Axis", CVAR_SETTING("FreeLook.InvertXAxis"),
                  CheckboxOptions().Color(THEME_COLOR).Tooltip("Inverts the Camera X Axis in:\n-Free look"));
     CVarCheckbox(
@@ -1472,8 +1483,15 @@ void SohInputEditorWindow::DrawCameraControlPanel() {
                         .Max(5.0f)
                         .DefaultValue(1.0f)
                         .ShowButtons(true));
-    CVarSliderInt("Camera Distance: %d", CVAR_SETTING("FreeLook.MaxCameraDistance"),
-                  IntSliderOptions().Color(THEME_COLOR).Min(100).Max(900).DefaultValue(185).ShowButtons(true));
+    CVarCheckbox("Follow Default Camera Distance", CVAR_SETTING("FreeLook.UseGameDistance"),
+                 CheckboxOptions()
+                     .Color(THEME_COLOR)
+                     .Tooltip("Lets the free camera pull in and out using the game's default distance for the "
+                              "current situation instead of a fixed distance."));
+    if (!CVarGetInteger(CVAR_SETTING("FreeLook.UseGameDistance"), 0)) {
+        CVarSliderInt("Camera Distance: %d", CVAR_SETTING("FreeLook.MaxCameraDistance"),
+                      IntSliderOptions().Color(THEME_COLOR).Min(100).Max(900).DefaultValue(185).ShowButtons(true));
+    }
     CVarSliderInt("Camera Transition Speed: %d", CVAR_SETTING("FreeLook.TransitionSpeed"),
                   IntSliderOptions().Color(THEME_COLOR).Min(0).Max(900).DefaultValue(25).ShowButtons(true));
     Ship::GuiWindow::EndGroupPanel(0);
@@ -1483,8 +1501,8 @@ void SohInputEditorWindow::DrawDpadControlPanel() {
     ImVec2 cursor = ImGui::GetCursorPos();
     ImGui::SetCursorPos(ImVec2(cursor.x + 5, cursor.y + 5));
     Ship::GuiWindow::BeginGroupPanel("D-Pad Options", ImGui::GetContentRegionAvail());
-    SohGui::mSohMenu->MenuDrawItem(dpadPause, ImGui::GetContentRegionAvail().x, THEME_COLOR);
-    SohGui::mSohMenu->MenuDrawItem(dpadText, ImGui::GetContentRegionAvail().x, THEME_COLOR);
+    SohGui::mSohMenu->MenuDrawItem(dpadPause, static_cast<uint32_t>(ImGui::GetContentRegionAvail().x), THEME_COLOR);
+    SohGui::mSohMenu->MenuDrawItem(dpadText, static_cast<uint32_t>(ImGui::GetContentRegionAvail().x), THEME_COLOR);
 
     if (!CVarGetInteger(CVAR_SETTING("DPadOnPause"), 0) && !CVarGetInteger(CVAR_SETTING("DpadInText"), 0)) {
         ImGui::BeginDisabled();
@@ -1526,7 +1544,8 @@ void SohInputEditorWindow::DrawDeviceToggles(uint8_t portIndex) {
 
     ImGui::PopItemFlag();
 
-    auto connectedDeviceManager = Ship::Context::GetInstance()->GetControlDeck()->GetConnectedPhysicalDeviceManager();
+    auto connectedDeviceManager =
+        Ship::Context::GetRawInstance()->GetControlDeck()->GetConnectedPhysicalDeviceManager();
     for (const auto& [instanceId, name] : connectedDeviceManager->GetConnectedSDLGamepadNames()) {
         ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
         auto buttonColor = ImGui::GetStyleColorVec4(ImGuiCol_Button);
@@ -1611,8 +1630,8 @@ void SohInputEditorWindow::DrawLinkTab() {
         }
 
         if (ImGui::CollapsingHeader("Modifier Buttons")) {
-            DrawButtonLine("Modifier 1", portIndex, BTN_CUSTOM_MODIFIER1);
-            DrawButtonLine("Modifier 2", portIndex, BTN_CUSTOM_MODIFIER2);
+            DrawButtonLine("M1", portIndex, BTN_CUSTOM_MODIFIER1);
+            DrawButtonLine("M2", portIndex, BTN_CUSTOM_MODIFIER2);
             DrawButtonLine("Mod Action 1", portIndex, BTN_CUSTOM_MOD_ACTION1);
             DrawButtonLine("Mod Action 2", portIndex, BTN_CUSTOM_MOD_ACTION2);
             DrawButtonLine("Mod Action 3", portIndex, BTN_CUSTOM_MOD_ACTION3);
@@ -1623,76 +1642,6 @@ void SohInputEditorWindow::DrawLinkTab() {
             DrawButtonLine("Mod Action 8", portIndex, BTN_CUSTOM_MOD_ACTION8);
             DrawButtonLine("Mod Action 9", portIndex, BTN_CUSTOM_MOD_ACTION9);
 
-            ImGui::BeginDisabled(CVarGetInteger(CVAR_SETTING("DisableChanges"), 0));
-            CVarCheckbox("Enable speed modifiers", CVAR_SETTING("WalkModifier.Enabled"),
-                         CheckboxOptions()
-                             .Color(THEME_COLOR)
-                             .Tooltip("Hold the assigned button to change the maximum walking or swimming speed"));
-            if (CVarGetInteger(CVAR_SETTING("WalkModifier.Enabled"), 0)) {
-                CVarBtnSelector(
-                    "Speed Modifier 1 Button Combo", CVAR_SETTING("WalkModifier.Mod1Btn"),
-                    BtnSelectorOptions()
-                        .DefaultValue(BTN_CUSTOM_MODIFIER1)
-                        .Color(THEME_COLOR)
-                        .Tooltip(
-                            "Buttons that activate Speed Modifier 1.\n\n"
-                            "If \"Toggle modifier instead of holding\" is off, hold this combo to apply the modifier.\n"
-                            "If it is on, tap this combo to toggle the modifier on/off."));
-
-                CVarBtnSelector(
-                    "Speed Modifier 2 Button Combo", CVAR_SETTING("WalkModifier.Mod2Btn"),
-                    BtnSelectorOptions()
-                        .DefaultValue(BTN_CUSTOM_MODIFIER2)
-                        .Color(THEME_COLOR)
-                        .Tooltip(
-                            "Buttons that activate Speed Modifier 2.\n\n"
-                            "If \"Toggle modifier instead of holding\" is off, hold this combo to apply the modifier.\n"
-                            "If it is on, tap this combo to toggle the modifier on/off."));
-                UIWidgets::Spacer(5);
-                Ship::GuiWindow::BeginGroupPanel("Speed Modifier", ImGui::GetContentRegionAvail());
-                CVarCheckbox("Toggle modifier instead of holding", CVAR_SETTING("WalkModifier.SpeedToggle"),
-                             CheckboxOptions().Color(THEME_COLOR));
-                Ship::GuiWindow::BeginGroupPanel("Walk Modifier", ImGui::GetContentRegionAvail());
-                CVarCheckbox("Don't affect jump distance/velocity", CVAR_SETTING("WalkModifier.DoesntChangeJump"),
-                             CheckboxOptions().Color(THEME_COLOR));
-                CVarSliderFloat("Walk Modifier 1: %.0f %%", CVAR_SETTING("WalkModifier.Mapping1"),
-                                FloatSliderOptions()
-                                    .Color(THEME_COLOR)
-                                    .IsPercentage()
-                                    .Min(0.0f)
-                                    .Max(5.0f)
-                                    .DefaultValue(1.0f)
-                                    .ShowButtons(true));
-                CVarSliderFloat("Walk Modifier 2: %.0f %%", CVAR_SETTING("WalkModifier.Mapping2"),
-                                FloatSliderOptions()
-                                    .Color(THEME_COLOR)
-                                    .IsPercentage()
-                                    .Min(0.0f)
-                                    .Max(5.0f)
-                                    .DefaultValue(1.0f)
-                                    .ShowButtons(true));
-                Ship::GuiWindow::EndGroupPanel(0);
-                Ship::GuiWindow::BeginGroupPanel("Swim Modifier", ImGui::GetContentRegionAvail());
-                CVarSliderFloat("Swim Modifier 1: %.0f %%", CVAR_SETTING("WalkModifier.SwimMapping1"),
-                                FloatSliderOptions()
-                                    .Color(THEME_COLOR)
-                                    .IsPercentage()
-                                    .Min(0.0f)
-                                    .Max(5.0f)
-                                    .DefaultValue(1.0f)
-                                    .ShowButtons(true));
-                CVarSliderFloat("Swim Modifier 2: %.0f %%", CVAR_SETTING("WalkModifier.SwimMapping2"),
-                                FloatSliderOptions()
-                                    .Color(THEME_COLOR)
-                                    .IsPercentage()
-                                    .Min(0.0f)
-                                    .Max(5.0f)
-                                    .DefaultValue(1.0f)
-                                    .ShowButtons(true));
-                Ship::GuiWindow::EndGroupPanel(0);
-                Ship::GuiWindow::EndGroupPanel(0);
-            }
-            ImGui::EndDisabled();
         }
 
         if (ImGui::CollapsingHeader("Ocarina Controls")) {
@@ -1835,7 +1784,7 @@ void SohInputEditorWindow::DrawClearAllButton(uint8_t portIndex) {
             ImGui::CloseCurrentPopup();
         }
         if (ImGui::Button("Clear All")) {
-            Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(portIndex)->ClearAllMappings();
+            Ship::Context::GetRawInstance()->GetControlDeck()->GetControllerByPort(portIndex)->ClearAllMappings();
             ImGui::CloseCurrentPopup();
         }
         PopStyleButton();
@@ -1868,11 +1817,11 @@ void SohInputEditorWindow::DrawSetDefaultsButton(uint8_t portIndex) {
                 ImGui::CloseCurrentPopup();
             }
             if (ImGui::Button("Set defaults")) {
-                Ship::Context::GetInstance()
+                Ship::Context::GetRawInstance()
                     ->GetControlDeck()
                     ->GetControllerByPort(portIndex)
                     ->ClearAllMappingsForDeviceType(Ship::PhysicalDeviceType::Keyboard);
-                Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(portIndex)->AddDefaultMappings(
+                Ship::Context::GetRawInstance()->GetControlDeck()->GetControllerByPort(portIndex)->AddDefaultMappings(
                     Ship::PhysicalDeviceType::Keyboard);
                 shouldClose = true;
                 ImGui::CloseCurrentPopup();
@@ -1898,11 +1847,11 @@ void SohInputEditorWindow::DrawSetDefaultsButton(uint8_t portIndex) {
                 ImGui::CloseCurrentPopup();
             }
             if (ImGui::Button("Set defaults")) {
-                Ship::Context::GetInstance()
+                Ship::Context::GetRawInstance()
                     ->GetControlDeck()
                     ->GetControllerByPort(portIndex)
                     ->ClearAllMappingsForDeviceType(Ship::PhysicalDeviceType::SDLGamepad);
-                Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(portIndex)->AddDefaultMappings(
+                Ship::Context::GetRawInstance()->GetControlDeck()->GetControllerByPort(portIndex)->AddDefaultMappings(
                     Ship::PhysicalDeviceType::SDLGamepad);
                 shouldClose = true;
                 ImGui::CloseCurrentPopup();
@@ -1961,7 +1910,7 @@ void RegisterInputEditorWidgets() {
         .Callback([](WidgetInfo& info) {
             bool enabled =
                 CVarGetInteger(CVAR_SETTING("EnableMouse"), 0) && CVarGetInteger(CVAR_SETTING("AutoCaptureMouse"), 1);
-            auto wnd = std::dynamic_pointer_cast<Fast::Fast3dWindow>(Ship::Context::GetInstance()->GetWindow());
+            auto wnd = std::dynamic_pointer_cast<Fast::Fast3dWindow>(Ship::Context::GetRawInstance()->GetWindow());
             wnd->SetAutoCaptureMouse(enabled);
         })
         .Options(
@@ -1977,7 +1926,7 @@ void RegisterInputEditorWidgets() {
         .Callback([](WidgetInfo& info) {
             bool enabled =
                 CVarGetInteger(CVAR_SETTING("EnableMouse"), 0) && CVarGetInteger(CVAR_SETTING("AutoCaptureMouse"), 1);
-            auto wnd = std::dynamic_pointer_cast<Fast::Fast3dWindow>(Ship::Context::GetInstance()->GetWindow());
+            auto wnd = std::dynamic_pointer_cast<Fast::Fast3dWindow>(Ship::Context::GetRawInstance()->GetWindow());
             wnd->SetAutoCaptureMouse(enabled);
         })
         .Options(CheckboxOptions()
@@ -1986,6 +1935,19 @@ void RegisterInputEditorWidgets() {
                               "hide the cursor "
                               "and capture mouse input when closing the menu."));
     SohGui::mSohMenu->AddSearchWidget({ mouseAutoCapture, "Settings", "Controls", "Camera Controls" });
+
+    mouseDisableThirdPerson = { .name = "Disable Third-Person Mouse Controls",
+                                .type = WidgetType::WIDGET_CVAR_CHECKBOX };
+    mouseDisableThirdPerson.CVar(CVAR_SETTING("DisableThirdPersonMouse"))
+        .PreFunc([](WidgetInfo& info) {
+            info.options->disabled = !CVarGetInteger(CVAR_SETTING("EnableMouse"), 0);
+            info.options->disabledTooltip = "Forced off because Mouse Controls are disabled.";
+        })
+        .Options(CheckboxOptions()
+                     .Color(THEME_COLOR)
+                     .Tooltip("Stops the mouse from moving the third-person camera and from triggering quickspins, "
+                              "while still allowing mouse control for first-person aiming and the shield."));
+    SohGui::mSohMenu->AddSearchWidget({ mouseDisableThirdPerson, "Settings", "Controls", "Camera Controls" });
 
     rightStickOcarina = { .name = "Right Stick Ocarina Playback", .type = WidgetType::WIDGET_CVAR_CHECKBOX };
     rightStickOcarina.CVar(CVAR_SETTING("CustomOcarina.RightStick")).Options(CheckboxOptions().Color(THEME_COLOR));

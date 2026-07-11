@@ -451,7 +451,7 @@ void EnOssan_SpawnItemsOnShelves(EnOssan* this, PlayState* play, ShopItem* shopI
                     &play->actorCtx, play, ACTOR_EN_GIRLA, shelves->actor.world.pos.x + shopItems->xOffset,
                     shelves->actor.world.pos.y + shopItems->yOffset, shelves->actor.world.pos.z + shopItems->zOffset,
                     shelves->actor.shape.rot.x, shelves->actor.shape.rot.y + sItemShelfRot[i],
-                    shelves->actor.shape.rot.z, itemParams, true);
+                    shelves->actor.shape.rot.z, itemParams);
                 if (IS_RANDO && Randomizer_GetSettingValue(RSK_SHOPSANITY) != RO_SHOPSANITY_OFF) {
                     this->shelfSlots[i]->randoSlotIndex = i + 1;
                 }
@@ -477,8 +477,7 @@ void EnOssan_UpdateShopOfferings(EnOssan* this, PlayState* play) {
                         &play->actorCtx, play, ACTOR_EN_GIRLA, this->shelves->actor.world.pos.x + shopItem->xOffset,
                         this->shelves->actor.world.pos.y + shopItem->yOffset,
                         this->shelves->actor.world.pos.z + shopItem->zOffset, this->shelves->actor.shape.rot.x,
-                        this->shelves->actor.shape.rot.y + sItemShelfRot[i], this->shelves->actor.shape.rot.z, params,
-                        true);
+                        this->shelves->actor.shape.rot.y + sItemShelfRot[i], this->shelves->actor.shape.rot.z, params);
                 }
             }
         }
@@ -693,7 +692,7 @@ void EnOssan_EndInteraction(PlayState* play, EnOssan* this) {
 }
 
 s32 EnOssan_TestEndInteraction(EnOssan* this, PlayState* play, Input* input) {
-    if (CHECK_BTN_ALL(input->press.button, BTN_B)) {
+    if (GameInteractor_Should(VB_SHOULD_OSSAN_CANCEL, CHECK_BTN_ALL(input->press.button, BTN_B), input)) {
         EnOssan_EndInteraction(play, this);
         return true;
     } else {
@@ -702,7 +701,7 @@ s32 EnOssan_TestEndInteraction(EnOssan* this, PlayState* play, Input* input) {
 }
 
 s32 EnOssan_TestCancelOption(EnOssan* this, PlayState* play, Input* input) {
-    if (CHECK_BTN_ALL(input->press.button, BTN_B)) {
+    if (GameInteractor_Should(VB_SHOULD_OSSAN_CANCEL, CHECK_BTN_ALL(input->press.button, BTN_B), input)) {
         this->stateFlag = this->tempStateFlag;
         Message_ContinueTextbox(play, this->shelfSlots[this->cursorIndex]->actor.textId);
         return true;
@@ -769,7 +768,7 @@ void EnOssan_State_Idle(EnOssan* this, PlayState* play, Player* player) {
         Play_SetShopBrowsingViewpoint(play);
         EnOssan_SetStateStartShopping(play, this, false);
     } else if (this->actor.xzDistToPlayer < 100.0f) {
-        func_8002F2CC(&this->actor, play, 100);
+        Actor_OfferTalk(&this->actor, play, 100);
     }
 }
 
@@ -1783,7 +1782,7 @@ void EnOssan_State_ContinueShoppingPrompt(EnOssan* this, PlayState* play, Player
                         Play_SetViewpoint(play, 2);
                         Message_StartTextbox(play, this->actor.textId, &this->actor);
                         EnOssan_SetStateStartShopping(play, this, true);
-                        func_8002F298(&this->actor, play, 100.0f, -1);
+                        Actor_OfferTalkExchangeEquiCylinder(&this->actor, play, 100.0f, -1);
                         break;
                     case 1:
                     default:
@@ -1802,7 +1801,7 @@ void EnOssan_State_ContinueShoppingPrompt(EnOssan* this, PlayState* play, Player
         Play_SetViewpoint(play, 2);
         Message_StartTextbox(play, this->actor.textId, &this->actor);
         EnOssan_SetStateStartShopping(play, this, true);
-        func_8002F298(&this->actor, play, 100.0f, -1);
+        Actor_OfferTalkExchangeEquiCylinder(&this->actor, play, 100.0f, -1);
     }
 }
 
@@ -2128,7 +2127,8 @@ u16 EnOssan_SetupHelloDialog(EnOssan* this) {
     this->happyMaskShopState = OSSAN_HAPPY_STATE_NONE;
     // mask shop messages
     if (this->actor.params == OSSAN_TYPE_MASK) {
-        if (INV_CONTENT(ITEM_TRADE_CHILD) == ITEM_SOLD_OUT) {
+        if (GameInteractor_Should(VB_HAPPY_MASK_SHOP_CHECK_SOLD_OUT, INV_CONTENT(ITEM_TRADE_CHILD) == ITEM_SOLD_OUT,
+                                  this)) {
             if (Flags_GetItemGetInf(ITEMGETINF_3B)) {
                 if (!Flags_GetEventChkInf(EVENTCHKINF_PAID_BACK_BUNNY_HOOD_FEE)) {
                     // Pay back Bunny Hood
