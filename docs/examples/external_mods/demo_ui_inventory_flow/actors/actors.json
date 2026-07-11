@@ -1,0 +1,19 @@
+{
+  "actors": [
+    {
+      "id": "com.sylian.demo_furnace_system:furnace_anchor",
+      "archetype": "prop",
+      "spawn": {
+        "scene": "SCENE_KOKIRI_FOREST",
+        "position": [0.0, 0.0, 0.0],
+        "rotation": [0.0, 0.0, 0.0]
+      },
+      "limits": {
+        "maxInstances": 2,
+        "tickRate": 1,
+        "lodDistance": 5000.0
+      },
+      "behaviorId": "com.sylian.demo_furnace_system:furnace_debug_behavior"
+    }
+  ]
+}

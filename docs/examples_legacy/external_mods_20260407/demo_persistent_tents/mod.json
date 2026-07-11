@@ -1,0 +1,40 @@
+﻿{
+    "id":  "com.sylian.demo_persistent_tents",
+    "name":  "Demo Persistent Tents",
+    "version":  "0.1.0",
+    "apiVersion":  4,
+    "loadPriority":  220,
+    "uiCategory":  "mod",
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "dependencies":  [
+                         {
+                             "id":  "com.sylian.persistence_kit",
+                             "versionRange":  "\u003e=0.1.0 \u003c0.2.0"
+                         }
+                     ],
+    "capabilities":  [
+                         "world.persistence.v1",
+                         "world.storage.v1"
+                     ],
+    "worldPersistenceDefinitions":  "world/persistence.json",
+    "worldStorageDefinitions":  "world/storage_domains.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "permissions":  [
+                        "filesystem"
+                    ],
+    "permissionRationales":  {
+                                 "filesystem":  "Stores persistent tent/world demo state across room/scene transitions and restart."
+                             },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json"
+}

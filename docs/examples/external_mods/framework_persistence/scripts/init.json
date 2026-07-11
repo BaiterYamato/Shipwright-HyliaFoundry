@@ -1,0 +1,9 @@
+﻿{
+    "apiVersion":  4,
+    "onGameLoaded":  [
+                         {
+                             "text":  "Persistence Kit loaded: v9 persistence domains and spawn profiles ready.",
+                             "action":  "showNotification"
+                         }
+                     ]
+}

@@ -1,0 +1,27 @@
+﻿{
+  "id": "com.sylian.framework_no_items_demo",
+  "name": "Framework No Items Demo",
+  "version": "0.1.0",
+  "apiVersion": 4,
+  "type": "framework",
+  "uiCategory": "core_api",
+  "loadPriority": 120,
+  "entryScript": "scripts/init.json",
+  "runtime": {
+    "type": "wasm3-v1",
+    "module": "scripts/noop.wat",
+    "maxMemoryKb": 512,
+    "maxCallMs": 2,
+    "maxFrameBudgetMs": 2,
+    "maxHookCallsPerFrame": 64,
+    "maxActorInstances": 64,
+    "maxActiveStatuses": 256
+  },
+  "provides": [
+    "v5.demo.framework_no_items"
+  ],
+  "uses": [],
+  "dependencies": [],
+  "capabilities": [],
+  "engineVersionRange": ">=9.1.2 <10.0.0"
+}

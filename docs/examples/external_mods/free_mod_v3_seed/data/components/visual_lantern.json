@@ -1,0 +1,18 @@
+{
+  "id": "com.sylian.demo.free_mod_v3_seed:component.visual_lantern",
+  "type": "visual",
+  "visibility": "public",
+  "prefabId": "com.sylian.demo.free_mod_v3_seed:lantern_prefab",
+  "meshId": "com.sylian.demo.free_mod_v3_seed:lantern_mesh",
+  "transform": {
+    "offset": [0.0, 28.0, 0.0],
+    "rotation": [0.0, 0.0, 0.0],
+    "scale": [24.0, 24.0, 24.0]
+  },
+  "lodDistance": 2200.0,
+  "billboard": true,
+  "tags": [
+    "prop",
+    "lantern"
+  ]
+}

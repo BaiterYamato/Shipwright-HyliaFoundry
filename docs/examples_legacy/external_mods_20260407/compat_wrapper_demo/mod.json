@@ -1,0 +1,31 @@
+﻿{
+  "id": "com.sylian.compat_wrapper_demo",
+  "name": "Compat Wrapper Demo",
+  "version": "0.1.0",
+  "apiVersion": 4,
+  "type": "content",
+  "uiCategory": "mod",
+  "loadPriority": 127,
+  "entryScript": "scripts/init.json",
+  "runtime": {
+    "type": "wasm3-v1",
+    "module": "scripts/noop.wat",
+    "maxMemoryKb": 512,
+    "maxCallMs": 2,
+    "maxFrameBudgetMs": 2,
+    "maxHookCallsPerFrame": 128,
+    "maxActorInstances": 64,
+    "maxActiveStatuses": 256
+  },
+  "dependencies": [
+    {
+      "modId": "com.sylian.container_kit",
+      "versionRange": ">=0.1.0 <0.2.0"
+    }
+  ],
+  "uses": [
+    "containers.v1",
+    "ui.inventory_ext.v1"
+  ],
+  "engineVersionRange": ">=9.1.2 <10.0.0"
+}

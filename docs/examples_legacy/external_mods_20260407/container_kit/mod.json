@@ -1,0 +1,55 @@
+﻿{
+    "id":  "com.sylian.container_kit",
+    "name":  "container kit",
+    "version":  "0.1.0",
+    "apiVersion":  4,
+    "loadPriority":  338,
+    "entryScript":  "scripts/init.json",
+    "assets":  [
+
+               ],
+    "dependencies":  [
+                         {
+                             "modId":  "com.sylian.ui_kit",
+                             "versionRange":  "\u003e=0.1.0 \u003c0.2.0"
+                         }
+                     ],
+    "capabilities":  [
+                         "ui.inventory_ext.v1",
+                         "containers.v1",
+                         "recipes.processing.v1",
+                         "interactions.v1"
+                     ],
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "permissions":  [
+
+                    ],
+    "entrypoints":  {
+                        "items":  "items/items.json",
+                        "combat":  "combat",
+                        "movement":  "movement",
+                        "camera":  "camera/camera_profiles.json",
+                        "ui":  "ui",
+                        "actors":  "actors",
+                        "quests":  "quests",
+                        "wasm":  "scripts/noop.wat"
+                    },
+    "containerDefinitions":  "containers/containers.json",
+    "inventoryExtensionDefinitions":  "inventory_ext/pages.json",
+    "recipeDefinitions":  "recipes/processing_recipes.json",
+    "interactionDefinitions":  "interactions/interactions.json",
+    "uiCategory":  "core_api"
+}
+

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "bindings": [
+    {
+      "id": "furnace_toggle_action8_v2",
+      "defaultMask": "MOD_ACTION8",
+      "trigger": "pressed",
+      "allowUserRemap": true,
+      "defaultKeyboardKeys": ["8"]
+    },
+    {
+      "id": "inventory_toggle_action9_v2",
+      "defaultMask": "MOD_ACTION9",
+      "trigger": "pressed",
+      "allowUserRemap": true,
+      "defaultKeyboardKeys": ["9"]
+    }
+  ]
+}

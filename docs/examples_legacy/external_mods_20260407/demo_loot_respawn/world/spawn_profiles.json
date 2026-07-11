@@ -1,0 +1,13 @@
+﻿{
+    "schemaVersion":  1,
+    "profiles":  [
+                     {
+                         "id":  "com.sylian.demo_loot_respawn:crate_spawn",
+                         "cooldownFrames":  900,
+                         "actorArchetypeId":  "com.sylian.demo_loot_respawn:crate_anchor",
+                         "maxDistanceFromPlayer":  1200,
+                         "minDistanceFromPlayer":  140,
+                         "maxActive":  1
+                     }
+                 ]
+}

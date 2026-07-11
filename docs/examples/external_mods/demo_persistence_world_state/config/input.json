@@ -1,0 +1,15 @@
+{
+  "bindings": [],
+  "hotkeys": [
+    {
+      "id": "consume_food",
+      "allowUserRemap": true,
+      "defaultKeyboardKeys": ["G"],
+      "action": {
+        "action": "consumeConsumableStack",
+        "consumableId": "com.sylian.player_survival_needs_demo:odd_mushroom_food",
+        "amount": 1
+      }
+    }
+  ]
+}

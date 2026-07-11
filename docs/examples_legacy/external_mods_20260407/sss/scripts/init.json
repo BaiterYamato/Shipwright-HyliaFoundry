@@ -1,0 +1,9 @@
+{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "showNotification",
+      "text": "SSS framework loaded: statuses, states, spells and FX presets are available."
+    }
+  ]
+}

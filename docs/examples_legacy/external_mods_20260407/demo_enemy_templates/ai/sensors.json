@@ -1,0 +1,10 @@
+﻿{
+    "schemaVersion":  1,
+    "sensors":  [
+                    {
+                        "range":  700,
+                        "id":  "com.sylian.demo_enemy_templates:aggro",
+                        "type":  "distance"
+                    }
+                ]
+}

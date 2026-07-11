@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "placements": [
+    {
+      "id": "com.sylian.demo.free_mod_v3_seed:kokiri_lantern_authoring_spot",
+      "placementId": "com.sylian.demo.free_mod_v3_seed:kokiri_lantern_placeable",
+      "position": [186.0, 0.0, 118.0],
+      "rotation": [0.0, 35.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    }
+  ]
+}

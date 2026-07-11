@@ -1,0 +1,43 @@
+﻿{
+    "id":  "com.sylian.demo_loot_respawn",
+    "name":  "Demo Loot Respawn",
+    "version":  "0.1.0",
+    "apiVersion":  4,
+    "loadPriority":  219,
+    "uiCategory":  "mod",
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "dependencies":  [
+                         {
+                             "id":  "com.sylian.persistence_kit",
+                             "versionRange":  "\u003e=0.1.0 \u003c0.2.0"
+                         }
+                     ],
+    "capabilities":  [
+                         "world.spawn_profiles.v1",
+                         "world.seeding.v1",
+                         "world.time_weather.v1",
+                         "actors.generic.v1",
+                         "actors.archetypes.v1"
+                     ],
+    "worldSpawnProfileDefinitions":  "world/spawn_profiles.json",
+    "worldSeedingDefinitions":  "world/seeding.json",
+    "worldTimeWeatherDefinitions":  "world/time_weather.json",
+    "actorDefinitions":  "actors/actors.json",
+    "actorArchetypeDefinitions":  "actors/archetypes.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "permissions":  [
+
+                    ],
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json"
+}

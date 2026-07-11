@@ -1,0 +1,9 @@
+{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "showNotification",
+      "text": "Stamina Demo loaded: Left Shift (MOD_ACTION6) sprints, and the same stamina wheel now powers roll, shield, climb, hang, and swim."
+    }
+  ]
+}

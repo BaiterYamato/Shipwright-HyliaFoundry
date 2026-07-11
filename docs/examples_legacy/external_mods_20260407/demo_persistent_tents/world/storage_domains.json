@@ -1,0 +1,10 @@
+﻿{
+    "schemaVersion":  1,
+    "domains":  [
+                    {
+                        "file":  "domains/worldState.json",
+                        "id":  "com.sylian.demo_persistent_tents:state",
+                        "version":  1
+                    }
+                ]
+}

@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "stamina",
+      "label": "Stamina Wheel",
+      "order": 0,
+      "entries": [
+        {
+          "key": "staminaEnabled",
+          "label": "Enable stamina system",
+          "type": "bool",
+          "default": true,
+          "applyMode": "realtime",
+          "help": "Toggle the generic player-resource stamina rules on or off for this mod."
+        },
+        {
+          "key": "staminaDrainMultiplier",
+          "label": "Drain multiplier",
+          "type": "float",
+          "default": 1.0,
+          "min": 0.25,
+          "max": 3.0,
+          "step": 0.05,
+          "applyMode": "realtime",
+          "help": "Scales all stamina drain rules: roll, shield, climb, hang, swim, and sprint."
+        },
+        {
+          "key": "staminaRegenMultiplier",
+          "label": "Regen multiplier",
+          "type": "float",
+          "default": 1.0,
+          "min": 0.25,
+          "max": 3.0,
+          "step": 0.05,
+          "applyMode": "realtime",
+          "help": "Scales how quickly stamina refills after the regen delay."
+        }
+      ]
+    },
+    {
+      "id": "display",
+      "label": "Display",
+      "order": 1,
+      "entries": [
+        {
+          "key": "showContextualRing",
+          "label": "Show contextual ring",
+          "type": "bool",
+          "default": true,
+          "applyMode": "realtime",
+          "help": "Draw the BOTW-style stamina ring near Link when stamina is being used or recovering."
+        },
+        {
+          "key": "showMagicStyleBar",
+          "label": "Show mana-style bar",
+          "type": "bool",
+          "default": true,
+          "applyMode": "realtime",
+          "help": "Draw a yellow stamina bar below the magic meter using the same HUD style."
+        },
+        {
+          "key": "ringScale",
+          "label": "HUD scale",
+          "type": "float",
+          "default": 1.0,
+          "min": 0.6,
+          "max": 1.8,
+          "step": 0.05,
+          "applyMode": "realtime",
+          "help": "Applies to the contextual stamina ring and the mana-style stamina bar."
+        },
+        {
+          "key": "ringOpacity",
+          "label": "HUD opacity",
+          "type": "float",
+          "default": 1.0,
+          "min": 0.2,
+          "max": 1.0,
+          "step": 0.05,
+          "applyMode": "realtime",
+          "help": "Controls the shared alpha used by the contextual ring and the mana-style stamina bar."
+        }
+      ]
+    }
+  ]
+}

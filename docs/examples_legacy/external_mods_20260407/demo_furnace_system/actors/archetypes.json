@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "archetypes": [
+    {
+      "id": "com.sylian.demo_furnace_system:furnace_debug",
+      "actorDefinitionId": "com.sylian.demo_furnace_system:furnace_anchor"
+    }
+  ]
+}

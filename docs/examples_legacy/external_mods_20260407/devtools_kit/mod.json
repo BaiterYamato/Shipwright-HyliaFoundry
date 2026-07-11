@@ -1,0 +1,43 @@
+﻿{
+    "id":  "com.sylian.devtools_kit",
+    "name":  "Devtools Kit",
+    "version":  "0.1.0",
+    "apiVersion":  4,
+    "loadPriority":  350,
+    "uiCategory":  "core_api",
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "dependencies":  [
+
+                     ],
+    "capabilities":  [
+                         "dev.hot_reload.v1",
+                         "dev.console.v1",
+                         "dev.watchers.v1",
+                         "wasm.sandbox.v2",
+                         "debug.reload_inspector.v1"
+                     ],
+    "devHotReloadDefinitions":  "dev/hot_reload.json",
+    "devConsoleDefinitions":  "dev/console_commands.json",
+    "devWatcherDefinitions":  "dev/watchers.json",
+    "wasmSandboxDefinitions":  "runtime/wasm_sandbox.json",
+    "reloadInspectorDefinitions":  "debug/reload_inspector.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "permissions":  [
+                        "process"
+                    ],
+    "permissionRationales":  {
+                                 "process":  "Enables dev-only reload/console actions used by hot-reload tooling and diagnostics."
+                             },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json"
+}

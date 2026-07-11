@@ -1,0 +1,9 @@
+﻿{
+    "schemaVersion":  1,
+    "definitions":  [
+                        {
+                            "id":  "com.sylian.persistence_kit:seed_default",
+                            "seedOffset":  101
+                        }
+                    ]
+}

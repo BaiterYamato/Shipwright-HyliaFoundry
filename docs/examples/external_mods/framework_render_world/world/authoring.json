@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "placements": [
+    {
+      "id": "com.example.lanterna_test:kokiri_lantern_authoring_spot",
+      "placementId": "com.example.lanterna_test:kokiri_lantern_placeable",
+      "position": [160.0, 0.0, 120.0],
+      "rotation": [0.0, 45.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "com.example.lanterna_test:kokiri_direct_prefab_spot",
+      "prefabId": "com.example.lanterna_test:lanterna_sign_prefab",
+      "scene": "SCENE_KOKIRI_FOREST",
+      "room": 0,
+      "position": [200.0, 0.0, 70.0],
+      "rotation": [0.0, -30.0, 0.0],
+      "scale": [0.8, 0.8, 0.8]
+    }
+  ]
+}

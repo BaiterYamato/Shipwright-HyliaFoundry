@@ -1,0 +1,40 @@
+{
+  "subscriptions": [
+    {
+      "id": "stamina_depleted_notice",
+      "hook": "onResourceDepleted",
+      "dispatch": "actions",
+      "cooldownFrames": 30,
+      "actions": [
+        {
+          "action": "showNotification",
+          "text": "Stamina empty: sprint pauses until the wheel starts to recover."
+        }
+      ]
+    },
+    {
+      "id": "stamina_recovered_notice",
+      "hook": "onResourceRecovered",
+      "dispatch": "actions",
+      "cooldownFrames": 30,
+      "actions": [
+        {
+          "action": "showNotification",
+          "text": "Stamina recovered: sprint is available again."
+        }
+      ]
+    },
+    {
+      "id": "stamina_capacity_notice",
+      "hook": "onResourceCapacityChanged",
+      "dispatch": "actions",
+      "cooldownFrames": 0,
+      "actions": [
+        {
+          "action": "showNotification",
+          "text": "Stamina capacity changed. Rings and persistence were refreshed."
+        }
+      ]
+    }
+  ]
+}

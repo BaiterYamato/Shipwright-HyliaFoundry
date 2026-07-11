@@ -1,0 +1,26 @@
+﻿{
+  "id": "com.sylian.unresolved_reference_demo",
+  "name": "Unresolved Reference Demo",
+  "version": "0.1.0",
+  "apiVersion": 4,
+  "type": "content",
+  "uiCategory": "mod",
+  "loadPriority": 126,
+  "entryScript": "scripts/init.json",
+  "runtime": {
+    "type": "wasm3-v1",
+    "module": "scripts/noop.wat",
+    "maxMemoryKb": 512,
+    "maxCallMs": 2,
+    "maxFrameBudgetMs": 2,
+    "maxHookCallsPerFrame": 128,
+    "maxActorInstances": 64,
+    "maxActiveStatuses": 256
+  },
+  "uses": [
+    "core.input.v1"
+  ],
+  "dependencies": [],
+  "capabilities": [],
+  "engineVersionRange": ">=9.1.2 <10.0.0"
+}

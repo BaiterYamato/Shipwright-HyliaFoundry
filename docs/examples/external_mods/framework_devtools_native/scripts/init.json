@@ -1,0 +1,9 @@
+﻿{
+    "apiVersion":  4,
+    "onGameLoaded":  [
+                         {
+                             "text":  "Devtools Kit loaded: hot-reload, watchers and sandbox v2 ready.",
+                             "action":  "showNotification"
+                         }
+                     ]
+}

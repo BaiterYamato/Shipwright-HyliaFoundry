@@ -1,0 +1,46 @@
+{
+  "id": "com.sylian.player_survival_needs_demo",
+  "name": "Player Survival Needs Demo",
+  "version": "0.1.0",
+  "apiVersion": 4,
+  "type": "content",
+  "uiCategory": "mod",
+  "loadPriority": 339,
+  "entryScript": "scripts/init.json",
+  "runtime": {
+    "type": "wasm3-v1",
+    "module": "scripts/noop.wat",
+    "maxMemoryKb": 512,
+    "maxCallMs": 2,
+    "maxFrameBudgetMs": 2,
+    "maxHookCallsPerFrame": 128,
+    "maxActorInstances": 64,
+    "maxActiveStatuses": 256
+  },
+  "dependencies": [],
+  "capabilities": [
+    "input.bindings.v2",
+    "player.resources.v1",
+    "ui.resource_rings.v1",
+    "player.consumables.v1",
+    "world.forage.v1"
+  ],
+  "capabilityRationales": {
+    "input.bindings.v2": "Adds a remappable food-consume hotkey for survival-safe consumables.",
+    "player.resources.v1": "Declares hunger and thirst as generic player resources with passive drain and depletion penalties.",
+    "ui.resource_rings.v1": "Draws fixed orange and blue bars stacked below the yellow stamina bar.",
+    "player.consumables.v1": "Defines survival-safe Odd Mushroom food stacks and custom bottled fresh water.",
+    "world.forage.v1": "Lets tall grass cutting grant custom survival food without touching vanilla item slots."
+  },
+  "inputDefinitions": "config/input.json",
+  "playerResourceDefinitions": "player/player_resources.json",
+  "playerConsumableDefinitions": "player/player_consumables.json",
+  "resourceRingDefinitions": "ui/resource_rings.json",
+  "worldForageDefinitions": "world/forage.json",
+  "settings": {
+    "schemaVersion": 1,
+    "schemaFile": "settings/settings.schema.json",
+    "defaultDomain": "save"
+  },
+  "engineVersionRange": ">=9.1.2 <10.0.0"
+}

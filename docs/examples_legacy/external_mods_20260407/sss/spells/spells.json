@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "spells": [
+    {
+      "id": "com.sylian.sss:spawn_firewall_forward",
+      "targetingProfile": "com.sylian.sss:self",
+      "cooldownFrames": 24,
+      "effects": [
+        {
+          "action": "fx.spawnPreset",
+          "presetId": "com.sylian.sss:magic_fire_purple"
+        },
+        {
+          "action": "spawnAoE",
+          "aoe": "com.sylian.sss:firewall_line"
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.sss:spawn_dome_around_owner",
+      "targetingProfile": "com.sylian.sss:self",
+      "cooldownFrames": 36,
+      "effects": [
+        {
+          "action": "fx.spawnPreset",
+          "presetId": "com.sylian.sss:levitation_aura"
+        },
+        {
+          "action": "spawnAoE",
+          "aoe": "com.sylian.sss:levitation_dome"
+        }
+      ]
+    }
+  ]
+}

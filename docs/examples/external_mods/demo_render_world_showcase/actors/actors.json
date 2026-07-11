@@ -1,0 +1,19 @@
+{
+  "actors": [
+    {
+      "id": "com.example.lanterna_test:lanterna_prefab_anchor",
+      "archetype": "prop",
+      "prefabId": "com.example.lanterna_test:lanterna_sign_prefab",
+      "spawn": {
+        "scene": "SCENE_KOKIRI_FOREST",
+        "position": [40.0, 0.0, 40.0],
+        "rotation": [0.0, 0.0, 0.0]
+      },
+      "limits": {
+        "maxInstances": 1,
+        "tickRate": 1,
+        "lodDistance": 2500.0
+      }
+    }
+  ]
+}

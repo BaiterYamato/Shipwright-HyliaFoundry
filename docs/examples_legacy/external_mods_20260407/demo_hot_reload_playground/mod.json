@@ -1,0 +1,46 @@
+﻿{
+    "id":  "com.sylian.demo_hot_reload_playground",
+    "name":  "Demo Hot Reload Playground",
+    "version":  "0.1.0",
+    "apiVersion":  4,
+    "loadPriority":  215,
+    "uiCategory":  "mod",
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "dependencies":  [
+                         {
+                             "id":  "com.sylian.devtools_kit",
+                             "versionRange":  "\u003e=0.1.0 \u003c0.2.0"
+                         }
+                     ],
+    "capabilities":  [
+                         "dev.hot_reload.v1",
+                         "dev.console.v1",
+                         "dev.watchers.v1",
+                         "wasm.sandbox.v2",
+                         "debug.reload_inspector.v1"
+                     ],
+    "devHotReloadDefinitions":  "dev/hot_reload.json",
+    "devConsoleDefinitions":  "dev/console_commands.json",
+    "devWatcherDefinitions":  "dev/watchers.json",
+    "wasmSandboxDefinitions":  "runtime/wasm_sandbox.json",
+    "reloadInspectorDefinitions":  "debug/reload_inspector.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "permissions":  [
+                        "process"
+                    ],
+    "permissionRationales":  {
+                                 "process":  "Allows dev playground hot reload and console-triggered reload actions during testing."
+                             },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json"
+}

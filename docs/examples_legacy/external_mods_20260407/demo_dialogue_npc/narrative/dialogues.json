@@ -1,0 +1,35 @@
+﻿{
+    "schemaVersion":  1,
+    "dialogues":  [
+                      {
+                          "nodes":  [
+                                        {
+                                            "speaker":  "NPC",
+                                            "options":  [
+                                                            {
+                                                                "nextNodeId":  "end",
+                                                                "onChoose":  [
+                                                                                 {
+                                                                                     "flagId":  "com.sylian.demo_dialogue_npc:spoke",
+                                                                                     "value":  "true",
+                                                                                     "action":  "narrative.setFlag"
+                                                                                 }
+                                                                             ],
+                                                                "id":  "yes",
+                                                                "text":  "Yes"
+                                                            }
+                                                        ],
+                                            "id":  "start",
+                                            "line":  "Need anything?"
+                                        },
+                                        {
+                                            "speaker":  "NPC",
+                                            "id":  "end",
+                                            "line":  "Come back soon."
+                                        }
+                                    ],
+                          "id":  "com.sylian.demo_dialogue_npc:npc_dialogue",
+                          "startNodeId":  "start"
+                      }
+                  ]
+}

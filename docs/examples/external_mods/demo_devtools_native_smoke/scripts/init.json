@@ -1,0 +1,9 @@
+﻿{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "showNotification",
+      "text": "Live Settings Demo loaded: open External Mods and tweak settings in the details panel."
+    }
+  ]
+}

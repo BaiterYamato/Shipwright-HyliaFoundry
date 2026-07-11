@@ -1,0 +1,9 @@
+﻿{
+    "bridges":  [
+                    {
+                        "id":  "com.sylian.ai_templates:default_bridge",
+                        "fallbackMode":  "waypoint_direct"
+                    }
+                ],
+    "schemaVersion":  1
+}

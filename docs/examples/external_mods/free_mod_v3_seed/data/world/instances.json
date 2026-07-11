@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "instances": [
+    {
+      "id": "com.sylian.demo.free_mod_v3_seed:kokiri_lantern_world_instance",
+      "entityId": "com.sylian.demo.free_mod_v3_seed:entity.kokiri_lantern",
+      "scene": "SCENE_KOKIRI_FOREST",
+      "room": 0,
+      "position": [132.0, 0.0, 84.0],
+      "rotation": [0.0, 0.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    }
+  ]
+}

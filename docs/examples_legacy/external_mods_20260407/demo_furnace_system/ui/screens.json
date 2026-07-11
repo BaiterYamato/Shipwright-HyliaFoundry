@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "screens": [
+    {
+      "id": "com.sylian.demo_furnace_system:furnace_inventory",
+      "closeOnEscape": true,
+      "hudLayoutId": "com.sylian.ui_kit:default_hud",
+      "onOpen": [],
+      "onClose": []
+    }
+  ]
+}

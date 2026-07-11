@@ -1,0 +1,117 @@
+﻿{
+    "id":  "com.sylian.framework.render_world",
+    "name":  "Framework Render World",
+    "version":  "0.1.0",
+    "type":  "framework",
+    "apiVersion":  4,
+    "uiCategory":  "core_api",
+    "loadPriority":  430,
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "hybrid-v1",
+                    "module":  "scripts/noop.wat",
+                    "entryLibrary":  "native/win64/plugin.dll",
+                    "abiVersion":  1,
+                    "nativeMode":  "sdk",
+                    "reloadPolicy":  "manual",
+                    "buildIdPolicy":  "ignore",
+                    "threadModel":  "main_thread",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json",
+    "assetPackDefinitions":  "assets/packs.json",
+    "assetSourceDefinitions":  "assets/sources.json",
+    "meshDefinitions":  "render/meshes.json",
+    "prefabDefinitions":  "actors/prefabs.json",
+    "worldInstanceDefinitions":  "world/instances.json",
+    "editorPlacementDefinitions":  "editor/placement.json",
+    "worldAuthoringDefinitions":  "world/authoring.json",
+    "materialDefinitions":  "materials/materials.json",
+    "pbrDefinitions":  "render/pbr_profiles.json",
+    "lightingDefinitions":  "lighting/light_profiles.json",
+    "postFxDefinitions":  "render/postfx_presets.json",
+    "sceneProfileDefinitions":  "world/scene_profiles.json",
+    "roomProfileDefinitions":  "world/room_profiles.json",
+    "renderInspectorDefinitions":  "debug/render_inspector.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "releaseChannels":  [
+                            "stable"
+                        ],
+    "capabilities":  [
+                         "native.sdk.v1",
+                         "assets.raw.v1",
+                         "assets.packs.v2",
+                         "render.meshes.v1",
+                         "actors.prefabs.v1",
+                         "world.instances.v1",
+                         "editor.placement.v1",
+                         "world.authoring.v1",
+                         "render.materials.v1",
+                         "render.pbr.v1",
+                         "render.lighting.v1",
+                         "render.postfx.v1",
+                         "world.scenes.v1",
+                         "world.rooms.v1",
+                         "debug.render_inspector.v1"
+                     ],
+    "capabilityRationales":  {
+                                 "native.sdk.v1":  "Declares native.sdk.v1 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "assets.raw.v1":  "Declares assets.raw.v1 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "assets.packs.v2":  "Declares assets.packs.v2 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "render.meshes.v1":  "Declares render.meshes.v1 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "actors.prefabs.v1":  "Declares actors.prefabs.v1 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "world.instances.v1":  "Declares world.instances.v1 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "editor.placement.v1":  "Declares editor.placement.v1 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "world.authoring.v1":  "Declares world.authoring.v1 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "render.materials.v1":  "Declares render.materials.v1 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "render.pbr.v1":  "Declares render.pbr.v1 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "render.lighting.v1":  "Declares render.lighting.v1 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "render.postfx.v1":  "Declares render.postfx.v1 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "world.scenes.v1":  "Declares world.scenes.v1 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "world.rooms.v1":  "Declares world.rooms.v1 as part of Framework Render World in the framework-first API v4 catalog.",
+                                 "debug.render_inspector.v1":  "Declares debug.render_inspector.v1 as part of Framework Render World in the framework-first API v4 catalog."
+                             },
+    "permissions":  [
+                        "nativeinterop"
+                    ],
+    "permissionRationales":  {
+                                 "nativeinterop":  "Required by Framework Render World for the configured runtime and diagnostics surface."
+                             },
+    "dependencies":  [
+
+                     ],
+    "provides":  [
+                     "framework.render_world"
+                 ],
+    "uses":  [
+
+             ],
+    "exports":  {
+                    "framework":  [
+                                      "framework.render_world"
+                                  ],
+                    "capabilities":  [
+                                         "native.sdk.v1",
+                                         "assets.raw.v1",
+                                         "assets.packs.v2",
+                                         "render.meshes.v1",
+                                         "actors.prefabs.v1",
+                                         "world.instances.v1",
+                                         "editor.placement.v1",
+                                         "world.authoring.v1",
+                                         "render.materials.v1",
+                                         "render.pbr.v1",
+                                         "render.lighting.v1",
+                                         "render.postfx.v1",
+                                         "world.scenes.v1",
+                                         "world.rooms.v1",
+                                         "debug.render_inspector.v1"
+                                     ]
+                }
+}

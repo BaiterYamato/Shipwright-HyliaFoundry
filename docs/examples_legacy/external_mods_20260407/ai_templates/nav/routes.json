@@ -1,0 +1,31 @@
+﻿{
+    "schemaVersion":  1,
+    "routes":  [
+                   {
+                       "id":  "com.sylian.ai_templates:town_patrol",
+                       "mode":  "loop",
+                       "waypoints":  [
+                                         [
+                                             0,
+                                             0,
+                                             0
+                                         ],
+                                         [
+                                             120,
+                                             0,
+                                             0
+                                         ],
+                                         [
+                                             120,
+                                             0,
+                                             120
+                                         ],
+                                         [
+                                             0,
+                                             0,
+                                             120
+                                         ]
+                                     ]
+                   }
+               ]
+}

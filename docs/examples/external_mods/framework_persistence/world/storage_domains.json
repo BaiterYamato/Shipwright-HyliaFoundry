@@ -1,0 +1,20 @@
+﻿{
+    "schemaVersion":  1,
+    "domains":  [
+                    {
+                        "file":  "domains/worldState.json",
+                        "id":  "core:world_state",
+                        "version":  1
+                    },
+                    {
+                        "file":  "domains/narrativeState.json",
+                        "id":  "core:narrative_state",
+                        "version":  1
+                    },
+                    {
+                        "file":  "domains/spawnState.json",
+                        "id":  "com.sylian.persistence_kit:spawn",
+                        "version":  1
+                    }
+                ]
+}

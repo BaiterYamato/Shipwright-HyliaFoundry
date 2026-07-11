@@ -1,0 +1,43 @@
+{
+  "id": "com.sylian.player_resources_stamina_botw_demo",
+  "name": "Player Resources Stamina BOTW Demo",
+  "version": "0.1.0",
+  "apiVersion": 4,
+  "type": "content",
+  "uiCategory": "mod",
+  "loadPriority": 338,
+  "entryScript": "scripts/init.json",
+  "runtime": {
+    "type": "wasm3-v1",
+    "module": "scripts/noop.wat",
+    "maxMemoryKb": 512,
+    "maxCallMs": 2,
+    "maxFrameBudgetMs": 2,
+    "maxHookCallsPerFrame": 128,
+    "maxActorInstances": 64,
+    "maxActiveStatuses": 256
+  },
+  "dependencies": [],
+  "capabilities": [
+    "hooks.extended.v1",
+    "input.bindings.v2",
+    "player.resources.v1",
+    "ui.resource_rings.v1"
+  ],
+  "capabilityRationales": {
+    "hooks.extended.v1": "Shows data-driven notifications when stamina depletes, recovers, or changes capacity.",
+    "input.bindings.v2": "Maps a sprint hold input used by the stamina action rule.",
+    "player.resources.v1": "Declares a generic player stamina resource with drain, regen, and persistent capacity.",
+    "ui.resource_rings.v1": "Renders BOTW-style contextual and fixed stamina rings for the declared resource."
+  },
+  "hookDefinitions": "hooks/hooks.json",
+  "inputDefinitions": "config/input.json",
+  "playerResourceDefinitions": "player/player_resources.json",
+  "resourceRingDefinitions": "ui/resource_rings.json",
+  "settings": {
+    "schemaVersion": 1,
+    "schemaFile": "settings/settings.schema.json",
+    "defaultDomain": "save"
+  },
+  "engineVersionRange": ">=9.1.2 <10.0.0"
+}

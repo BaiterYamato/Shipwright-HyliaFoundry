@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "resources": [
+    {
+      "id": "com.sylian.player_resources_stamina_botw_demo:stamina",
+      "kind": "stamina",
+      "displayName": "Stamina Wheel",
+      "settingsDomain": "save",
+      "storageDomainId": "stamina_wheel",
+      "capacityStorageKey": "capacity",
+      "currentStorageKey": "current",
+      "baseCapacity": 100.0,
+      "wheelCapacity": 100.0,
+      "segmentCount": 10,
+      "initialValue": 100.0,
+      "persistCurrentValue": false,
+      "refillOnLoad": true,
+      "refillOnSceneEnter": true,
+      "regenRatePerSecond": 22.0,
+      "regenDelayMs": 700,
+      "depletedRegenDelayMs": 1400,
+      "lowPercent": 0.25,
+      "enabledSettingKey": "staminaEnabled",
+      "drainMultiplierSettingKey": "staminaDrainMultiplier",
+      "regenMultiplierSettingKey": "staminaRegenMultiplier",
+      "actionRules": [
+        {
+          "tag": "roll.start",
+          "startCost": 18.0,
+          "costPerSecond": 0.0,
+          "blockWhenInsufficient": true,
+          "cancelOnDepleted": true,
+          "depletedResponse": "block"
+        },
+        {
+          "tag": "shield.hold",
+          "startCost": 0.0,
+          "costPerSecond": 9.0,
+          "blockWhenInsufficient": true,
+          "cancelOnDepleted": true,
+          "depletedResponse": "dropShield"
+        },
+        {
+          "tag": "climb.hold",
+          "startCost": 0.0,
+          "costPerSecond": 15.0,
+          "blockWhenInsufficient": true,
+          "cancelOnDepleted": true,
+          "depletedResponse": "forceFall"
+        },
+        {
+          "tag": "hang.hold",
+          "startCost": 0.0,
+          "costPerSecond": 11.0,
+          "blockWhenInsufficient": true,
+          "cancelOnDepleted": true,
+          "depletedResponse": "releaseHang"
+        },
+        {
+          "tag": "swim.hold",
+          "startCost": 0.0,
+          "costPerSecond": 13.0,
+          "blockWhenInsufficient": true,
+          "cancelOnDepleted": true,
+          "depletedResponse": "swimFatigue"
+        },
+        {
+          "tag": "sprint.hold",
+          "startCost": 0.0,
+          "costPerSecond": 16.0,
+          "blockWhenInsufficient": true,
+          "cancelOnDepleted": true,
+          "inputBindingId": "stamina_sprint_hold"
+        }
+      ]
+    }
+  ]
+}

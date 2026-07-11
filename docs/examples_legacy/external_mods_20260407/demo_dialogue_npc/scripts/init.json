@@ -1,0 +1,13 @@
+﻿{
+    "apiVersion":  4,
+    "onGameLoaded":  [
+                         {
+                             "dialogueId":  "com.sylian.demo_dialogue_npc:npc_dialogue",
+                             "action":  "narrative.startDialogue"
+                         },
+                         {
+                             "text":  "Dialogue demo started.",
+                             "action":  "showNotification"
+                         }
+                     ]
+}

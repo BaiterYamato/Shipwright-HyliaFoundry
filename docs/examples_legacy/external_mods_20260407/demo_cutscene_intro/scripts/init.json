@@ -1,0 +1,9 @@
+﻿{
+    "apiVersion":  4,
+    "onGameLoaded":  [
+                         {
+                             "timelineId":  "com.sylian.demo_cutscene_intro:intro",
+                             "action":  "narrative.startTimeline"
+                         }
+                     ]
+}

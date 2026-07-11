@@ -1,0 +1,10 @@
+﻿{
+    "schemaVersion":  1,
+    "profiles":  [
+                     {
+                         "defaultWeather":  "clear",
+                         "defaultTimeSegment":  "day",
+                         "id":  "com.sylian.persistence_kit:default"
+                     }
+                 ]
+}

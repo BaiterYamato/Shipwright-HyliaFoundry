@@ -1,0 +1,34 @@
+﻿{
+  "id": "com.sylian.live_settings_realtime_demo",
+  "name": "Live Settings Realtime Demo",
+  "version": "0.1.0",
+  "apiVersion": 4,
+  "type": "content",
+  "uiCategory": "mod",
+  "loadPriority": 125,
+  "entryScript": "scripts/init.json",
+  "runtime": {
+    "type": "wasm3-v1",
+    "module": "scripts/noop.wat",
+    "maxMemoryKb": 512,
+    "maxCallMs": 2,
+    "maxFrameBudgetMs": 2,
+    "maxHookCallsPerFrame": 128,
+    "maxActorInstances": 64,
+    "maxActiveStatuses": 256
+  },
+  "dependencies": [],
+  "capabilities": [
+    "hooks.extended.v1"
+  ],
+  "capabilityRationales": {
+    "hooks.extended.v1": "Listens to settings.changed so the demo can confirm realtime/queued apply events."
+  },
+  "hookDefinitions": "hooks/hooks.json",
+  "settings": {
+    "schemaVersion": 1,
+    "schemaFile": "settings/settings.schema.json",
+    "defaultDomain": "global"
+  },
+  "engineVersionRange": ">=9.1.2 <10.0.0"
+}

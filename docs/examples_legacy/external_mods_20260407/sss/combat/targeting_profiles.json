@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "com.sylian.sss:self",
+      "mode": "self"
+    },
+    {
+      "id": "com.sylian.sss:front_cone",
+      "mode": "cone",
+      "range": 260,
+      "angle": 40,
+      "includeEnemies": true,
+      "includeProps": false
+    },
+    {
+      "id": "com.sylian.sss:dome_targets",
+      "mode": "sphere",
+      "range": 260,
+      "radius": 260,
+      "includeEnemies": true,
+      "includeProps": false
+    }
+  ]
+}

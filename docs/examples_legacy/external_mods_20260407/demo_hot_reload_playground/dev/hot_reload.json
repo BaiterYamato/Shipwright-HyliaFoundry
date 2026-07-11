@@ -1,0 +1,10 @@
+﻿{
+    "schemaVersion":  1,
+    "definitions":  [
+                        {
+                            "debounceMs":  300,
+                            "id":  "com.sylian.demo_hot_reload_playground:default",
+                            "enabled":  true
+                        }
+                    ]
+}

@@ -1,0 +1,11 @@
+﻿{
+    "schemaVersion":  1,
+    "watchers":  [
+                     {
+                         "debounceMs":  300,
+                         "path":  "scripts",
+                         "id":  "com.sylian.demo_hot_reload_playground:watch_scripts",
+                         "target":  "all"
+                     }
+                 ]
+}

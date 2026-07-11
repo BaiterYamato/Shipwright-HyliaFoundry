@@ -1,0 +1,13 @@
+﻿{
+    "schemaVersion": 1,
+    "sources": [
+        {
+            "id": "com.sylian.framework.devtools_native:sample_payload",
+            "path": "assets/data/sample.json",
+            "kind": "data",
+            "format": "json",
+            "hostAccess": true
+        }
+    ]
+}
+

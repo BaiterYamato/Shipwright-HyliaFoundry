@@ -1,0 +1,9 @@
+﻿{
+    "recipes":  [
+                    {
+                        "id":  "com.sylian.container_kit:furnace_sample",
+                        "durationMs":  3000
+                    }
+                ],
+    "schemaVersion":  1
+}

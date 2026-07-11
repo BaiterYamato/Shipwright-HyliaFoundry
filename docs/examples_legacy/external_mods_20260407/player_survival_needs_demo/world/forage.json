@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "id": "com.sylian.player_survival_needs_demo:tall_grass_food_drop",
+      "source": "tall_grass.cut",
+      "chance": 0.125,
+      "replaceVanillaDrop": true,
+      "actions": [
+        {
+          "action": "grantConsumableStack",
+          "consumableId": "com.sylian.player_survival_needs_demo:odd_mushroom_food",
+          "amount": 1
+        },
+        {
+          "action": "showNotification",
+          "text": "Found Odd Mushroom (+1)."
+        }
+      ]
+    }
+  ]
+}
