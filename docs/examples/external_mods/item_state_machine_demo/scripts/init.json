@@ -1,0 +1,7 @@
+{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    { "action": "grantModItem", "itemId": "state_hammer" },
+    { "action": "showNotification", "text": "M4 pronto: equipe o Martelo de Estados." }
+  ]
+}

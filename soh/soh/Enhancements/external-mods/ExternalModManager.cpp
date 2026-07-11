@@ -8810,6 +8810,144 @@ bool ParseActionArray(const nlohmann::json& json, int32_t apiVersion, const char
     return true;
 }
 
+bool TryParseItemStateDefinitionsImpl(
+    const std::string& content, int32_t apiVersion, const std::string& modId,
+    std::vector<ExternalModItemStateMachineDefinition>& outDefinitions, std::string& outError) {
+    if (apiVersion != kExternalModApiVersionV4) {
+        outError = "items.state_machine.v1 requires apiVersion 4";
+        return false;
+    }
+
+    nlohmann::json root;
+    try {
+        root = nlohmann::json::parse(content);
+    } catch (const std::exception& ex) {
+        outError = std::string("items.state_machine.v1 parse error: ") + ex.what();
+        return false;
+    }
+    if (!root.is_object() || !root.contains("schemaVersion") || !root["schemaVersion"].is_number_integer() ||
+        root["schemaVersion"].get<int32_t>() != 1) {
+        outError = "items.state_machine.v1::$schemaVersion must be integer 1";
+        return false;
+    }
+    if (!root.contains("stateMachines") || !root["stateMachines"].is_array()) {
+        outError = "items.state_machine.v1::stateMachines must be an array";
+        return false;
+    }
+    if (root["stateMachines"].size() > 64) {
+        outError = "items.state_machine.v1::stateMachines exceeds 64 entries";
+        return false;
+    }
+
+    const std::unordered_map<std::string, ExternalModItemStateEvent> eventMap = {
+        { "select", ExternalModItemStateEvent::Select },       { "deselect", ExternalModItemStateEvent::Deselect },
+        { "press", ExternalModItemStateEvent::Press },         { "hold", ExternalModItemStateEvent::Hold },
+        { "release", ExternalModItemStateEvent::Release },     { "impact", ExternalModItemStateEvent::Impact },
+    };
+    std::unordered_set<std::string> seenIds;
+    outDefinitions.clear();
+    for (size_t machineIndex = 0; machineIndex < root["stateMachines"].size(); ++machineIndex) {
+        const auto& machineJson = root["stateMachines"][machineIndex];
+        const std::string path = "stateMachines[" + std::to_string(machineIndex) + "]";
+        if (!machineJson.is_object()) {
+            outError = path + " must be an object";
+            return false;
+        }
+        for (const char* field : { "id", "itemId", "initialState" }) {
+            if (!machineJson.contains(field) || !machineJson[field].is_string() ||
+                machineJson[field].get<std::string>().empty()) {
+                outError = path + "." + field + " must be a non-empty string";
+                return false;
+            }
+        }
+
+        ExternalModItemStateMachineDefinition definition;
+        definition.id = machineJson["id"].get<std::string>();
+        definition.itemId = machineJson["itemId"].get<std::string>();
+        definition.initialState = machineJson["initialState"].get<std::string>();
+        if (definition.id.rfind(modId + ":", 0) != 0 && definition.id.rfind("core:", 0) != 0) {
+            outError = path + ".id must be namespaced with '" + modId + ":' or 'core:'";
+            return false;
+        }
+        if (!seenIds.insert(definition.id).second) {
+            outError = path + ".id is duplicated: " + definition.id;
+            return false;
+        }
+        if (definition.initialState.size() > 64) {
+            outError = path + ".initialState exceeds 64 characters";
+            return false;
+        }
+        if (machineJson.contains("bindingId")) {
+            if (!machineJson["bindingId"].is_string()) {
+                outError = path + ".bindingId must be a string";
+                return false;
+            }
+            definition.bindingId = machineJson["bindingId"].get<std::string>();
+        }
+        if (!machineJson.contains("transitions") || !machineJson["transitions"].is_array() ||
+            machineJson["transitions"].empty()) {
+            outError = path + ".transitions must be a non-empty array";
+            return false;
+        }
+        if (machineJson["transitions"].size() > 128) {
+            outError = path + ".transitions exceeds 128 entries";
+            return false;
+        }
+
+        std::unordered_set<std::string> deterministicKeys;
+        bool needsBinding = false;
+        for (size_t transitionIndex = 0; transitionIndex < machineJson["transitions"].size(); ++transitionIndex) {
+            const auto& transitionJson = machineJson["transitions"][transitionIndex];
+            const std::string transitionPath = path + ".transitions[" + std::to_string(transitionIndex) + "]";
+            if (!transitionJson.is_object()) {
+                outError = transitionPath + " must be an object";
+                return false;
+            }
+            for (const char* field : { "event", "from", "to" }) {
+                if (!transitionJson.contains(field) || !transitionJson[field].is_string() ||
+                    transitionJson[field].get<std::string>().empty()) {
+                    outError = transitionPath + "." + field + " must be a non-empty string";
+                    return false;
+                }
+            }
+            const std::string eventToken = ToLower(transitionJson["event"].get<std::string>());
+            const auto eventIt = eventMap.find(eventToken);
+            if (eventIt == eventMap.end()) {
+                outError = transitionPath + ".event must be select|deselect|press|hold|release|impact";
+                return false;
+            }
+            ExternalModItemStateTransition transition;
+            transition.event = eventIt->second;
+            transition.fromState = transitionJson["from"].get<std::string>();
+            transition.toState = transitionJson["to"].get<std::string>();
+            if (transition.fromState.size() > 64 || transition.toState.size() > 64) {
+                outError = transitionPath + " state names must not exceed 64 characters";
+                return false;
+            }
+            const std::string deterministicKey = transition.fromState + "\n" + eventToken;
+            if (!deterministicKeys.insert(deterministicKey).second) {
+                outError = transitionPath + " duplicates event/from pair";
+                return false;
+            }
+            if (!transitionJson.contains("actions") ||
+                !ParseActionArray(transitionJson["actions"], apiVersion, "actions", transition.actions, outError)) {
+                outError = transitionPath + ".actions: " + outError;
+                return false;
+            }
+            needsBinding = needsBinding || transition.event == ExternalModItemStateEvent::Press ||
+                           transition.event == ExternalModItemStateEvent::Hold ||
+                           transition.event == ExternalModItemStateEvent::Release;
+            definition.transitions.push_back(std::move(transition));
+        }
+        if (needsBinding && definition.bindingId.empty()) {
+            outError = path + ".bindingId is required by press/hold/release transitions";
+            return false;
+        }
+        outDefinitions.push_back(std::move(definition));
+    }
+    return true;
+}
+
 bool ParseVec3(const nlohmann::json& json, float& x, float& y, float& z, const char* fieldName, std::string& outError) {
     if (!json.is_array() || json.size() != 3 || !json[0].is_number() || !json[1].is_number() || !json[2].is_number()) {
         outError = std::string(fieldName) + " must be [x,y,z] numbers";
@@ -17320,6 +17458,8 @@ void ExternalModManager::Shutdown() {
         package.runtime.frameTriggers.clear();
         package.runtime.inputBindings.clear();
         package.runtime.inputTriggers.clear();
+        package.runtime.itemStateMachineDefinitions.clear();
+        package.runtime.itemStateMachineStates.clear();
         package.runtime.itemDefinitions.clear();
         package.runtime.hookSubscriptions.clear();
         package.runtime.actorDefinitions.clear();
@@ -17621,6 +17761,9 @@ void ExternalModManager::Initialize() {
         mPlayerResourcesRuntime = std::make_unique<ExternalModPlayerResourcesRuntime>();
     } else {
         mPlayerResourcesRuntime->Reset(gPlayState);
+    }
+    if (!mItemStateRuntime) {
+        mItemStateRuntime = std::make_unique<ExternalModItemRuntime>();
     }
     mAimCameraState.overShoulderEnabled =
         CVarGetInteger(kAimCameraOverShoulderCVar, mAimCameraState.overShoulderEnabled ? 1 : 0) != 0;
@@ -19396,6 +19539,12 @@ bool ExternalModManager::TryParseEntryScript(const std::string& content, int32_t
     }
 
     return true;
+}
+
+bool ExternalModManager::TryParseItemStateDefinitions(
+    const std::string& content, int32_t apiVersion, const std::string& modId,
+    std::vector<ExternalModItemStateMachineDefinition>& outDefinitions, std::string& outError) {
+    return TryParseItemStateDefinitionsImpl(content, apiVersion, modId, outDefinitions, outError);
 }
 
 bool ExternalModManager::TryParseItemDefinitions(const std::string& content,
@@ -28893,6 +29042,50 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             }
         }
 
+        if (!package.manifest.itemStateDefinitions.empty()) {
+            std::filesystem::path stateMachinePath;
+            if (!IsSafePackageRelativePath(package.manifest.itemStateDefinitions, stateMachinePath, outError)) {
+                outError = "itemStateDefinitions invalid path: " + outError;
+                return false;
+            }
+            std::string stateMachineContent;
+            if (!ReadFileFromPackage(package, stateMachinePath, kMaxItemStateDefinitionBytes, stateMachineContent,
+                                     outError)) {
+                outError = "itemStateDefinitions read failed: " + outError;
+                return false;
+            }
+            if (!TryParseItemStateDefinitions(stateMachineContent, runtime.apiVersion, package.manifest.id,
+                                              runtime.itemStateMachineDefinitions, outError)) {
+                outError = "items.state_machine.v1 file=" + package.manifest.itemStateDefinitions + " reason=" + outError;
+                return false;
+            }
+            for (size_t machineIndex = 0; machineIndex < runtime.itemStateMachineDefinitions.size(); ++machineIndex) {
+                const auto& machine = runtime.itemStateMachineDefinitions[machineIndex];
+                const auto itemIt = std::find_if(runtime.itemDefinitions.begin(), runtime.itemDefinitions.end(),
+                                                 [&](const ExternalModItemDefinition& item) {
+                                                     return item.id == machine.itemId;
+                                                 });
+                if (itemIt == runtime.itemDefinitions.end()) {
+                    outError = "items.state_machine.v1 file=" + package.manifest.itemStateDefinitions +
+                               " jsonPath=stateMachines[" + std::to_string(machineIndex) +
+                               "].itemId reason=unknown item '" + machine.itemId + "'";
+                    return false;
+                }
+                if (!machine.bindingId.empty()) {
+                    const auto bindingIt = std::find_if(runtime.inputBindings.begin(), runtime.inputBindings.end(),
+                                                        [&](const ExternalModInputBinding& binding) {
+                                                            return binding.id == machine.bindingId;
+                                                        });
+                    if (bindingIt == runtime.inputBindings.end()) {
+                        outError = "items.state_machine.v1 file=" + package.manifest.itemStateDefinitions +
+                                   " jsonPath=stateMachines[" + std::to_string(machineIndex) +
+                                   "].bindingId reason=unknown binding '" + machine.bindingId + "'";
+                        return false;
+                    }
+                }
+            }
+        }
+
         for (const auto& inputTrigger : runtime.inputTriggers) {
             const auto bindingIt = std::find_if(runtime.inputBindings.begin(), runtime.inputBindings.end(),
                                                 [&inputTrigger](const ExternalModInputBinding& binding) {
@@ -34177,6 +34370,9 @@ void ExternalModManager::OnLoadGame(int32_t fileNum) {
                 item.granted = false;
                 item.cooldownRemaining = 0;
             }
+            if (mItemStateRuntime) {
+                mItemStateRuntime->Reset(package);
+            }
             for (auto& hookSubscription : package.runtime.hookSubscriptions) {
                 hookSubscription.cooldownRemaining = 0;
             }
@@ -34764,6 +34960,31 @@ void ExternalModManager::OnGameFrameUpdate() {
                                 "Add the binding to inputDefinitions or remove the onInput trigger.");
                 return true;
             });
+
+            if (mItemStateRuntime && !package.runtime.itemStateMachineDefinitions.empty()) {
+                std::unordered_set<std::string> selectedItemIds;
+                for (const auto& item : package.runtime.itemDefinitions) {
+                    if (item.granted && IsModItemHeld(item, player)) {
+                        selectedItemIds.insert(item.id);
+                    }
+                }
+                std::unordered_map<std::string, int32_t> bindingMasks;
+                for (const auto& binding : package.runtime.inputBindings) {
+                    const auto cvarName = BuildBindingCVarName(package.manifest.id, binding.id);
+                    int32_t mask = binding.allowUserRemap ? CVarGetInteger(cvarName.c_str(), binding.defaultMask)
+                                                          : binding.defaultMask;
+                    if (mask == 0) {
+                        mask = binding.defaultMask;
+                    }
+                    bindingMasks.emplace(binding.id, mask);
+                }
+                mItemStateRuntime->Tick(
+                    package, selectedItemIds, bindingMasks, input->cur.button, input->prev.button,
+                    [&](const ExternalModItemStateMachineDefinition& machine,
+                        const ExternalModItemStateTransition& transition) {
+                        ExecuteActions(package, transition.actions, machine.id.c_str());
+                    });
+            }
 
             for (auto& inputTrigger : package.runtime.inputTriggers) {
                 if (inputTrigger.cooldownRemaining > 0) {
@@ -35456,6 +35677,36 @@ bool ExternalModManager::OnHammerGroundImpact(PlayState* play, Player* player, f
     int32_t selectedPriority = std::numeric_limits<int32_t>::min();
     std::string selectedModId;
     const int32_t heldItemId = player->heldItemId;
+    bool stateMachineHandled = false;
+
+    if (mItemStateRuntime) {
+        for (auto& package : mPackages) {
+            if (!package.runtime.enabled || package.runtime.itemStateMachineDefinitions.empty()) {
+                continue;
+            }
+            for (const auto& item : package.runtime.itemDefinitions) {
+                if (!item.granted || !ItemDefinitionMatchesUseItem(item, heldItemId)) {
+                    continue;
+                }
+                package.runtime.hasEffectImpactPosition = true;
+                package.runtime.effectImpactPosX = impactX;
+                package.runtime.effectImpactPosY = impactY;
+                package.runtime.effectImpactPosZ = impactZ;
+                stateMachineHandled =
+                    mItemStateRuntime->DispatchImpact(
+                        package, item.id,
+                        [&](const ExternalModItemStateMachineDefinition& machine,
+                            const ExternalModItemStateTransition& transition) {
+                            ExecuteActions(package, transition.actions, machine.id.c_str());
+                        }) ||
+                    stateMachineHandled;
+                package.runtime.hasEffectImpactPosition = false;
+                package.runtime.effectImpactPosX = 0.0f;
+                package.runtime.effectImpactPosY = 0.0f;
+                package.runtime.effectImpactPosZ = 0.0f;
+            }
+        }
+    }
 
     for (auto& package : mPackages) {
         if (!package.runtime.enabled) {
@@ -35482,7 +35733,7 @@ bool ExternalModManager::OnHammerGroundImpact(PlayState* play, Player* player, f
     }
 
     if (selectedPackage == nullptr || selectedItem == nullptr) {
-        return false;
+        return stateMachineHandled;
     }
 
     auto& runtime = selectedPackage->runtime;
@@ -35521,7 +35772,7 @@ bool ExternalModManager::OnHammerGroundImpact(PlayState* play, Player* player, f
 
     const bool handledShockwave = runtime.useProfileSpawnedShockwave;
     clearImpactContext();
-    return handledShockwave;
+    return handledShockwave || stateMachineHandled;
 }
 
 void ExternalModManager::OnPlayerUseItem(void* player, int32_t itemId, bool* allowVanilla) {

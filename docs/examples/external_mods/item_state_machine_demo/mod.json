@@ -1,0 +1,36 @@
+{
+  "id": "com.sylian.demo.item_state_machine",
+  "name": "Item State Machine Demo",
+  "version": "0.1.0",
+  "type": "content",
+  "apiVersion": 4,
+  "uiCategory": "mod",
+  "loadPriority": 220,
+  "entryScript": "scripts/init.json",
+  "itemDefinitions": "items/items.json",
+  "inputDefinitions": "config/input.json",
+  "itemStateDefinitions": "items/state_machine.json",
+  "runtime": {
+    "type": "wasm3-v1",
+    "module": "scripts/noop.wat",
+    "maxMemoryKb": 1024,
+    "maxCallMs": 2,
+    "maxFrameBudgetMs": 2,
+    "maxHookCallsPerFrame": 64,
+    "maxActorInstances": 8,
+    "maxActiveStatuses": 16
+  },
+  "engineVersionRange": ">=9.2.3 <10.0.0",
+  "capabilities": [
+    "core.items.v1",
+    "core.input.v1",
+    "items.state_machine.v1"
+  ],
+  "capabilityRationales": {
+    "core.items.v1": "Declara o martelo de prova da maquina de estados.",
+    "core.input.v1": "Fornece a entrada de press, hold e release.",
+    "items.state_machine.v1": "Demonstra select, deselect, press, hold, release e impact no runtime API v4."
+  },
+  "dependencies": [],
+  "permissions": []
+}

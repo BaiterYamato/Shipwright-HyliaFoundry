@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "id": "state_hammer",
+      "displayName": "Martelo de Estados",
+      "slot": "SLOT_HAMMER",
+      "description": "Martelo de prova para items.state_machine.v1.",
+      "agePolicy": "adultOnly",
+      "useMode": "vanilla",
+      "params": { "cooldown": 0 }
+    }
+  ]
+}

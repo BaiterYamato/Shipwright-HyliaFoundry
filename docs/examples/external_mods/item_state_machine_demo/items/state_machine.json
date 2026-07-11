@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "stateMachines": [
+    {
+      "id": "com.sylian.demo.item_state_machine:hammer",
+      "itemId": "state_hammer",
+      "bindingId": "state_hammer_action",
+      "initialState": "idle",
+      "transitions": [
+        { "event": "select", "from": "idle", "to": "selected", "actions": [
+          { "action": "showNotification", "text": "M4: martelo selecionado" }
+        ] },
+        { "event": "deselect", "from": "*", "to": "idle", "actions": [
+          { "action": "showNotification", "text": "M4: martelo desselecionado" }
+        ] },
+        { "event": "press", "from": "selected", "to": "pressed", "actions": [
+          { "action": "showNotification", "text": "M4: press" }
+        ] },
+        { "event": "hold", "from": "pressed", "to": "held", "actions": [] },
+        { "event": "hold", "from": "held", "to": "held", "actions": [] },
+        { "event": "release", "from": "pressed", "to": "selected", "actions": [
+          { "action": "showNotification", "text": "M4: release" }
+        ] },
+        { "event": "release", "from": "held", "to": "selected", "actions": [
+          { "action": "showNotification", "text": "M4: release apos hold" }
+        ] },
+        { "event": "impact", "from": "*", "to": "selected", "actions": [
+          { "action": "showNotification", "text": "M4: impact" }
+        ] }
+      ]
+    }
+  ]
+}

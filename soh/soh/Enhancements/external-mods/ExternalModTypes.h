@@ -1209,6 +1209,35 @@ enum class ExternalModPlayerConsumableStorageMode {
     BottleContent,
 };
 
+enum class ExternalModItemStateEvent {
+    Select,
+    Deselect,
+    Press,
+    Hold,
+    Release,
+    Impact,
+};
+
+struct ExternalModItemStateTransition {
+    ExternalModItemStateEvent event = ExternalModItemStateEvent::Press;
+    std::string fromState;
+    std::string toState;
+    std::vector<ExternalModAction> actions;
+};
+
+struct ExternalModItemStateMachineDefinition {
+    std::string id;
+    std::string itemId;
+    std::string bindingId;
+    std::string initialState;
+    std::vector<ExternalModItemStateTransition> transitions;
+};
+
+struct ExternalModItemStateMachineRuntimeState {
+    std::string currentState;
+    bool selected = false;
+};
+
 enum class ExternalModPlayerConsumableUseAnimation {
     None,
     DrinkDemo,
@@ -2039,6 +2068,8 @@ struct ExternalModRuntime {
     std::vector<ExternalModCameraHotkeyDefinition> cameraHotkeys;
     std::vector<ExternalModHotkeyDefinition> hotkeys;
     std::vector<ExternalModInputActionTrigger> inputTriggers;
+    std::vector<ExternalModItemStateMachineDefinition> itemStateMachineDefinitions;
+    std::unordered_map<std::string, ExternalModItemStateMachineRuntimeState> itemStateMachineStates;
     std::vector<ExternalModItemDefinition> itemDefinitions;
     std::vector<ExternalModHookSubscription> hookSubscriptions;
     std::vector<ExternalModActorDefinition> actorDefinitions;
