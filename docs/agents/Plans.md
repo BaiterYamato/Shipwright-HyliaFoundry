@@ -905,3 +905,20 @@ This file is the fixed, append-only plan ledger for this repository.
   - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
   - docs/examples/external_mods/demo_furnace_system/config/input.json
   - docs/examples/external_mods/demo_furnace_system/scripts/init.json
+
+## [PLN-20260711-0001] Integrar upstream oficial 2026-07-11
+- createdUtc: 2026-07-11T07:51:45Z
+- status: in_progress
+- scope: mixed
+- summary: Mesclar HarbourMasters/develop atual preservando o External Modloader, atualizar Graphify e validar build/runtime com conflitos minimizados.
+- milestones:
+  1. Atualizar Graphify e fixar refs Git
+  2. Criar branch recuperavel e mesclar upstream
+  3. Resolver conflitos preservando contratos locais
+  4. Inicializar dependencias e validar build e smokes
+  5. Auditar resultado e registrar conclusao
+- tags: upstream, merge, external-mods, graphify
+- refs:
+  - docs/agents/project_state.md
+  - docs/EXTERNAL_MOD_DATA_DRIVEN_REFERENCE.md
+  - soh/soh/Enhancements/external-mods/ExternalModManager.cpp
