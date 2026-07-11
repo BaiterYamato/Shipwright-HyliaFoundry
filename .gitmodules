@@ -1,4 +1,7 @@
-hyliafoundry
+[submodule "libultraship"]
+	path = libultraship
+	url = https://github.com/BaiterYamato/libultraship.git
+	branch = hyliafoundry
 [submodule "ZAPDTR"]
 	path = ZAPDTR
 	url = https://github.com/harbourmasters/ZAPDTR
