@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "survival",
+      "label": "Survival Needs",
+      "order": 0,
+      "entries": [
+        {
+          "key": "hungerEnabled",
+          "label": "Enable hunger",
+          "type": "bool",
+          "default": true,
+          "applyMode": "realtime",
+          "help": "Toggles passive hunger drain and hunger depletion penalties."
+        },
+        {
+          "key": "thirstEnabled",
+          "label": "Enable thirst",
+          "type": "bool",
+          "default": true,
+          "applyMode": "realtime",
+          "help": "Toggles passive thirst drain, thirst depletion penalties, and periodic dehydration damage."
+        },
+        {
+          "key": "hungerDrainMultiplier",
+          "label": "Hunger drain",
+          "type": "float",
+          "default": 1.0,
+          "min": 0.25,
+          "max": 3.0,
+          "step": 0.05,
+          "applyMode": "realtime",
+          "help": "Scales all passive hunger drain rules."
+        },
+        {
+          "key": "thirstDrainMultiplier",
+          "label": "Thirst drain",
+          "type": "float",
+          "default": 1.0,
+          "min": 0.25,
+          "max": 3.0,
+          "step": 0.05,
+          "applyMode": "realtime",
+          "help": "Scales all passive thirst drain rules."
+        }
+      ]
+    },
+    {
+      "id": "display",
+      "label": "Display",
+      "order": 1,
+      "entries": [
+        {
+          "key": "showHungerBar",
+          "label": "Show hunger bar",
+          "type": "bool",
+          "default": true,
+          "applyMode": "realtime",
+          "help": "Draw the orange hunger bar in the fixed magic-bar stack."
+        },
+        {
+          "key": "showThirstBar",
+          "label": "Show thirst bar",
+          "type": "bool",
+          "default": true,
+          "applyMode": "realtime",
+          "help": "Draw the blue thirst bar in the fixed magic-bar stack."
+        },
+        {
+          "key": "survivalHudScale",
+          "label": "HUD scale",
+          "type": "float",
+          "default": 1.0,
+          "min": 0.6,
+          "max": 1.8,
+          "step": 0.05,
+          "applyMode": "realtime",
+          "help": "Applies to the hunger and thirst fixed bars."
+        },
+        {
+          "key": "survivalHudOpacity",
+          "label": "HUD opacity",
+          "type": "float",
+          "default": 1.0,
+          "min": 0.2,
+          "max": 1.0,
+          "step": 0.05,
+          "applyMode": "realtime",
+          "help": "Controls the shared alpha used by the hunger and thirst bars."
+        }
+      ]
+    }
+  ]
+}

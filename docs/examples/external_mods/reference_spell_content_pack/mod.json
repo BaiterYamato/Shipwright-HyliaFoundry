@@ -1,0 +1,60 @@
+﻿{
+    "id":  "com.sylian.reference.spell_content_pack",
+    "name":  "Reference Spell Content Pack",
+    "version":  "0.1.0",
+    "type":  "content",
+    "apiVersion":  4,
+    "uiCategory":  "mod",
+    "loadPriority":  205,
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json",
+    "itemUseProfiles":  "items/use_profiles.json",
+    "statusDefinitions":  "statuses/statuses.json",
+    "targetingDefinitions":  "combat/targeting_profiles.json",
+    "aoeDefinitions":  "combat/aoe_profiles.json",
+    "fxPresetDefinitions":  "fx/fx_presets.json",
+    "spellDefinitions":  "spells/spells.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "releaseChannels":  [
+                            "stable"
+                        ],
+    "capabilities":  [
+                         "statuses.catalog.v1",
+                         "combat.targeting.v1",
+                         "combat.aoe.v1",
+                         "items.use_profiles.v1",
+                         "fx.presets.v1",
+                         "spells.catalog.v1"
+                     ],
+    "capabilityRationales":  {
+                                 "statuses.catalog.v1":  "Declares statuses.catalog.v1 as part of Reference Spell Content Pack in the framework-first API v4 catalog.",
+                                 "combat.targeting.v1":  "Declares combat.targeting.v1 as part of Reference Spell Content Pack in the framework-first API v4 catalog.",
+                                 "combat.aoe.v1":  "Declares combat.aoe.v1 as part of Reference Spell Content Pack in the framework-first API v4 catalog.",
+                                 "items.use_profiles.v1":  "Declares items.use_profiles.v1 as part of Reference Spell Content Pack in the framework-first API v4 catalog.",
+                                 "fx.presets.v1":  "Declares fx.presets.v1 as part of Reference Spell Content Pack in the framework-first API v4 catalog.",
+                                 "spells.catalog.v1":  "Declares spells.catalog.v1 as part of Reference Spell Content Pack in the framework-first API v4 catalog."
+                             },
+    "dependencies":  [
+                         {
+                             "id":  "com.sylian.framework.combat_ai",
+                             "versionRange":  "\u003e=0.1.0 \u003c0.2.0"
+                         }
+                     ],
+    "uses":  [
+                 "framework.combat_ai"
+             ],
+    "exports":  {
+
+                }
+}

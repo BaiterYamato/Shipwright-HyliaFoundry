@@ -1,0 +1,47 @@
+﻿{
+    "id":  "com.sylian.reference.dependency_matrix",
+    "name":  "Reference Dependency Matrix",
+    "version":  "0.1.0",
+    "type":  "content",
+    "apiVersion":  4,
+    "uiCategory":  "mod",
+    "loadPriority":  200,
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "releaseChannels":  [
+                            "stable"
+                        ],
+    "capabilities":  [
+
+                     ],
+    "capabilityRationales":  {
+
+                             },
+    "dependencies":  [
+                         {
+                             "id":  "com.sylian.framework.narrative",
+                             "versionRange":  "\u003e=0.1.0 \u003c0.2.0"
+                         },
+                         {
+                             "id":  "com.sylian.framework.persistence",
+                             "versionRange":  "\u003e=0.1.0 \u003c0.2.0"
+                         }
+                     ],
+    "uses":  [
+                 "framework.narrative",
+                 "framework.persistence"
+             ],
+    "exports":  {
+
+                }
+}

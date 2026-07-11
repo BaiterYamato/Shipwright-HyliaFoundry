@@ -1,0 +1,11 @@
+﻿{
+    "schemaVersion":  1,
+    "definitions":  [
+                        {
+                            "scope":  "room",
+                            "autoSaveOnRoomExit":  true,
+                            "id":  "com.sylian.persistence_kit:default",
+                            "autoLoadOnRoomEnter":  true
+                        }
+                    ]
+}

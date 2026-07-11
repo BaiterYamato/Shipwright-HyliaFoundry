@@ -1,0 +1,9 @@
+﻿{
+    "apiVersion":  4,
+    "onGameLoaded":  [
+                         {
+                             "text":  "Narrative Kit loaded: flags, dialogue, quests and timelines ready.",
+                             "action":  "showNotification"
+                         }
+                     ]
+}

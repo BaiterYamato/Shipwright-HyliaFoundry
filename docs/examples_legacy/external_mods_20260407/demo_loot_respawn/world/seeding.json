@@ -1,0 +1,9 @@
+﻿{
+    "schemaVersion":  1,
+    "definitions":  [
+                        {
+                            "id":  "com.sylian.demo_loot_respawn:seed",
+                            "seedOffset":  303
+                        }
+                    ]
+}

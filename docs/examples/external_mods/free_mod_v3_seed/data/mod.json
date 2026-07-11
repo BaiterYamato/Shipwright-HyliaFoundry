@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "mod.manifest.v3",
+  "id": "com.sylian.demo.free_mod_v3_seed",
+  "name": "Free Mod V3 Seed",
+  "version": "0.1.0",
+  "type": "content",
+  "uiCategory": "mod",
+  "apiVersion": 4,
+  "releaseChannels": [
+    "stable"
+  ],
+  "runtime": {
+    "type": "data-only"
+  },
+  "sharePolicy": {
+    "read": "public",
+    "write": "owner",
+    "override": "owner",
+    "nativeService": "public"
+  },
+  "imports": [
+    {
+      "modId": "com.sylian.framework.render_world",
+      "namespace": "framework",
+      "access": "read",
+      "optional": true
+    }
+  ],
+  "provides": [
+    "demo.free_mod_v3_seed"
+  ],
+  "uses": [
+    "framework.render_world"
+  ],
+  "exports": [
+    {
+      "id": "public.placeable.lantern",
+      "kind": "prefab",
+      "namespace": "prefabs",
+      "source": "com.sylian.demo.free_mod_v3_seed:lantern_prefab",
+      "visibility": "public",
+      "mutableBy": "owner"
+    }
+  ],
+  "serviceEndpoints": [
+    {
+      "id": "seed.lookup",
+      "kind": "query",
+      "entry": "services/lookup.json",
+      "visibility": "public",
+      "mutableBy": "owner"
+    }
+  ],
+  "capabilities": [
+    "assets.raw.v1",
+    "render.meshes.v1",
+    "actors.prefabs.v1",
+    "world.instances.v1",
+    "editor.placement.v1",
+    "world.authoring.v1",
+    "dsl.components.v1",
+    "dsl.entities.v1",
+    "dsl.graphs.v1",
+    "services.endpoints.v1"
+  ],
+  "capabilityRationales": {
+    "assets.raw.v1": "Expose loose runtime assets from mods_runtime for a split API v4 package.",
+    "render.meshes.v1": "Bind runtime OBJ and texture assets to reusable mesh ids through v3 conventions.",
+    "actors.prefabs.v1": "Allow visual components to synthesize reusable prefab bindings from mesh-backed DSL documents.",
+    "world.instances.v1": "Place entity-backed props directly from mods_data/world without hard-coding prefab ids at each instance.",
+    "editor.placement.v1": "Publish reusable entity-backed placement entries through the world convention root.",
+    "world.authoring.v1": "Exercise authored placements through the v3 convention model and entity-driven placement bindings.",
+    "dsl.components.v1": "Load generic component DSL documents from the components directory.",
+    "dsl.entities.v1": "Load generic entity DSL documents from the entities directory.",
+    "dsl.graphs.v1": "Load generic graph DSL documents from the graphs directory.",
+    "services.endpoints.v1": "Expose service endpoint metadata for cross-mod lookup."
+  }
+}

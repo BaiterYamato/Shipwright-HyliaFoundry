@@ -1,0 +1,16 @@
+﻿{
+    "screens":  [
+                    {
+                        "onClose":  [
+
+                                    ],
+                        "closeOnEscape":  true,
+                        "id":  "com.sylian.ui_kit:mini_inventory",
+                        "hudLayoutId":  "com.sylian.ui_kit:default_hud",
+                        "onOpen":  [
+
+                                   ]
+                    }
+                ],
+    "schemaVersion":  1
+}

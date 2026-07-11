@@ -1,0 +1,40 @@
+﻿{
+    "id":  "com.sylian.narrative_kit",
+    "name":  "Narrative Kit",
+    "version":  "0.1.0",
+    "apiVersion":  4,
+    "loadPriority":  355,
+    "uiCategory":  "core_api",
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "dependencies":  [
+
+                     ],
+    "capabilities":  [
+                         "narrative.flags.v1",
+                         "narrative.dialogue.v1",
+                         "narrative.quests.v1",
+                         "narrative.timeline.v1",
+                         "debug.narrative_inspector.v1"
+                     ],
+    "narrativeFlagDefinitions":  "narrative/flags.json",
+    "narrativeDialogueDefinitions":  "narrative/dialogues.json",
+    "narrativeQuestDefinitions":  "narrative/quests.json",
+    "narrativeTimelineDefinitions":  "narrative/timelines.json",
+    "narrativeInspectorDefinitions":  "debug/narrative_inspector.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "permissions":  [
+
+                    ],
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json"
+}

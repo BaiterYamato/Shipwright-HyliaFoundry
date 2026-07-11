@@ -1,0 +1,27 @@
+﻿{
+    "schemaVersion":  1,
+    "quests":  [
+                   {
+                       "objectives":  [
+                                          {
+                                              "id":  "step_1",
+                                              "text":  "Find the marker",
+                                              "state":  "pending"
+                                          },
+                                          {
+                                              "id":  "step_2",
+                                              "text":  "Return to giver",
+                                              "state":  "pending"
+                                          }
+                                      ],
+                       "onStart":  [
+                                       {
+                                           "text":  "Quest chain started.",
+                                           "action":  "showNotification"
+                                       }
+                                   ],
+                       "id":  "com.sylian.demo_quest_chain:main",
+                       "startState":  "inactive"
+                   }
+               ]
+}

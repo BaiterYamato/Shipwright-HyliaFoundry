@@ -1,0 +1,11 @@
+﻿{
+    "schemaVersion":  1,
+    "flags":  [
+                  {
+                      "scope":  "global",
+                      "valueType":  "bool",
+                      "id":  "com.sylian.narrative_kit:gate_open",
+                      "defaultValue":  "false"
+                  }
+              ]
+}

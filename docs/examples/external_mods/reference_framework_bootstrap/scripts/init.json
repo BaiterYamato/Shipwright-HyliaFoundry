@@ -1,0 +1,9 @@
+﻿{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "showNotification",
+      "text": "Framework No Items Demo loaded without itemDefinitions/inputDefinitions."
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "consumables": [
+    {
+      "id": "com.sylian.player_survival_needs_demo:odd_mushroom_food",
+      "displayName": "Odd Mushroom (Food)",
+      "settingsDomain": "save",
+      "storageDomainId": "survival_food",
+      "countStorageKey": "oddMushroomCount",
+      "storageMode": "stack",
+      "consumeAnimation": "drinkDemo",
+      "maxStack": 20,
+      "inventoryPlaceholderItemId": 48,
+      "companionVanillaItemId": 48,
+      "effects": [
+        {
+          "resourceId": "com.sylian.player_survival_needs_demo:hunger",
+          "addValue": 35.0
+        }
+      ]
+    },
+    {
+      "id": "com.sylian.player_survival_needs_demo:fresh_water",
+      "displayName": "Fresh Water",
+      "settingsDomain": "save",
+      "storageDomainId": "survival_water",
+      "countStorageKey": "freshWater",
+      "storageMode": "bottleContent",
+      "fillSource": "water",
+      "usesPerFill": 2,
+      "placeholderItemId": 26,
+      "placeholderPartialItemId": 31,
+      "placeholderIconAsset": "ui/assets/fresh_water_full.png",
+      "placeholderPartialIconAsset": "ui/assets/fresh_water_half.png",
+      "returnItemId": 20,
+      "companionVanillaItemId": 26,
+      "effects": [
+        {
+          "resourceId": "com.sylian.player_survival_needs_demo:thirst",
+          "addValue": 45.0
+        }
+      ]
+    }
+  ]
+}

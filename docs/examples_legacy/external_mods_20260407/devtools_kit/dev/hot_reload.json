@@ -1,0 +1,10 @@
+﻿{
+    "schemaVersion":  1,
+    "definitions":  [
+                        {
+                            "debounceMs":  300,
+                            "id":  "com.sylian.devtools_kit:default",
+                            "enabled":  true
+                        }
+                    ]
+}

@@ -1,0 +1,11 @@
+﻿{
+    "schemaVersion":  1,
+    "watchers":  [
+                     {
+                         "debounceMs":  300,
+                         "path":  "dev",
+                         "id":  "com.sylian.devtools_kit:watch_self",
+                         "target":  "all"
+                     }
+                 ]
+}

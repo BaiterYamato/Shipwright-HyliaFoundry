@@ -1,0 +1,15 @@
+﻿{
+    "schemaVersion":  1,
+    "commands":  [
+                     {
+                         "command":  "dev.hello",
+                         "actions":  [
+                                         {
+                                             "text":  "dev.console.exec works.",
+                                             "action":  "showNotification"
+                                         }
+                                     ],
+                         "id":  "com.sylian.devtools_kit:hello"
+                     }
+                 ]
+}

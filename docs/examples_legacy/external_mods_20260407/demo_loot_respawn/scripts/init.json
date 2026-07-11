@@ -1,0 +1,13 @@
+﻿{
+    "apiVersion":  4,
+    "onGameLoaded":  [
+                         {
+                             "profileId":  "com.sylian.demo_loot_respawn:crate_spawn",
+                             "action":  "world.spawnFromProfile"
+                         },
+                         {
+                             "text":  "Loot respawn profile ticked.",
+                             "action":  "showNotification"
+                         }
+                     ]
+}

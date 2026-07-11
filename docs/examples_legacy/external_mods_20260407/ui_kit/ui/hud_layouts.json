@@ -1,0 +1,8 @@
+﻿{
+    "layouts":  [
+                    {
+                        "id":  "com.sylian.ui_kit:default_hud"
+                    }
+                ],
+    "schemaVersion":  1
+}

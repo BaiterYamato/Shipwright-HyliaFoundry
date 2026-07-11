@@ -1,0 +1,16 @@
+﻿{
+    "schemaVersion":  1,
+    "sandboxes":  [
+                      {
+                          "id":  "com.sylian.devtools_kit:default",
+                          "maxHookCallsPerFrame":  256,
+                          "maxFrameBudgetMs":  2,
+                          "deterministicMode":  true,
+                          "maxCallMs":  2,
+                          "allowedSurfaces":  [
+                                                  "host_applyStatus",
+                                                  "host_spawnAoE"
+                                              ]
+                      }
+                  ]
+}

@@ -1,0 +1,89 @@
+﻿{
+    "id":  "com.sylian.framework.persistence",
+    "name":  "Framework Persistence",
+    "version":  "0.1.0",
+    "type":  "framework",
+    "apiVersion":  4,
+    "uiCategory":  "core_api",
+    "loadPriority":  410,
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "hybrid-v1",
+                    "module":  "scripts/noop.wat",
+                    "entryLibrary":  "native/win64/plugin.dll",
+                    "abiVersion":  1,
+                    "nativeMode":  "sdk",
+                    "reloadPolicy":  "manual",
+                    "buildIdPolicy":  "ignore",
+                    "threadModel":  "main_thread",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json",
+    "worldPersistenceDefinitions":  "world/persistence.json",
+    "worldStorageDefinitions":  "world/storage_domains.json",
+    "worldSpawnProfileDefinitions":  "world/spawn_profiles.json",
+    "worldTimeWeatherDefinitions":  "world/time_weather.json",
+    "worldSeedingDefinitions":  "world/seeding.json",
+    "worldMigrationDefinitions":  "world/migrations.json",
+    "persistenceInspectorDefinitions":  "debug/persistence_inspector.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "releaseChannels":  [
+                            "stable"
+                        ],
+    "capabilities":  [
+                         "native.sdk.v1",
+                         "world.persistence.v1",
+                         "world.storage.v1",
+                         "world.spawn_profiles.v1",
+                         "world.time_weather.v1",
+                         "world.seeding.v1",
+                         "world.migrations.v1",
+                         "debug.persistence_inspector.v1"
+                     ],
+    "capabilityRationales":  {
+                                 "native.sdk.v1":  "Declares native.sdk.v1 as part of Framework Persistence in the framework-first API v4 catalog.",
+                                 "world.persistence.v1":  "Declares world.persistence.v1 as part of Framework Persistence in the framework-first API v4 catalog.",
+                                 "world.storage.v1":  "Declares world.storage.v1 as part of Framework Persistence in the framework-first API v4 catalog.",
+                                 "world.spawn_profiles.v1":  "Declares world.spawn_profiles.v1 as part of Framework Persistence in the framework-first API v4 catalog.",
+                                 "world.time_weather.v1":  "Declares world.time_weather.v1 as part of Framework Persistence in the framework-first API v4 catalog.",
+                                 "world.seeding.v1":  "Declares world.seeding.v1 as part of Framework Persistence in the framework-first API v4 catalog.",
+                                 "world.migrations.v1":  "Declares world.migrations.v1 as part of Framework Persistence in the framework-first API v4 catalog.",
+                                 "debug.persistence_inspector.v1":  "Declares debug.persistence_inspector.v1 as part of Framework Persistence in the framework-first API v4 catalog."
+                             },
+    "permissions":  [
+                        "nativeinterop"
+                    ],
+    "permissionRationales":  {
+                                 "nativeinterop":  "Required by Framework Persistence for the configured runtime and diagnostics surface."
+                             },
+    "dependencies":  [
+
+                     ],
+    "provides":  [
+                     "framework.persistence"
+                 ],
+    "uses":  [
+
+             ],
+    "exports":  {
+                    "framework":  [
+                                      "framework.persistence"
+                                  ],
+                    "capabilities":  [
+                                         "native.sdk.v1",
+                                         "world.persistence.v1",
+                                         "world.storage.v1",
+                                         "world.spawn_profiles.v1",
+                                         "world.time_weather.v1",
+                                         "world.seeding.v1",
+                                         "world.migrations.v1",
+                                         "debug.persistence_inspector.v1"
+                                     ]
+                }
+}

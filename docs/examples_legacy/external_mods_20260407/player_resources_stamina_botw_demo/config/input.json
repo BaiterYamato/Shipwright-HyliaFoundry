@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "bindings": [
+    {
+      "id": "stamina_sprint_hold",
+      "defaultMask": "MOD_ACTION6",
+      "trigger": "held",
+      "allowUserRemap": true,
+      "defaultKeyboardKeys": ["LSHIFT"]
+    }
+  ]
+}

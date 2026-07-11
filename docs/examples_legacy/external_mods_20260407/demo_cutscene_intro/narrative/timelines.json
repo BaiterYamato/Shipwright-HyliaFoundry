@@ -1,0 +1,40 @@
+﻿{
+    "schemaVersion":  1,
+    "timelines":  [
+                      {
+                          "onCompleted":  [
+                                              {
+                                                  "text":  "Cutscene intro complete.",
+                                                  "action":  "showNotification"
+                                              }
+                                          ],
+                          "durationFrames":  90,
+                          "tracks":  [
+                                         {
+                                             "atFrame":  1,
+                                             "actions":  [
+                                                             {
+                                                                 "text":  "Cutscene intro start.",
+                                                                 "action":  "showNotification"
+                                                             }
+                                                         ],
+                                             "id":  "start",
+                                             "type":  "actions"
+                                         },
+                                         {
+                                             "atFrame":  45,
+                                             "actions":  [
+                                                             {
+                                                                 "text":  "Cutscene intro middle.",
+                                                                 "action":  "showNotification"
+                                                             }
+                                                         ],
+                                             "id":  "middle",
+                                             "type":  "actions"
+                                         }
+                                     ],
+                          "id":  "com.sylian.demo_cutscene_intro:intro",
+                          "skippable":  true
+                      }
+                  ]
+}

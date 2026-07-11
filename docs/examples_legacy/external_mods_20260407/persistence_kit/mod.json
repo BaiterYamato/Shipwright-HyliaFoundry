@@ -1,0 +1,47 @@
+﻿{
+    "id":  "com.sylian.persistence_kit",
+    "name":  "Persistence Kit",
+    "version":  "0.1.0",
+    "apiVersion":  4,
+    "loadPriority":  360,
+    "uiCategory":  "core_api",
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "dependencies":  [
+
+                     ],
+    "capabilities":  [
+                         "world.persistence.v1",
+                         "world.storage.v1",
+                         "world.spawn_profiles.v1",
+                         "world.time_weather.v1",
+                         "world.seeding.v1",
+                         "world.migrations.v1",
+                         "debug.persistence_inspector.v1"
+                     ],
+    "worldPersistenceDefinitions":  "world/persistence.json",
+    "worldStorageDefinitions":  "world/storage_domains.json",
+    "worldSpawnProfileDefinitions":  "world/spawn_profiles.json",
+    "worldTimeWeatherDefinitions":  "world/time_weather.json",
+    "worldSeedingDefinitions":  "world/seeding.json",
+    "worldMigrationDefinitions":  "world/migrations.json",
+    "persistenceInspectorDefinitions":  "debug/persistence_inspector.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "permissions":  [
+                        "filesystem"
+                    ],
+    "permissionRationales":  {
+                                 "filesystem":  "Persists world/domain JSON state under Save/external_mods/persist for v9 persistence runtime."
+                             },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json"
+}

@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    {
+      "id": "com.sylian.world_profiles:overworld_clear",
+      "tonemap": "filmic",
+      "exposure": 1.0,
+      "bloom": 0.04,
+      "fogColor": [
+        0.67,
+        0.8,
+        1.0,
+        1.0
+      ],
+      "fogNear": 965,
+      "fogFar": 1000,
+      "vignette": 0.0,
+      "saturation": 1.0
+    },
+    {
+      "id": "com.sylian.world_profiles:overworld_godrays",
+      "tonemap": "filmic",
+      "exposure": 1.02,
+      "bloom": 0.08,
+      "fogColor": [
+        0.72,
+        0.84,
+        1.0,
+        1.0
+      ],
+      "fogNear": 880,
+      "fogFar": 1020,
+      "vignette": 0.08,
+      "saturation": 1.0,
+      "volumetrics": {
+        "enabled": true,
+        "quality": "high",
+        "density": 0.22,
+        "color": [
+          0.72,
+          0.84,
+          1.0
+        ],
+        "ambientIntensity": 0.5,
+        "anisotropy": 0.55,
+        "startDistance": 35.0,
+        "maxDistance": 1300.0,
+        "heightFogEnabled": true,
+        "baseHeight": -20.0,
+        "heightFalloff": 0.0035,
+        "lightShaftIntensity": 1.4,
+        "shadowIntensity": 0.75,
+        "temporalBlend": 0.82,
+        "jitterScale": 0.9,
+        "debugView": false
+      }
+    },
+    {
+      "id": "com.sylian.world_profiles:overworld_green_cinematic",
+      "tonemap": "filmic",
+      "exposure": 0.94,
+      "bloom": 0.18,
+      "fogColor": [
+        0.16,
+        0.88,
+        0.28,
+        1.0
+      ],
+      "fogNear": 420,
+      "fogFar": 980,
+      "vignette": 0.32,
+      "saturation": 0.92,
+      "forceFogOverlay": true,
+      "fogOverlayStrength": 0.12,
+      "forceDepthAwareFog": true
+    },
+    {
+      "id": "com.sylian.world_profiles:cave_cold",
+      "tonemap": "filmic",
+      "exposure": 0.75,
+      "bloom": 0.05,
+      "fogColor": [
+        0.25,
+        0.38,
+        0.7,
+        1.0
+      ],
+      "fogDensity": 0.08,
+      "volumetrics": {
+        "enabled": true,
+        "quality": "medium",
+        "density": 0.34,
+        "color": [
+          0.22,
+          0.34,
+          0.75
+        ],
+        "ambientIntensity": 0.65,
+        "anisotropy": 0.18,
+        "startDistance": 20.0,
+        "maxDistance": 620.0,
+        "heightFogEnabled": true,
+        "baseHeight": -120.0,
+        "heightFalloff": 0.012,
+        "lightShaftIntensity": 0.95,
+        "shadowIntensity": 0.6,
+        "temporalBlend": 0.78,
+        "jitterScale": 0.7,
+        "debugView": false
+      }
+    }
+  ]
+}

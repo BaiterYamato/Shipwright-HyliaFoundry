@@ -1,0 +1,22 @@
+﻿{
+    "schemaVersion":  1,
+    "quests":  [
+                   {
+                       "objectives":  [
+                                          {
+                                              "id":  "talk_to_guide",
+                                              "text":  "Talk to the guide",
+                                              "state":  "pending"
+                                          }
+                                      ],
+                       "onStart":  [
+                                       {
+                                           "text":  "Quest started: Talk to the guide.",
+                                           "action":  "showNotification"
+                                       }
+                                   ],
+                       "id":  "com.sylian.narrative_kit:intro_quest",
+                       "startState":  "inactive"
+                   }
+               ]
+}

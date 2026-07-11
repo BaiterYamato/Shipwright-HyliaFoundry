@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "com.sylian.world_profiles:sky_white",
+      "type": "directional",
+      "direction": [
+        0.24,
+        -0.92,
+        -0.3
+      ],
+      "color": [
+        0.95,
+        0.99,
+        1.0
+      ],
+      "intensity": 1.2,
+      "radius": 0.0,
+      "castShadows": true,
+      "shadowResolution": 1024,
+      "shadowBias": 0.003,
+      "shadowNormalBias": 0.08,
+      "shadowRange": 1800.0,
+      "volumetricIntensity": 1.1
+    },
+    {
+      "id": "com.sylian.world_profiles:cave_blue",
+      "type": "point",
+      "color": [
+        0.45,
+        0.6,
+        1.0
+      ],
+      "intensity": 95.0,
+      "radius": 280.0,
+      "castShadows": true,
+      "shadowResolution": 512,
+      "shadowBias": 0.02,
+      "shadowNormalBias": 0.15,
+      "shadowRange": 260.0,
+      "volumetricIntensity": 1.35
+    }
+  ]
+}

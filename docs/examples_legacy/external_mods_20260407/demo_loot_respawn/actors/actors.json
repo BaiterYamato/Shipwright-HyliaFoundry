@@ -1,0 +1,26 @@
+﻿{
+    "actors":  [
+                   {
+                       "spawn":  {
+                                     "position":  [
+                                                      0,
+                                                      0,
+                                                      0
+                                                  ],
+                                     "rotation":  [
+                                                      0,
+                                                      0,
+                                                      0
+                                                  ],
+                                     "scene":  "SCENE_KOKIRI_FOREST"
+                                 },
+                       "archetype":  "prop",
+                       "id":  "com.sylian.demo_loot_respawn:crate_anchor",
+                       "limits":  {
+                                      "lodDistance":  5000,
+                                      "maxInstances":  2,
+                                      "tickRate":  1
+                                  }
+                   }
+               ]
+}

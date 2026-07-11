@@ -1,0 +1,68 @@
+﻿{
+    "id":  "com.sylian.demo.render_world_showcase",
+    "name":  "Demo Render World Showcase",
+    "version":  "0.1.0",
+    "type":  "content",
+    "apiVersion":  4,
+    "uiCategory":  "mod",
+    "loadPriority":  320,
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json",
+    "hookDefinitions":  "hooks/hooks.json",
+    "actorDefinitions":  "actors/actors.json",
+    "assetSourceDefinitions":  "assets/sources.json",
+    "meshDefinitions":  "render/meshes.json",
+    "prefabDefinitions":  "actors/prefabs.json",
+    "worldInstanceDefinitions":  "world/instances.json",
+    "editorPlacementDefinitions":  "editor/placement.json",
+    "worldAuthoringDefinitions":  "world/authoring.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "releaseChannels":  [
+                            "stable"
+                        ],
+    "capabilities":  [
+                         "hooks.extended.v1",
+                         "actors.generic.v1",
+                         "actors.vm.v1",
+                         "assets.raw.v1",
+                         "render.meshes.v1",
+                         "actors.prefabs.v1",
+                         "world.instances.v1",
+                         "editor.placement.v1",
+                         "world.authoring.v1"
+                     ],
+    "capabilityRationales":  {
+                                 "hooks.extended.v1":  "Declares hooks.extended.v1 as part of Demo Render World Showcase in the framework-first API v4 catalog.",
+                                 "actors.generic.v1":  "Declares actors.generic.v1 as part of Demo Render World Showcase in the framework-first API v4 catalog.",
+                                 "actors.vm.v1":  "Declares actors.vm.v1 as part of Demo Render World Showcase in the framework-first API v4 catalog.",
+                                 "assets.raw.v1":  "Declares assets.raw.v1 as part of Demo Render World Showcase in the framework-first API v4 catalog.",
+                                 "render.meshes.v1":  "Declares render.meshes.v1 as part of Demo Render World Showcase in the framework-first API v4 catalog.",
+                                 "actors.prefabs.v1":  "Declares actors.prefabs.v1 as part of Demo Render World Showcase in the framework-first API v4 catalog.",
+                                 "world.instances.v1":  "Declares world.instances.v1 as part of Demo Render World Showcase in the framework-first API v4 catalog.",
+                                 "editor.placement.v1":  "Declares editor.placement.v1 as part of Demo Render World Showcase in the framework-first API v4 catalog.",
+                                 "world.authoring.v1":  "Declares world.authoring.v1 as part of Demo Render World Showcase in the framework-first API v4 catalog."
+                             },
+    "dependencies":  [
+                         {
+                             "id":  "com.sylian.framework.render_world",
+                             "versionRange":  "\u003e=0.1.0 \u003c0.2.0"
+                         }
+                     ],
+    "uses":  [
+                 "framework.render_world"
+             ],
+    "exports":  {
+
+                }
+}

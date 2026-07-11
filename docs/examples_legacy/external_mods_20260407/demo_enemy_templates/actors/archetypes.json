@@ -1,0 +1,10 @@
+﻿{
+    "schemaVersion":  1,
+    "archetypes":  [
+                       {
+                           "id":  "com.sylian.demo_enemy_templates:basic_enemy",
+                           "actorDefinitionId":  "core:dummy_enemy",
+                           "behaviorId":  "com.sylian.demo_enemy_templates:enemy_bt"
+                       }
+                   ]
+}

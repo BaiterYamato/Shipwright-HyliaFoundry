@@ -1,0 +1,9 @@
+﻿{
+    "schemaVersion":  1,
+    "archetypes":  [
+                       {
+                           "id":  "com.sylian.demo_loot_respawn:crate_anchor",
+                           "actorDefinitionId":  "com.sylian.demo_loot_respawn:crate_anchor"
+                       }
+                   ]
+}

@@ -1,0 +1,9 @@
+{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "showNotification",
+      "text": "Survival Demo loaded: G eats Odd Mushroom food, empty bottles fill with fresh water while standing in water."
+    }
+  ]
+}

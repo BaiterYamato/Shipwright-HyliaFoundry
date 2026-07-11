@@ -1,0 +1,11 @@
+{
+  "id": "com.sylian.demo.free_mod_v3_seed:entity.kokiri_lantern",
+  "type": "entity",
+  "visibility": "public",
+  "components": [
+    "com.sylian.demo.free_mod_v3_seed:component.visual_lantern"
+  ],
+  "state": {
+    "lit": true
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "com.sylian.lighting_kit:torch_orange",
+      "type": "point",
+      "color": [
+        1.0,
+        0.55,
+        0.2
+      ],
+      "intensity": 280.0,
+      "radius": 240.0,
+      "flicker": true,
+      "flickerAmount": 0.25,
+      "castShadows": true,
+      "shadowResolution": 512,
+      "shadowBias": 0.018,
+      "shadowNormalBias": 0.12,
+      "shadowRange": 220.0,
+      "volumetricIntensity": 1.25
+    },
+    {
+      "id": "com.sylian.lighting_kit:sky_white",
+      "type": "directional",
+      "direction": [
+        0.18,
+        -0.94,
+        -0.29
+      ],
+      "color": [
+        0.95,
+        0.98,
+        1.0
+      ],
+      "intensity": 1.35,
+      "radius": 0.0,
+      "castShadows": true,
+      "shadowResolution": 1024,
+      "shadowBias": 0.003,
+      "shadowNormalBias": 0.08,
+      "shadowRange": 2200.0,
+      "volumetricIntensity": 0.95
+    },
+    {
+      "id": "com.sylian.lighting_kit:fire_green",
+      "type": "point",
+      "color": [
+        0.2,
+        1.0,
+        0.25
+      ],
+      "intensity": 220.0,
+      "radius": 210.0,
+      "flicker": true,
+      "flickerAmount": 0.2,
+      "castShadows": true,
+      "shadowResolution": 512,
+      "shadowBias": 0.02,
+      "shadowNormalBias": 0.12,
+      "shadowRange": 190.0,
+      "volumetricIntensity": 1.5
+    },
+    {
+      "id": "com.sylian.lighting_kit:magic_purple",
+      "type": "point",
+      "color": [
+        0.55,
+        0.3,
+        1.0
+      ],
+      "intensity": 180.0,
+      "radius": 180.0,
+      "flicker": false,
+      "castShadows": false,
+      "shadowResolution": 256,
+      "shadowBias": 0.02,
+      "shadowNormalBias": 0.1,
+      "shadowRange": 160.0,
+      "volumetricIntensity": 1.1
+    },
+    {
+      "id": "com.sylian.lighting_kit:shaft_green_spot",
+      "type": "spot",
+      "direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "color": [
+        0.42,
+        1.0,
+        0.5
+      ],
+      "intensity": 165.0,
+      "radius": 320.0,
+      "innerConeDeg": 18.0,
+      "outerConeDeg": 30.0,
+      "castShadows": true,
+      "shadowResolution": 1024,
+      "shadowBias": 0.008,
+      "shadowNormalBias": 0.08,
+      "shadowRange": 320.0,
+      "volumetricIntensity": 1.75
+    }
+  ]
+}

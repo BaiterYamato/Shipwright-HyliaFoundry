@@ -1,0 +1,30 @@
+{
+  "id": "com.sylian.demo.free_mod_v3_seed:service.lookup",
+  "type": "query",
+  "visibility": "public",
+  "defaultKind": "summary",
+  "supportedKinds": [
+    "summary",
+    "exports",
+    "services",
+    "dsl",
+    "runtime",
+    "settings",
+    "world",
+    "narrative",
+    "storage",
+    "inventory"
+  ],
+  "returns": [
+    "summary",
+    "export",
+    "service",
+    "dsl_document",
+    "runtime_state",
+    "settings_state",
+    "world_state",
+    "narrative_state",
+    "storage_state",
+    "inventory_state"
+  ]
+}

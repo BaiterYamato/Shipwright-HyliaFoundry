@@ -1,0 +1,9 @@
+﻿{
+    "recipes":  [
+                    {
+                        "id":  "com.sylian.demo_furnace_system:smelt",
+                        "durationMs":  3000
+                    }
+                ],
+    "schemaVersion":  1
+}

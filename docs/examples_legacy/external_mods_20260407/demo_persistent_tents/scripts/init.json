@@ -1,0 +1,20 @@
+﻿{
+    "apiVersion":  4,
+    "onGameLoaded":  [
+                         {
+                             "entityGuid":  "com.sylian.demo_persistent_tents:tent_001",
+                             "scope":  "room",
+                             "action":  "persist.ensureEntityGuid"
+                         },
+                         {
+                             "entityGuid":  "com.sylian.demo_persistent_tents:tent_001",
+                             "key":  "placed",
+                             "value":  "true",
+                             "action":  "persist.saveEntityState"
+                         },
+                         {
+                             "text":  "Persistent tent state saved.",
+                             "action":  "showNotification"
+                         }
+                     ]
+}

@@ -1,0 +1,11 @@
+﻿{
+    "schemaVersion":  1,
+    "flags":  [
+                  {
+                      "scope":  "global",
+                      "valueType":  "bool",
+                      "id":  "com.sylian.demo_quest_chain:completed",
+                      "defaultValue":  "false"
+                  }
+              ]
+}

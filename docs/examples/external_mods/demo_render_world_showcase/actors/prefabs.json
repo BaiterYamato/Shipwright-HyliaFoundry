@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "prefabs": [
+    {
+      "id": "com.example.lanterna_test:lanterna_sign_prefab",
+      "meshId": "com.example.lanterna_test:lanterna_quad_mesh",
+      "transform": {
+        "offset": [0.0, 32.0, 0.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scale": [28.0, 28.0, 28.0]
+      },
+      "lodDistance": 2500.0,
+      "billboard": true
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+﻿{
+    "id":  "com.sylian.demo.ui_inventory_flow",
+    "name":  "Demo UI Inventory Flow",
+    "version":  "0.1.0",
+    "type":  "content",
+    "apiVersion":  4,
+    "uiCategory":  "mod",
+    "loadPriority":  305,
+    "entryScript":  "scripts/init.json",
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json",
+    "behaviorDefinitions":  "behaviors/behaviors.json",
+    "actorDefinitions":  "actors/actors.json",
+    "actorArchetypeDefinitions":  "actors/archetypes.json",
+    "containerDefinitions":  "containers/containers.json",
+    "recipeDefinitions":  "recipes/processing_recipes.json",
+    "interactionDefinitions":  "interactions/interactions.json",
+    "uiScreenDefinitions":  "ui/screens.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "releaseChannels":  [
+                            "stable"
+                        ],
+    "capabilities":  [
+                         "input.bindings.v2",
+                         "behaviors.graph.v1",
+                         "ui.runtime.v1",
+                         "actors.generic.v1",
+                         "actors.archetypes.v1",
+                         "containers.v1",
+                         "recipes.processing.v1",
+                         "interactions.v1"
+                     ],
+    "capabilityRationales":  {
+                                 "input.bindings.v2":  "Declares input.bindings.v2 as part of Demo UI Inventory Flow in the framework-first API v4 catalog.",
+                                 "behaviors.graph.v1":  "Declares behaviors.graph.v1 as part of Demo UI Inventory Flow in the framework-first API v4 catalog.",
+                                 "ui.runtime.v1":  "Declares ui.runtime.v1 as part of Demo UI Inventory Flow in the framework-first API v4 catalog.",
+                                 "actors.generic.v1":  "Declares actors.generic.v1 as part of Demo UI Inventory Flow in the framework-first API v4 catalog.",
+                                 "actors.archetypes.v1":  "Declares actors.archetypes.v1 as part of Demo UI Inventory Flow in the framework-first API v4 catalog.",
+                                 "containers.v1":  "Declares containers.v1 as part of Demo UI Inventory Flow in the framework-first API v4 catalog.",
+                                 "recipes.processing.v1":  "Declares recipes.processing.v1 as part of Demo UI Inventory Flow in the framework-first API v4 catalog.",
+                                 "interactions.v1":  "Declares interactions.v1 as part of Demo UI Inventory Flow in the framework-first API v4 catalog."
+                             },
+    "dependencies":  [
+                         {
+                             "id":  "com.sylian.framework.ui_inventory",
+                             "versionRange":  "\u003e=0.1.0 \u003c0.2.0"
+                         }
+                     ],
+    "uses":  [
+                 "framework.ui_inventory"
+             ],
+    "exports":  {
+
+                }
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "com.sylian.demo.free_mod_v3_seed:lantern_mesh_asset",
+      "path": "assets/lanterna_square.obj",
+      "kind": "mesh",
+      "format": "obj",
+      "hostAccess": true
+    },
+    {
+      "id": "com.sylian.demo.free_mod_v3_seed:lantern_texture_asset",
+      "path": "assets/lanterna_placeholder.png",
+      "kind": "texture",
+      "format": "png",
+      "hostAccess": true
+    }
+  ]
+}

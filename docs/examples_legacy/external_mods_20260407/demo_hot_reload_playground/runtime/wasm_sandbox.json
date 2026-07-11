@@ -1,0 +1,15 @@
+﻿{
+    "schemaVersion":  1,
+    "sandboxes":  [
+                      {
+                          "id":  "com.sylian.demo_hot_reload_playground:default",
+                          "maxHookCallsPerFrame":  256,
+                          "maxFrameBudgetMs":  2,
+                          "deterministicMode":  true,
+                          "maxCallMs":  2,
+                          "allowedSurfaces":  [
+                                                  "host_applyStatus"
+                                              ]
+                      }
+                  ]
+}

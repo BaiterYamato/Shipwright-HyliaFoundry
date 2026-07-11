@@ -1,0 +1,23 @@
+﻿{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "showNotification",
+      "text": "Unresolved Reference Demo loaded: this package should stay enabled with ERROR diagnostics."
+    }
+  ],
+  "onInput": [
+    {
+      "id": "missing_binding_demo",
+      "binding": "binding_that_does_not_exist",
+      "trigger": "pressed",
+      "cooldownFrames": 0,
+      "actions": [
+        {
+          "action": "showNotification",
+          "text": "This should never fire because the binding is intentionally unresolved."
+        }
+      ]
+    }
+  ]
+}

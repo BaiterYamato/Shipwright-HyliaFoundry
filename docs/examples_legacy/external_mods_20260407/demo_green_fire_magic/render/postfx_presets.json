@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    {
+      "id": "com.sylian.demo_green_fire_magic:green_flame_flash",
+      "tonemap": "filmic",
+      "exposure": 1.15,
+      "bloom": 0.6,
+      "fogColor": [
+        0.25,
+        0.9,
+        0.35,
+        1.0
+      ],
+      "fogDensity": 0.05,
+      "volumetrics": {
+        "enabled": true,
+        "quality": "medium",
+        "density": 0.42,
+        "anisotropy": 0.3,
+        "startDistance": 12.0,
+        "maxDistance": 540.0,
+        "heightFogEnabled": true,
+        "baseHeight": -60.0,
+        "heightFalloff": 0.02,
+        "lightShaftIntensity": 1.25,
+        "shadowIntensity": 0.55,
+        "temporalBlend": 0.76,
+        "jitterScale": 0.75,
+        "debugView": false
+      }
+    }
+  ]
+}

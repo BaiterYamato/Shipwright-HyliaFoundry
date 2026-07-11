@@ -1,0 +1,46 @@
+﻿{
+    "schemaVersion":  1,
+    "timelines":  [
+                      {
+                          "id":  "com.sylian.narrative_kit:intro_timeline",
+                          "skippable":  true,
+                          "onSkipped":  [
+                                            {
+                                                "text":  "Timeline skipped.",
+                                                "action":  "showNotification"
+                                            }
+                                        ],
+                          "tracks":  [
+                                         {
+                                             "atFrame":  1,
+                                             "actions":  [
+                                                             {
+                                                                 "text":  "Timeline started.",
+                                                                 "action":  "showNotification"
+                                                             }
+                                                         ],
+                                             "id":  "t0",
+                                             "type":  "actions"
+                                         },
+                                         {
+                                             "atFrame":  45,
+                                             "actions":  [
+                                                             {
+                                                                 "text":  "Timeline about to complete.",
+                                                                 "action":  "showNotification"
+                                                             }
+                                                         ],
+                                             "id":  "t1",
+                                             "type":  "actions"
+                                         }
+                                     ],
+                          "durationFrames":  60,
+                          "onCompleted":  [
+                                              {
+                                                  "text":  "Timeline completed.",
+                                                  "action":  "showNotification"
+                                              }
+                                          ]
+                      }
+                  ]
+}

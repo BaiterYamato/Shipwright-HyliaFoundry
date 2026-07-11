@@ -1,0 +1,70 @@
+﻿{
+    "id":  "com.example.lanterna_test",
+    "name":  "Lanterna Test",
+    "version":  "0.1.0",
+    "apiVersion":  4,
+    "loadOrder":  170,
+    "entryScript":  "scripts/init.json",
+    "assets":  [
+
+               ],
+    "dependencies":  [
+
+                     ],
+    "capabilityRationales":  {
+                                 "hooks.extended.v1":  "Mantem o demo integrado ao fluxo atual de hooks externos do modloader.",
+                                 "actors.generic.v1":  "Expõe um actor virtual simples usando prefab visual para validar o acoplamento actor+mesh.",
+                                 "assets.raw.v1":  "Declara os assets loose usados pelo mesh demo e pelo sample de host access.",
+                                 "render.meshes.v1":  "Registra um mesh reutilizável carregado do mesmo pacote do mod.",
+                                 "actors.prefabs.v1":  "Define um prefab visual reutilizável para actors e world instances.",
+                                 "world.instances.v1":  "Coloca uma instância visual por cena/sala sem depender de lógica actor.",
+                                 "editor.placement.v1":  "Expõe uma biblioteca de placeables reutilizáveis para authoring externo.",
+                                 "world.authoring.v1":  "Instancia placeables e prefabs diretamente do authoring JSON."
+                             },
+    "capabilities":  [
+                         "hooks.extended.v1",
+                         "actors.generic.v1",
+                         "assets.raw.v1",
+                         "render.meshes.v1",
+                         "actors.prefabs.v1",
+                         "world.instances.v1",
+                         "editor.placement.v1",
+                         "world.authoring.v1"
+                     ],
+    "hookDefinitions":  "hooks/hooks.json",
+    "actorDefinitions":  "actors/actors.json",
+    "assetSourceDefinitions":  "assets/sources.json",
+    "meshDefinitions":  "render/meshes.json",
+    "prefabDefinitions":  "actors/prefabs.json",
+    "worldInstanceDefinitions":  "world/instances.json",
+    "editorPlacementDefinitions":  "editor/placement.json",
+    "worldAuthoringDefinitions":  "world/authoring.json",
+    "runtime":  {
+                    "type":  "wasm3-v1",
+                    "module":  "scripts/noop.wat",
+                    "maxMemoryKb":  1024,
+                    "maxCallMs":  2,
+                    "maxFrameBudgetMs":  2,
+                    "maxHookCallsPerFrame":  256,
+                    "maxActorInstances":  64,
+                    "maxActiveStatuses":  256
+                },
+    "itemDefinitions":  "items/items.json",
+    "inputDefinitions":  "config/input.json",
+    "engineVersionRange":  "\u003e=9.1.2 \u003c10.0.0",
+    "permissions":  [
+
+                    ],
+    "entrypoints":  {
+                        "items":  "items/items.json",
+                        "combat":  "combat",
+                        "movement":  "movement",
+                        "camera":  "camera/camera_profiles.json",
+                        "ui":  "ui",
+                        "actors":  "actors/actors.json",
+                        "quests":  "quests/quests.json",
+                        "wasm":  "scripts/noop.wat"
+                    },
+    "uiCategory":  "mod"
+}
+

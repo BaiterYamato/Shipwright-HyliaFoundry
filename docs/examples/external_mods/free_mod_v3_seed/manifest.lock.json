@@ -1,0 +1,13 @@
+﻿{
+    "schemaVersion":  "mod.lockfile.v1",
+    "generatedUtc":  "2000-01-01T00:00:00Z",
+    "modId":  "com.sylian.demo.free_mod_v3_seed",
+    "version":  "0.1.0",
+    "releaseChannel":  "stable",
+    "resolvedDependencies":  {
+
+                             },
+    "resolvedLoadOrder":  [
+                              "com.sylian.demo.free_mod_v3_seed"
+                          ]
+}

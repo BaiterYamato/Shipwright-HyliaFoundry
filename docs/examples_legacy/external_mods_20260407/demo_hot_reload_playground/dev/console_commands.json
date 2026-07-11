@@ -1,0 +1,19 @@
+﻿{
+    "schemaVersion":  1,
+    "commands":  [
+                     {
+                         "command":  "reload.ping",
+                         "actions":  [
+                                         {
+                                             "text":  "Console command executed.",
+                                             "action":  "showNotification"
+                                         },
+                                         {
+                                             "target":  "all",
+                                             "action":  "dev.reloadTarget"
+                                         }
+                                     ],
+                         "id":  "com.sylian.demo_hot_reload_playground:ping"
+                     }
+                 ]
+}
