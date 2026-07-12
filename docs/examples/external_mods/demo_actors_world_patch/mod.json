@@ -7,15 +7,18 @@
   "uiCategory": "mod",
   "loadPriority": 230,
   "actorTagDefinitions": "actors/actor_tags.json",
+  "worldPatchDefinitions": "world/patchsets.json",
   "runtime": {
     "type": "data-only"
   },
   "engineVersionRange": ">=9.2.3 <10.0.0",
   "capabilities": [
-    "actors.tags.v1"
+    "actors.tags.v1",
+    "world.patchsets.v1"
   ],
   "capabilityRationales": {
-    "actors.tags.v1": "Marca Deku Babas com a tag demo:flora no OnActorInit e mostra uma notificacao de prova do runtime M8."
+    "actors.tags.v1": "Marca Deku Babas com a tag demo:flora no OnActorInit e mostra uma notificacao de prova do runtime M8.",
+    "world.patchsets.v1": "Spawna um arbusto extra na Kokiri Forest no OnSceneInit e mostra uma notificacao de prova do runtime M8."
   },
   "dependencies": [],
   "permissions": []

@@ -1243,6 +1243,29 @@ struct ExternalModActorTagDefinition {
     std::vector<ExternalModAction> onTagged;
 };
 
+struct ExternalModWorldPatchOp {
+    std::string op;
+    int32_t actorId = -1;
+    bool hasActorId = false;
+    float posX = 0.0f;
+    float posY = 0.0f;
+    float posZ = 0.0f;
+    bool hasPos = false;
+    int32_t rotY = 0;
+    bool hasRotY = false;
+    int32_t params = 0;
+    bool hasParams = false;
+    std::vector<ExternalModAction> actions;
+};
+
+struct ExternalModWorldPatchsetDefinition {
+    std::string id;
+    int32_t sceneId = -1;
+    int32_t roomId = -1;
+    bool hasRoomId = false;
+    std::vector<ExternalModWorldPatchOp> ops;
+};
+
 enum class ExternalModItemStateEvent {
     Select,
     Deselect,
@@ -2117,6 +2140,7 @@ struct ExternalModRuntime {
     std::vector<ExternalModEffectGraphDefinition> effectGraphDefinitions;
     std::vector<ExternalModCombatHitRuleDefinition> combatHitRuleDefinitions;
     std::vector<ExternalModActorTagDefinition> actorTags;
+    std::vector<ExternalModWorldPatchsetDefinition> worldPatchsets;
     std::vector<ExternalModProjectileProfile> projectileProfiles;
     std::vector<ExternalModAoEProfile> aoeProfiles;
     std::vector<ExternalModMovementProfile> movementProfiles;

@@ -17771,6 +17771,9 @@ void ExternalModManager::Initialize() {
     if (!mActorTagRuntime) {
         mActorTagRuntime = std::make_unique<ExternalModActorTagRuntime>();
     }
+    if (!mWorldPatchRuntime) {
+        mWorldPatchRuntime = std::make_unique<ExternalModWorldPatchRuntime>();
+    }
     mAimCameraState.overShoulderEnabled =
         CVarGetInteger(kAimCameraOverShoulderCVar, mAimCameraState.overShoulderEnabled ? 1 : 0) != 0;
 
@@ -22142,6 +22145,133 @@ bool ExternalModManager::TryParseActorTagDefinitions(const std::string& content,
                 outError = "tags[" + std::to_string(i) + "]." + outError;
                 return false;
             }
+        }
+        outDefinitions.push_back(std::move(definition));
+    }
+    return true;
+}
+
+bool ExternalModManager::TryParseWorldPatchsetDefinitions(const std::string& content, int32_t apiVersion,
+                                                          std::vector<ExternalModWorldPatchsetDefinition>& outDefinitions,
+                                                          std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "worldPatchDefinitions requires apiVersion 4";
+        return false;
+    }
+    nlohmann::json json = nlohmann::json::parse(content, nullptr, false);
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1 || !json.contains("patchsets") || !json["patchsets"].is_array()) {
+        outError = "patchsets.json must use schemaVersion 1 and contain patchsets[]";
+        return false;
+    }
+    if (json["patchsets"].size() > 64) {
+        outError = "patchsets.json exceeds the 64-patchset limit";
+        return false;
+    }
+
+    std::unordered_set<std::string> ids;
+    for (size_t i = 0; i < json["patchsets"].size(); ++i) {
+        const auto& patchsetJson = json["patchsets"][i];
+        ExternalModWorldPatchsetDefinition definition;
+        if (!patchsetJson.is_object() || !ValidateRequiredString(patchsetJson, "id", definition.id, outError) ||
+            !IsNamespacedCatalogId(definition.id) || !ids.insert(definition.id).second) {
+            outError = "patchsets[" + std::to_string(i) + "] must have a unique namespaced id";
+            return false;
+        }
+        if (!patchsetJson.contains("sceneId") || !patchsetJson["sceneId"].is_number_integer() ||
+            patchsetJson["sceneId"].get<int32_t>() < 0) {
+            outError = "patchsets[" + std::to_string(i) + "].sceneId must be a non-negative integer";
+            return false;
+        }
+        definition.sceneId = patchsetJson["sceneId"].get<int32_t>();
+        if (patchsetJson.contains("roomId")) {
+            if (!patchsetJson["roomId"].is_number_integer() || patchsetJson["roomId"].get<int32_t>() < 0) {
+                outError = "patchsets[" + std::to_string(i) + "].roomId must be a non-negative integer";
+                return false;
+            }
+            definition.roomId = patchsetJson["roomId"].get<int32_t>();
+            definition.hasRoomId = true;
+        }
+        if (!patchsetJson.contains("ops") || !patchsetJson["ops"].is_array() || patchsetJson["ops"].empty() ||
+            patchsetJson["ops"].size() > 64) {
+            outError = "patchsets[" + std::to_string(i) + "].ops must be an array with 1..64 entries";
+            return false;
+        }
+        for (size_t opIndex = 0; opIndex < patchsetJson["ops"].size(); ++opIndex) {
+            const auto& opJson = patchsetJson["ops"][opIndex];
+            const std::string opPrefix = "patchsets[" + std::to_string(i) + "].ops[" + std::to_string(opIndex) + "]";
+            ExternalModWorldPatchOp op;
+            if (!opJson.is_object() || !opJson.contains("op") || !opJson["op"].is_string()) {
+                outError = opPrefix + ".op must be a string";
+                return false;
+            }
+            op.op = opJson["op"].get<std::string>();
+            if (op.op != "suppressActor" && op.op != "spawnActor" && op.op != "actions") {
+                outError = opPrefix + ".op must be suppressActor, spawnActor, or actions";
+                return false;
+            }
+            if (opJson.contains("actorId")) {
+                if (!opJson["actorId"].is_number_integer() || opJson["actorId"].get<int32_t>() < 0) {
+                    outError = opPrefix + ".actorId must be a non-negative integer";
+                    return false;
+                }
+                op.actorId = opJson["actorId"].get<int32_t>();
+                op.hasActorId = true;
+            }
+            if (opJson.contains("params")) {
+                if (!opJson["params"].is_number_integer()) {
+                    outError = opPrefix + ".params must be an integer";
+                    return false;
+                }
+                op.params = opJson["params"].get<int32_t>();
+                op.hasParams = true;
+            }
+            if (opJson.contains("rotY")) {
+                if (!opJson["rotY"].is_number_integer()) {
+                    outError = opPrefix + ".rotY must be an integer";
+                    return false;
+                }
+                op.rotY = opJson["rotY"].get<int32_t>();
+                op.hasRotY = true;
+            }
+            if (opJson.contains("pos")) {
+                if (!opJson["pos"].is_array() || opJson["pos"].size() != 3 || !opJson["pos"][0].is_number() ||
+                    !opJson["pos"][1].is_number() || !opJson["pos"][2].is_number()) {
+                    outError = opPrefix + ".pos must be a [x, y, z] numeric array";
+                    return false;
+                }
+                op.posX = opJson["pos"][0].get<float>();
+                op.posY = opJson["pos"][1].get<float>();
+                op.posZ = opJson["pos"][2].get<float>();
+                op.hasPos = true;
+            }
+            if (op.op == "suppressActor" || op.op == "spawnActor") {
+                if (!op.hasActorId) {
+                    outError = opPrefix + " requires actorId";
+                    return false;
+                }
+                if (op.actorId == 0) {
+                    outError = opPrefix + " must not target the player actor (actorId 0)";
+                    return false;
+                }
+            }
+            if (op.op == "spawnActor" && !op.hasPos) {
+                outError = opPrefix + " requires pos";
+                return false;
+            }
+            if (op.op == "actions") {
+                if (!opJson.contains("actions") || !opJson["actions"].is_array() || opJson["actions"].empty() ||
+                    opJson["actions"].size() > 16) {
+                    outError = opPrefix + ".actions must be an array with 1..16 actions";
+                    return false;
+                }
+                if (!ParseActionArray(opJson["actions"], apiVersion, "actions", op.actions, outError)) {
+                    outError = opPrefix + "." + outError;
+                    return false;
+                }
+            }
+            definition.ops.push_back(std::move(op));
         }
         outDefinitions.push_back(std::move(definition));
     }
@@ -29403,6 +29533,22 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             }
         }
 
+        if (!package.manifest.worldPatchDefinitions.empty()) {
+            std::filesystem::path worldPatchesPath;
+            if (!IsSafePackageRelativePath(package.manifest.worldPatchDefinitions, worldPatchesPath, outError)) {
+                outError = "worldPatchDefinitions invalid path: " + outError;
+                return false;
+            }
+            std::string worldPatchesContent;
+            if (!ReadFileFromPackage(package, worldPatchesPath, kMaxWorldPatchDefinitionBytes, worldPatchesContent,
+                                     outError) ||
+                !TryParseWorldPatchsetDefinitions(worldPatchesContent, runtime.apiVersion, runtime.worldPatchsets,
+                                                  outError)) {
+                outError = "world.patchsets.v1 file=" + package.manifest.worldPatchDefinitions + " reason=" + outError;
+                return false;
+            }
+        }
+
         for (const auto& inputTrigger : runtime.inputTriggers) {
             const auto bindingIt = std::find_if(runtime.inputBindings.begin(), runtime.inputBindings.end(),
                                                 [&inputTrigger](const ExternalModInputBinding& binding) {
@@ -34541,6 +34687,15 @@ void ExternalModManager::RegisterHooks() {
         [](int16_t amount) { ExternalModManager::Instance().OnPlayerHealthChange(amount); });
     mOnItemReceiveHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnItemReceive>(
         [](GetItemEntry itemEntry) { ExternalModManager::Instance().OnItemReceive(static_cast<int16_t>(itemEntry.itemId)); });
+    mShouldActorInitHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::ShouldActorInit>(
+        [](void* actor, bool* result) {
+            // Shared hook (randomizer/enhancements also listen): only ever narrow `*result` to
+            // false on a strict patchset match; never overwrite a false decided by someone else.
+            if (result != nullptr && *result &&
+                !ExternalModManager::Instance().ShouldAllowActorInit(actor)) {
+                *result = false;
+            }
+        });
     mOnActorInitHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnActorInit>(
         [](void* actor) { ExternalModManager::Instance().OnActorHook(ExternalModHookType::OnActorInit, actor, "OnActorInit"); });
     mOnActorSpawnHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnActorSpawn>(
@@ -34583,6 +34738,7 @@ void ExternalModManager::UnregisterHooks() {
         GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnPlayerUseItem>(mOnPlayerUseItemHook);
         GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnPlayerHealthChange>(mOnPlayerHealthChangeHook);
         GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnItemReceive>(mOnItemReceiveHook);
+        GameInteractor::Instance->UnregisterGameHook<GameInteractor::ShouldActorInit>(mShouldActorInitHook);
         GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnActorInit>(mOnActorInitHook);
         GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnActorSpawn>(mOnActorSpawnHook);
         GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnActorUpdate>(mOnActorUpdateHook);
@@ -34609,6 +34765,7 @@ void ExternalModManager::UnregisterHooks() {
     mOnPlayerUseItemHook = 0;
     mOnPlayerHealthChangeHook = 0;
     mOnItemReceiveHook = 0;
+    mShouldActorInitHook = 0;
     mOnActorInitHook = 0;
     mOnActorSpawnHook = 0;
     mOnActorUpdateHook = 0;
@@ -34897,6 +35054,20 @@ void ExternalModManager::OnSceneInit(int16_t sceneNum) {
 
             if (!package.runtime.enabled) {
                 continue;
+            }
+
+            if (mWorldPatchRuntime && !package.runtime.worldPatchsets.empty()) {
+                try {
+                    mWorldPatchRuntime->ApplyOnSceneInit(
+                        package, gPlayState, sceneNum,
+                        [&package](const ExternalModWorldPatchsetDefinition& patchset,
+                                   const ExternalModWorldPatchOp& op) {
+                            ExecuteActions(package, op.actions, patchset.id.c_str());
+                        });
+                } catch (const std::exception& ex) {
+                    DisableRuntime(package, std::string("world.patchsets.v1 dispatch failed: ") + ex.what());
+                    continue;
+                }
             }
 
             for (auto& instance : package.runtime.actorInstances) {
@@ -36286,6 +36457,34 @@ void ExternalModManager::OnActorHook(ExternalModHookType hookType, void* actor, 
     }
 
     DispatchExtendedHook(hookType, context, hookName);
+}
+
+bool ExternalModManager::ShouldAllowActorInit(void* actor) {
+    // Permissive default: this hook is shared with the randomizer and other enhancements, so we
+    // only veto the init on a strict world.patchsets.v1 suppressActor match. The player actor is
+    // never suppressed.
+    if (actor == nullptr || mWorldPatchRuntime == nullptr || gPlayState == nullptr) {
+        return true;
+    }
+    auto* actorPtr = static_cast<Actor*>(actor);
+    if (actorPtr->id == ACTOR_PLAYER) {
+        return true;
+    }
+    const int32_t sceneNum = static_cast<int32_t>(gPlayState->sceneNum);
+    for (auto& package : mPackages) {
+        if (!package.runtime.enabled || package.runtime.worldPatchsets.empty()) {
+            continue;
+        }
+        try {
+            if (mWorldPatchRuntime->ShouldSuppressActor(package, static_cast<int16_t>(actorPtr->id), sceneNum,
+                                                        static_cast<int32_t>(actorPtr->params))) {
+                return false;
+            }
+        } catch (const std::exception& ex) {
+            DisableRuntime(package, std::string("world.patchsets.v1 dispatch failed: ") + ex.what());
+        }
+    }
+    return true;
 }
 
 void ExternalModManager::OnPlayDestroy() {

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "patchsets": [
+    {
+      "id": "com.sylian.demo.actors_world_patch:kokiri_extra_bush",
+      "sceneId": 85,
+      "ops": [
+        {
+          "op": "spawnActor",
+          "actorId": 293,
+          "pos": [-50, 0, 1000],
+          "rotY": 0,
+          "params": 0
+        },
+        {
+          "op": "actions",
+          "actions": [
+            {
+              "action": "showNotification",
+              "text": "Patchset aplicado: arbusto extra na Kokiri Forest"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

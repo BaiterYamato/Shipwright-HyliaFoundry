@@ -17,6 +17,7 @@ struct Player;
 #include "ExternalModItemRuntime.h"
 #include "ExternalModEffectRuntime.h"
 #include "ExternalModActorTagRuntime.h"
+#include "ExternalModWorldPatchRuntime.h"
 #include "ExternalModWorldGraphicsRuntime.h"
 #include "ExternalModPlayerResourcesRuntime.h"
 
@@ -184,6 +185,7 @@ class ExternalModManager {
     uint32_t mOnPlayerUseItemHook = 0;
     uint32_t mOnPlayerHealthChangeHook = 0;
     uint32_t mOnItemReceiveHook = 0;
+    uint32_t mShouldActorInitHook = 0;
     uint32_t mOnActorInitHook = 0;
     uint32_t mOnActorSpawnHook = 0;
     uint32_t mOnActorUpdateHook = 0;
@@ -197,6 +199,7 @@ class ExternalModManager {
     std::unique_ptr<ExternalModItemRuntime> mItemStateRuntime;
     std::unique_ptr<ExternalModEffectRuntime> mEffectRuntime;
     std::unique_ptr<ExternalModActorTagRuntime> mActorTagRuntime;
+    std::unique_ptr<ExternalModWorldPatchRuntime> mWorldPatchRuntime;
 
     static bool TryParseManifest(const std::string& content, ExternalModManifest& outManifest, std::string& outError);
     static bool TryParseEntryScript(const std::string& content, int32_t apiVersion, ExternalModRuntime& outRuntime,
@@ -216,6 +219,9 @@ class ExternalModManager {
     static bool TryParseActorTagDefinitions(const std::string& content, int32_t apiVersion,
                                             std::vector<ExternalModActorTagDefinition>& outDefinitions,
                                             std::string& outError);
+    static bool TryParseWorldPatchsetDefinitions(const std::string& content, int32_t apiVersion,
+                                                 std::vector<ExternalModWorldPatchsetDefinition>& outDefinitions,
+                                                 std::string& outError);
     static bool TryParseInputDefinitions(const std::string& content, std::vector<ExternalModInputBinding>& outBindings,
                                          std::vector<ExternalModCameraHotkeyDefinition>& outCameraHotkeys,
                                          std::vector<ExternalModHotkeyDefinition>& outHotkeys,
@@ -511,6 +517,9 @@ class ExternalModManager {
     void OnPlayerHealthChange(int16_t amount);
     void OnItemReceive(int16_t itemId);
     void OnActorHook(ExternalModHookType hookType, void* actor, const char* hookName);
+    // ShouldActorInit consumer: returns false only on a strict world.patchsets.v1 suppressActor
+    // match (scene + actorId + optional params); otherwise keeps the permissive default (true).
+    bool ShouldAllowActorInit(void* actor);
     void OnPlayDestroy();
 
     friend class ExternalModParser;
