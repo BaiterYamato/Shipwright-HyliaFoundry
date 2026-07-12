@@ -2,13 +2,17 @@
   "schemaVersion": 1,
   "profiles": [
     {
-      "id": "com.example.pistol_hitscan_demo:pistol_aim",
-      "contexts": ["slingshot"],
+      "id": "com.sylian.demo.combat_ai_showcase:over_shoulder_aim",
+      "contexts": ["bow", "slingshot", "boomerang"],
       "firstPersonModeByContext": {
-        "slingshot": "slingshot"
+        "bow": "bowarrow",
+        "slingshot": "slingshot",
+        "boomerang": "boomerang"
       },
       "overShoulderModeByContext": {
-        "slingshot": "bowarrowz"
+        "bow": "bowarrowz",
+        "slingshot": "bowarrowz",
+        "boomerang": "bowarrowz"
       },
       "shoulder": "right",
       "aimRay": "camera_center",
