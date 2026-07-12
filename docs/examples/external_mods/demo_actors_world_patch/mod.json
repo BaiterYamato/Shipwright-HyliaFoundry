@@ -1,0 +1,22 @@
+{
+  "id": "com.sylian.demo.actors_world_patch",
+  "name": "Actors World Patch Demo",
+  "version": "0.1.0",
+  "type": "content",
+  "apiVersion": 4,
+  "uiCategory": "mod",
+  "loadPriority": 230,
+  "actorTagDefinitions": "actors/actor_tags.json",
+  "runtime": {
+    "type": "data-only"
+  },
+  "engineVersionRange": ">=9.2.3 <10.0.0",
+  "capabilities": [
+    "actors.tags.v1"
+  ],
+  "capabilityRationales": {
+    "actors.tags.v1": "Marca Deku Babas com a tag demo:flora no OnActorInit e mostra uma notificacao de prova do runtime M8."
+  },
+  "dependencies": [],
+  "permissions": []
+}

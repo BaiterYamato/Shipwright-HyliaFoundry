@@ -16,6 +16,7 @@ struct Player;
 #include "ExternalModInterop.h"
 #include "ExternalModItemRuntime.h"
 #include "ExternalModEffectRuntime.h"
+#include "ExternalModActorTagRuntime.h"
 #include "ExternalModWorldGraphicsRuntime.h"
 #include "ExternalModPlayerResourcesRuntime.h"
 
@@ -195,6 +196,7 @@ class ExternalModManager {
     std::unique_ptr<ExternalModPlayerResourcesRuntime> mPlayerResourcesRuntime;
     std::unique_ptr<ExternalModItemRuntime> mItemStateRuntime;
     std::unique_ptr<ExternalModEffectRuntime> mEffectRuntime;
+    std::unique_ptr<ExternalModActorTagRuntime> mActorTagRuntime;
 
     static bool TryParseManifest(const std::string& content, ExternalModManifest& outManifest, std::string& outError);
     static bool TryParseEntryScript(const std::string& content, int32_t apiVersion, ExternalModRuntime& outRuntime,
@@ -211,6 +213,9 @@ class ExternalModManager {
     static bool TryParseCombatHitRuleDefinitions(const std::string& content, int32_t apiVersion,
                                                  std::vector<ExternalModCombatHitRuleDefinition>& outDefinitions,
                                                  std::string& outError);
+    static bool TryParseActorTagDefinitions(const std::string& content, int32_t apiVersion,
+                                            std::vector<ExternalModActorTagDefinition>& outDefinitions,
+                                            std::string& outError);
     static bool TryParseInputDefinitions(const std::string& content, std::vector<ExternalModInputBinding>& outBindings,
                                          std::vector<ExternalModCameraHotkeyDefinition>& outCameraHotkeys,
                                          std::vector<ExternalModHotkeyDefinition>& outHotkeys,

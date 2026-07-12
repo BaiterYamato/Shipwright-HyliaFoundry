@@ -1230,6 +1230,19 @@ struct ExternalModCombatHitRuleDefinition {
     bool stopPropagation = false;
 };
 
+struct ExternalModActorTagDefinition {
+    std::string id;
+    int32_t actorId = -1;
+    int32_t category = -1;
+    int32_t sceneId = -1;
+    int32_t params = 0;
+    bool hasCategory = false;
+    bool hasSceneId = false;
+    bool hasParams = false;
+    std::vector<std::string> tags;
+    std::vector<ExternalModAction> onTagged;
+};
+
 enum class ExternalModItemStateEvent {
     Select,
     Deselect,
@@ -2103,6 +2116,7 @@ struct ExternalModRuntime {
     std::vector<ExternalModItemUseProfile> itemUseProfiles;
     std::vector<ExternalModEffectGraphDefinition> effectGraphDefinitions;
     std::vector<ExternalModCombatHitRuleDefinition> combatHitRuleDefinitions;
+    std::vector<ExternalModActorTagDefinition> actorTags;
     std::vector<ExternalModProjectileProfile> projectileProfiles;
     std::vector<ExternalModAoEProfile> aoeProfiles;
     std::vector<ExternalModMovementProfile> movementProfiles;
@@ -2356,6 +2370,7 @@ struct ExternalModRuntime {
     std::unordered_map<std::string, bool> permissionGrants;
     std::unordered_map<std::string, std::string> globalBlackboard;
     std::unordered_map<int16_t, std::unordered_map<std::string, std::string>> sceneBlackboard;
+    std::unordered_map<uintptr_t, std::vector<std::string>> taggedActorInstances;
     std::unordered_map<std::string, std::unordered_map<std::string, std::string>> persistentDomains;
     std::unordered_map<std::string, std::string> settingsGlobalValues;
     std::unordered_map<std::string, std::string> settingsSaveValues;

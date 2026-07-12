@@ -2727,10 +2727,10 @@ const std::vector<ManifestPathConvention> kManifestPathConventions = {
     { "effects.graph.v2", &ExternalModManifest::effectGraphDefinitions, "effects/graph.json" },
     { "combat.hit_rules.v2", &ExternalModManifest::combatHitRuleDefinitions, "combat/hit_rules.json" },
     { "movement.surf.v2", &ExternalModManifest::surfDefinitions, "movement/surf.json" },
-    { "actors.tags.v1", &ExternalModManifest::actorTagDefinitions, "actors/tags.json" },
+    { "actors.tags.v1", &ExternalModManifest::actorTagDefinitions, "actors/actor_tags.json" },
     { "world.patchsets.v1", &ExternalModManifest::worldPatchDefinitions, "world/patchsets.json" },
-    { "quests.graph.v1", &ExternalModManifest::questDefinitions, "narrative/quests.json" },
-    { "dialog.nodes.v1", &ExternalModManifest::dialogDefinitions, "narrative/dialogue.json" },
+    { "quests.graph.v1", &ExternalModManifest::questDefinitions, "quests/quests.json" },
+    { "dialog.nodes.v1", &ExternalModManifest::dialogDefinitions, "dialog/dialogs.json" },
     { "sdk.generators.v1", &ExternalModManifest::sdkGeneratorDefinitions, "sdk/generators.json" },
     { "fx.presets.v1", &ExternalModManifest::fxPresetDefinitions, "render/fx_presets.json" },
     { "states.catalog.v1", &ExternalModManifest::stateDefinitions, "gameplay/states.json" },
@@ -17768,6 +17768,9 @@ void ExternalModManager::Initialize() {
     if (!mEffectRuntime) {
         mEffectRuntime = std::make_unique<ExternalModEffectRuntime>();
     }
+    if (!mActorTagRuntime) {
+        mActorTagRuntime = std::make_unique<ExternalModActorTagRuntime>();
+    }
     mAimCameraState.overShoulderEnabled =
         CVarGetInteger(kAimCameraOverShoulderCVar, mAimCameraState.overShoulderEnabled ? 1 : 0) != 0;
 
@@ -22050,6 +22053,97 @@ bool ExternalModManager::TryParseCombatHitRuleDefinitions(
             rule.stopPropagation = ruleJson["stopPropagation"].get<bool>();
         }
         outDefinitions.push_back(std::move(rule));
+    }
+    return true;
+}
+
+bool ExternalModManager::TryParseActorTagDefinitions(const std::string& content, int32_t apiVersion,
+                                                     std::vector<ExternalModActorTagDefinition>& outDefinitions,
+                                                     std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "actorTagDefinitions requires apiVersion 4";
+        return false;
+    }
+    nlohmann::json json = nlohmann::json::parse(content, nullptr, false);
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1 || !json.contains("tags") || !json["tags"].is_array()) {
+        outError = "actor_tags.json must use schemaVersion 1 and contain tags[]";
+        return false;
+    }
+    if (json["tags"].size() > 256) {
+        outError = "actor_tags.json exceeds the 256-definition limit";
+        return false;
+    }
+
+    std::unordered_set<std::string> ids;
+    for (size_t i = 0; i < json["tags"].size(); ++i) {
+        const auto& tagJson = json["tags"][i];
+        ExternalModActorTagDefinition definition;
+        if (!tagJson.is_object() || !ValidateRequiredString(tagJson, "id", definition.id, outError) ||
+            !IsNamespacedCatalogId(definition.id) || !ids.insert(definition.id).second) {
+            outError = "tags[" + std::to_string(i) + "] must have a unique namespaced id";
+            return false;
+        }
+        if (!tagJson.contains("actorId") || !tagJson["actorId"].is_number_integer() ||
+            tagJson["actorId"].get<int32_t>() < 0) {
+            outError = "tags[" + std::to_string(i) + "].actorId must be a non-negative integer";
+            return false;
+        }
+        definition.actorId = tagJson["actorId"].get<int32_t>();
+        if (tagJson.contains("category")) {
+            if (!tagJson["category"].is_number_integer()) {
+                outError = "tags[" + std::to_string(i) + "].category must be an integer";
+                return false;
+            }
+            definition.category = tagJson["category"].get<int32_t>();
+            definition.hasCategory = true;
+        }
+        if (tagJson.contains("sceneId")) {
+            if (!tagJson["sceneId"].is_number_integer()) {
+                outError = "tags[" + std::to_string(i) + "].sceneId must be an integer";
+                return false;
+            }
+            definition.sceneId = tagJson["sceneId"].get<int32_t>();
+            definition.hasSceneId = true;
+        }
+        if (tagJson.contains("params")) {
+            if (!tagJson["params"].is_number_integer()) {
+                outError = "tags[" + std::to_string(i) + "].params must be an integer";
+                return false;
+            }
+            definition.params = tagJson["params"].get<int32_t>();
+            definition.hasParams = true;
+        }
+        if (!tagJson.contains("tags") || !tagJson["tags"].is_array() || tagJson["tags"].empty() ||
+            tagJson["tags"].size() > 16) {
+            outError = "tags[" + std::to_string(i) + "].tags must be an array with 1..16 entries";
+            return false;
+        }
+        std::unordered_set<std::string> tagValues;
+        for (const auto& tagValue : tagJson["tags"]) {
+            if (!tagValue.is_string() || tagValue.get<std::string>().empty() ||
+                tagValue.get<std::string>().size() > 64) {
+                outError = "tags[" + std::to_string(i) + "].tags entries must be non-empty strings (max 64 chars)";
+                return false;
+            }
+            if (!tagValues.insert(tagValue.get<std::string>()).second) {
+                outError = "tags[" + std::to_string(i) + "].tags entries must be unique";
+                return false;
+            }
+            definition.tags.push_back(tagValue.get<std::string>());
+        }
+        if (tagJson.contains("onTagged")) {
+            if (!tagJson["onTagged"].is_array() || tagJson["onTagged"].size() > 16) {
+                outError = "tags[" + std::to_string(i) + "].onTagged must be an array with at most 16 actions";
+                return false;
+            }
+            if (!ParseActionArray(tagJson["onTagged"], apiVersion, "onTagged", definition.onTagged, outError)) {
+                outError = "tags[" + std::to_string(i) + "]." + outError;
+                return false;
+            }
+        }
+        outDefinitions.push_back(std::move(definition));
     }
     return true;
 }
@@ -29295,6 +29389,20 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             }
         }
 
+        if (!package.manifest.actorTagDefinitions.empty()) {
+            std::filesystem::path actorTagsPath;
+            if (!IsSafePackageRelativePath(package.manifest.actorTagDefinitions, actorTagsPath, outError)) {
+                outError = "actorTagDefinitions invalid path: " + outError;
+                return false;
+            }
+            std::string actorTagsContent;
+            if (!ReadFileFromPackage(package, actorTagsPath, kMaxActorTagDefinitionBytes, actorTagsContent, outError) ||
+                !TryParseActorTagDefinitions(actorTagsContent, runtime.apiVersion, runtime.actorTags, outError)) {
+                outError = "actors.tags.v1 file=" + package.manifest.actorTagDefinitions + " reason=" + outError;
+                return false;
+            }
+        }
+
         for (const auto& inputTrigger : runtime.inputTriggers) {
             const auto bindingIt = std::find_if(runtime.inputBindings.begin(), runtime.inputBindings.end(),
                                                 [&inputTrigger](const ExternalModInputBinding& binding) {
@@ -34720,6 +34828,9 @@ void ExternalModManager::OnSceneInit(int16_t sceneNum) {
             package.runtime.nextActorHandle = 1;
             package.runtime.wasmTargetHandles.clear();
             package.runtime.wasmNextTargetHandle = 1;
+            if (mActorTagRuntime) {
+                mActorTagRuntime->ClearForPackage(package);
+            }
             package.runtime.lastSceneSeen = sceneNum;
             package.runtime.lastRoomSeen =
                 gPlayState != nullptr ? static_cast<int16_t>(gPlayState->roomCtx.curRoom.num) : static_cast<int16_t>(-1);
@@ -36156,6 +36267,24 @@ void ExternalModManager::OnActorHook(ExternalModHookType hookType, void* actor, 
         context.actorCategory = static_cast<int16_t>(actorPtr->category);
     }
 
+    if (hookType == ExternalModHookType::OnActorInit && actor != nullptr && mActorTagRuntime) {
+        auto* actorPtr = static_cast<Actor*>(actor);
+        for (auto& package : mPackages) {
+            if (!package.runtime.enabled || package.runtime.actorTags.empty()) {
+                continue;
+            }
+            try {
+                mActorTagRuntime->ApplyOnActorInit(package, actorPtr, gPlayState,
+                                                   [&package](const ExternalModActorTagDefinition& definition) {
+                                                       ExecuteActions(package, definition.onTagged,
+                                                                      definition.id.c_str());
+                                                   });
+            } catch (const std::exception& ex) {
+                DisableRuntime(package, std::string("actors.tags.v1 dispatch failed: ") + ex.what());
+            }
+        }
+    }
+
     DispatchExtendedHook(hookType, context, hookName);
 }
 
@@ -36207,6 +36336,9 @@ void ExternalModManager::OnPlayDestroy() {
         package.runtime.useProfileSpawnedShockwave = false;
         package.runtime.actorInstances.clear();
         package.runtime.nextActorHandle = 1;
+        if (mActorTagRuntime) {
+            mActorTagRuntime->ClearForPackage(package);
+        }
         package.runtime.pendingSignals.clear();
         package.runtime.wasmTargetHandles.clear();
         package.runtime.wasmNextTargetHandle = 1;
