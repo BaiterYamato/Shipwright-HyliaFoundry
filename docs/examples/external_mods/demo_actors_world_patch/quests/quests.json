@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "quests": [
+    {
+      "id": "com.sylian.demo.actors_world_patch:kokiri_scavenger",
+      "startNodeId": "visit_kokiri",
+      "nodes": [
+        {
+          "id": "visit_kokiri",
+          "text": "Visite a Kokiri Forest.",
+          "onEnter": [
+            {
+              "action": "showNotification",
+              "text": "Quest iniciada: visite a Kokiri Forest"
+            }
+          ],
+          "advanceWhen": [
+            {
+              "event": "sceneEnter",
+              "sceneId": 85
+            }
+          ],
+          "next": ["collect_stick"]
+        },
+        {
+          "id": "collect_stick",
+          "text": "Pegue um Deku Stick.",
+          "onEnter": [
+            {
+              "action": "showNotification",
+              "text": "Quest avancou: pegue um Deku Stick"
+            }
+          ],
+          "advanceWhen": [
+            {
+              "event": "itemReceive",
+              "itemId": 0
+            }
+          ],
+          "next": ["done"]
+        },
+        {
+          "id": "done",
+          "text": "Quest concluida.",
+          "onEnter": [
+            {
+              "action": "showNotification",
+              "text": "Quest concluida: Kokiri Scavenger"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

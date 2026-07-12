@@ -2350,6 +2350,7 @@ void LoadRuntimeStateForPackage(ExternalModPackage& package) {
     package.runtime.persistentStateDirty = false;
     package.runtime.narrativeFlags.clear();
     package.runtime.narrativeQuests.clear();
+    package.runtime.questCurrentNode.clear();
     package.runtime.activeTimelines.clear();
     package.runtime.activeDialogueId.clear();
     package.runtime.activeDialogueNodeId.clear();
@@ -2541,6 +2542,17 @@ void LoadRuntimeStateForPackage(ExternalModPackage& package) {
                     }
                 }
             }
+        }
+    }
+
+    // Rebuild the quests.graph.v1 current-node cache from the persisted "__node" objectives.
+    for (const auto& questPair : package.runtime.narrativeQuests) {
+        if (questPair.second.state != "active") {
+            continue;
+        }
+        const auto nodeIt = questPair.second.objectives.find(ExternalModQuestGraphRuntime::kCurrentNodeObjectiveKey);
+        if (nodeIt != questPair.second.objectives.end() && !nodeIt->second.empty()) {
+            package.runtime.questCurrentNode[questPair.first] = nodeIt->second;
         }
     }
 
@@ -17774,6 +17786,9 @@ void ExternalModManager::Initialize() {
     if (!mWorldPatchRuntime) {
         mWorldPatchRuntime = std::make_unique<ExternalModWorldPatchRuntime>();
     }
+    if (!mQuestGraphRuntime) {
+        mQuestGraphRuntime = std::make_unique<ExternalModQuestGraphRuntime>();
+    }
     mAimCameraState.overShoulderEnabled =
         CVarGetInteger(kAimCameraOverShoulderCVar, mAimCameraState.overShoulderEnabled ? 1 : 0) != 0;
 
@@ -22274,6 +22289,193 @@ bool ExternalModManager::TryParseWorldPatchsetDefinitions(const std::string& con
             definition.ops.push_back(std::move(op));
         }
         outDefinitions.push_back(std::move(definition));
+    }
+    return true;
+}
+
+bool ExternalModManager::TryParseQuestGraphDefinitions(const std::string& content, int32_t apiVersion,
+                                                       std::vector<ExternalModQuestGraphDefinition>& outDefinitions,
+                                                       std::string& outError) {
+    outDefinitions.clear();
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "questDefinitions requires apiVersion 4";
+        return false;
+    }
+    nlohmann::json json = nlohmann::json::parse(content, nullptr, false);
+    if (!json.is_object() || !json.contains("schemaVersion") || !json["schemaVersion"].is_number_integer() ||
+        json["schemaVersion"].get<int32_t>() != 1 || !json.contains("quests") || !json["quests"].is_array()) {
+        outError = "quests.json must use schemaVersion 1 and contain quests[]";
+        return false;
+    }
+    if (json["quests"].size() > 64) {
+        outError = "quests.json exceeds the 64-quest limit";
+        return false;
+    }
+
+    std::unordered_set<std::string> questIds;
+    for (size_t questIndex = 0; questIndex < json["quests"].size(); ++questIndex) {
+        const auto& questJson = json["quests"][questIndex];
+        ExternalModQuestGraphDefinition quest;
+        if (!questJson.is_object() || !ValidateRequiredString(questJson, "id", quest.id, outError) ||
+            !IsNamespacedCatalogId(quest.id) ||
+            !ValidateRequiredString(questJson, "startNodeId", quest.startNodeId, outError) ||
+            !questJson.contains("nodes") || !questJson["nodes"].is_array()) {
+            outError = "quests[" + std::to_string(questIndex) + "] has an invalid id, startNodeId, or nodes[]";
+            return false;
+        }
+        if (!questIds.insert(quest.id).second || questJson["nodes"].empty() || questJson["nodes"].size() > 128) {
+            outError = "quests[" + std::to_string(questIndex) + "] must have a unique namespaced id and 1..128 nodes";
+            return false;
+        }
+
+        std::unordered_set<std::string> nodeIds;
+        for (size_t nodeIndex = 0; nodeIndex < questJson["nodes"].size(); ++nodeIndex) {
+            const auto& nodeJson = questJson["nodes"][nodeIndex];
+            const std::string nodePrefix =
+                "quests[" + std::to_string(questIndex) + "].nodes[" + std::to_string(nodeIndex) + "]";
+            ExternalModQuestNode node;
+            if (!nodeJson.is_object() || !ValidateRequiredString(nodeJson, "id", node.id, outError) ||
+                !nodeIds.insert(node.id).second) {
+                outError = nodePrefix + " must have a unique id";
+                return false;
+            }
+            if (nodeJson.contains("text")) {
+                if (!nodeJson["text"].is_string() || nodeJson["text"].get<std::string>().size() > 512) {
+                    outError = nodePrefix + ".text must be a string (max 512 chars)";
+                    return false;
+                }
+                node.text = nodeJson["text"].get<std::string>();
+            }
+            if (nodeJson.contains("onEnter")) {
+                if (!nodeJson["onEnter"].is_array() || nodeJson["onEnter"].size() > 16) {
+                    outError = nodePrefix + ".onEnter must be an array with at most 16 actions";
+                    return false;
+                }
+                if (!ParseActionArray(nodeJson["onEnter"], apiVersion, "onEnter", node.onEnter, outError)) {
+                    outError = nodePrefix + "." + outError;
+                    return false;
+                }
+            }
+            if (nodeJson.contains("advanceWhen")) {
+                if (!nodeJson["advanceWhen"].is_array() || nodeJson["advanceWhen"].size() > 8) {
+                    outError = nodePrefix + ".advanceWhen must be an array with at most 8 triggers";
+                    return false;
+                }
+                for (size_t triggerIndex = 0; triggerIndex < nodeJson["advanceWhen"].size(); ++triggerIndex) {
+                    const auto& triggerJson = nodeJson["advanceWhen"][triggerIndex];
+                    const std::string triggerPrefix = nodePrefix + ".advanceWhen[" + std::to_string(triggerIndex) + "]";
+                    ExternalModQuestTrigger trigger;
+                    if (!triggerJson.is_object() || !triggerJson.contains("event") ||
+                        !triggerJson["event"].is_string()) {
+                        outError = triggerPrefix + ".event must be a string";
+                        return false;
+                    }
+                    trigger.event = triggerJson["event"].get<std::string>();
+                    const auto readIntField = [&](const char* key, int32_t& outValue, bool& outHas) -> bool {
+                        if (!triggerJson.contains(key)) {
+                            return true;
+                        }
+                        if (!triggerJson[key].is_number_integer()) {
+                            outError = triggerPrefix + "." + key + " must be an integer";
+                            return false;
+                        }
+                        outValue = triggerJson[key].get<int32_t>();
+                        outHas = true;
+                        return true;
+                    };
+                    if (!readIntField("flagType", trigger.flagType, trigger.hasFlagType) ||
+                        !readIntField("flagId", trigger.flagId, trigger.hasFlagId) ||
+                        !readIntField("sceneId", trigger.sceneId, trigger.hasSceneId) ||
+                        !readIntField("itemId", trigger.itemId, trigger.hasItemId) ||
+                        !readIntField("actorId", trigger.actorId, trigger.hasActorId)) {
+                        return false;
+                    }
+                    if (trigger.event == "flagSet") {
+                        if (!trigger.hasFlagType || !trigger.hasFlagId) {
+                            outError = triggerPrefix + " requires flagType and flagId";
+                            return false;
+                        }
+                    } else if (trigger.event == "sceneEnter") {
+                        if (!trigger.hasSceneId) {
+                            outError = triggerPrefix + " requires sceneId";
+                            return false;
+                        }
+                    } else if (trigger.event == "itemReceive") {
+                        if (!trigger.hasItemId) {
+                            outError = triggerPrefix + " requires itemId";
+                            return false;
+                        }
+                    } else if (trigger.event == "enemyDefeat" || trigger.event == "bossDefeat") {
+                        if (!trigger.hasActorId) {
+                            outError = triggerPrefix + " requires actorId";
+                            return false;
+                        }
+                    } else {
+                        outError = triggerPrefix +
+                                   ".event must be flagSet, sceneEnter, itemReceive, enemyDefeat, or bossDefeat";
+                        return false;
+                    }
+                    node.advanceWhen.push_back(std::move(trigger));
+                }
+            }
+            if (nodeJson.contains("next")) {
+                if (!nodeJson["next"].is_array() || nodeJson["next"].size() > 8) {
+                    outError = nodePrefix + ".next must be an array with at most 8 node ids";
+                    return false;
+                }
+                for (const auto& next : nodeJson["next"]) {
+                    if (!next.is_string() || next.get<std::string>().empty()) {
+                        outError = nodePrefix + ".next entries must be non-empty strings";
+                        return false;
+                    }
+                    node.next.push_back(next.get<std::string>());
+                }
+            }
+            quest.nodes.push_back(std::move(node));
+        }
+        if (!nodeIds.contains(quest.startNodeId)) {
+            outError = "quests[" + std::to_string(questIndex) + "].startNodeId references an unknown node: " +
+                       quest.startNodeId;
+            return false;
+        }
+
+        std::unordered_map<std::string, size_t> indegree;
+        for (const auto& node : quest.nodes) {
+            indegree[node.id] = 0;
+        }
+        for (const auto& node : quest.nodes) {
+            for (const auto& next : node.next) {
+                if (!indegree.contains(next)) {
+                    outError = "quest graph node references unknown next node: " + next;
+                    return false;
+                }
+                ++indegree[next];
+            }
+        }
+        std::vector<std::string> ready;
+        for (const auto& [nodeId, degree] : indegree) {
+            if (degree == 0) {
+                ready.push_back(nodeId);
+            }
+        }
+        size_t visited = 0;
+        while (!ready.empty()) {
+            const auto nodeId = ready.back();
+            ready.pop_back();
+            ++visited;
+            const auto nodeIt = std::find_if(quest.nodes.begin(), quest.nodes.end(),
+                                             [&](const auto& node) { return node.id == nodeId; });
+            for (const auto& next : nodeIt->next) {
+                if (--indegree[next] == 0) {
+                    ready.push_back(next);
+                }
+            }
+        }
+        if (visited != quest.nodes.size()) {
+            outError = "quest graph must be acyclic: " + quest.id;
+            return false;
+        }
+        outDefinitions.push_back(std::move(quest));
     }
     return true;
 }
@@ -29549,6 +29751,20 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             }
         }
 
+        if (!package.manifest.questDefinitions.empty()) {
+            std::filesystem::path questsPath;
+            if (!IsSafePackageRelativePath(package.manifest.questDefinitions, questsPath, outError)) {
+                outError = "questDefinitions invalid path: " + outError;
+                return false;
+            }
+            std::string questsContent;
+            if (!ReadFileFromPackage(package, questsPath, kMaxQuestDefinitionBytes, questsContent, outError) ||
+                !TryParseQuestGraphDefinitions(questsContent, runtime.apiVersion, runtime.questGraphs, outError)) {
+                outError = "quests.graph.v1 file=" + package.manifest.questDefinitions + " reason=" + outError;
+                return false;
+            }
+        }
+
         for (const auto& inputTrigger : runtime.inputTriggers) {
             const auto bindingIt = std::find_if(runtime.inputBindings.begin(), runtime.inputBindings.end(),
                                                 [&inputTrigger](const ExternalModInputBinding& binding) {
@@ -34895,6 +35111,28 @@ void ExternalModManager::OnLoadGame(int32_t fileNum) {
                 }
             }
 
+            if (mQuestGraphRuntime && !package.runtime.questGraphs.empty()) {
+                try {
+                    mQuestGraphRuntime->StartOrResumeQuests(
+                        package,
+                        [&package](const std::vector<ExternalModAction>& actions, const char* contextLabel) {
+                            ExecuteActions(package, actions, contextLabel);
+                        },
+                        [this](const std::string& value) {
+                            ExternalModHookEventContext questContext;
+                            if (gPlayState != nullptr) {
+                                questContext.scene = static_cast<int16_t>(gPlayState->sceneNum);
+                            }
+                            questContext.value = value;
+                            DispatchExtendedHook(ExternalModHookType::OnQuestStateChanged, questContext,
+                                                 "OnQuestStateChanged");
+                        });
+                } catch (const std::exception& ex) {
+                    DisableRuntime(package, std::string("quests.graph.v1 start failed: ") + ex.what());
+                    continue;
+                }
+            }
+
             ExecuteActions(package, package.runtime.onGameLoadedActions, "onGameLoaded");
         } catch (const std::exception& ex) {
             DisableRuntime(package, std::string("Unhandled exception on onGameLoaded: ") + ex.what());
@@ -35104,6 +35342,11 @@ void ExternalModManager::OnSceneInit(int16_t sceneNum) {
     context.scene = sceneNum;
     DispatchExtendedHook(ExternalModHookType::OnSceneInit, context, "OnSceneInit");
     DispatchExtendedHook(ExternalModHookType::OnWorldSceneLoaded, context, "OnWorldSceneLoaded");
+
+    ExternalModQuestEvent questEvent;
+    questEvent.event = "sceneEnter";
+    questEvent.sceneId = static_cast<int32_t>(sceneNum);
+    DispatchQuestGraphEvent(questEvent);
     PruneAimCameraStateForUnavailableProfiles();
 
     SyncExtraInventoryGrid();
@@ -35132,6 +35375,12 @@ void ExternalModManager::OnFlagSet(int16_t flagType, int16_t flag) {
     context.flagType = flagType;
     context.flagId = flag;
     DispatchExtendedHook(ExternalModHookType::OnFlagSet, context, "OnFlagSet");
+
+    ExternalModQuestEvent questEvent;
+    questEvent.event = "flagSet";
+    questEvent.flagType = static_cast<int32_t>(flagType);
+    questEvent.flagId = static_cast<int32_t>(flag);
+    DispatchQuestGraphEvent(questEvent);
 }
 
 void ExternalModManager::OnFlagUnset(int16_t flagType, int16_t flag) {
@@ -35150,6 +35399,14 @@ void ExternalModManager::OnSceneFlagSet(int16_t sceneNum, int16_t flagType, int1
     context.flagType = flagType;
     context.flagId = flag;
     DispatchExtendedHook(ExternalModHookType::OnSceneFlagSet, context, "OnSceneFlagSet");
+
+    // Scene flags are still flag writes; quest triggers match them by flagType/flagId.
+    ExternalModQuestEvent questEvent;
+    questEvent.event = "flagSet";
+    questEvent.flagType = static_cast<int32_t>(flagType);
+    questEvent.flagId = static_cast<int32_t>(flag);
+    questEvent.sceneId = static_cast<int32_t>(sceneNum);
+    DispatchQuestGraphEvent(questEvent);
 }
 
 void ExternalModManager::OnSceneFlagUnset(int16_t sceneNum, int16_t flagType, int16_t flag) {
@@ -36424,6 +36681,39 @@ void ExternalModManager::OnItemReceive(int16_t itemId) {
     }
     context.itemId = itemId;
     DispatchExtendedHook(ExternalModHookType::OnItemReceive, context, "OnItemReceive");
+
+    ExternalModQuestEvent questEvent;
+    questEvent.event = "itemReceive";
+    questEvent.itemId = static_cast<int32_t>(itemId);
+    DispatchQuestGraphEvent(questEvent);
+}
+
+void ExternalModManager::DispatchQuestGraphEvent(const ExternalModQuestEvent& event) {
+    if (!mQuestGraphRuntime) {
+        return;
+    }
+    for (auto& package : mPackages) {
+        if (!package.runtime.enabled || package.runtime.questGraphs.empty()) {
+            continue;
+        }
+        try {
+            mQuestGraphRuntime->OnEvent(
+                package, event,
+                [&package](const std::vector<ExternalModAction>& actions, const char* contextLabel) {
+                    ExecuteActions(package, actions, contextLabel);
+                },
+                [this](const std::string& value) {
+                    ExternalModHookEventContext context;
+                    if (gPlayState != nullptr) {
+                        context.scene = static_cast<int16_t>(gPlayState->sceneNum);
+                    }
+                    context.value = value;
+                    DispatchExtendedHook(ExternalModHookType::OnQuestStateChanged, context, "OnQuestStateChanged");
+                });
+        } catch (const std::exception& ex) {
+            DisableRuntime(package, std::string("quests.graph.v1 dispatch failed: ") + ex.what());
+        }
+    }
 }
 
 void ExternalModManager::OnActorHook(ExternalModHookType hookType, void* actor, const char* hookName) {
@@ -36457,6 +36747,14 @@ void ExternalModManager::OnActorHook(ExternalModHookType hookType, void* actor, 
     }
 
     DispatchExtendedHook(hookType, context, hookName);
+
+    if ((hookType == ExternalModHookType::OnEnemyDefeat || hookType == ExternalModHookType::OnBossDefeat) &&
+        actor != nullptr) {
+        ExternalModQuestEvent questEvent;
+        questEvent.event = hookType == ExternalModHookType::OnEnemyDefeat ? "enemyDefeat" : "bossDefeat";
+        questEvent.actorId = static_cast<int32_t>(static_cast<Actor*>(actor)->id);
+        DispatchQuestGraphEvent(questEvent);
+    }
 }
 
 bool ExternalModManager::ShouldAllowActorInit(void* actor) {

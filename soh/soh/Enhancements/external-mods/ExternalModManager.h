@@ -18,6 +18,7 @@ struct Player;
 #include "ExternalModEffectRuntime.h"
 #include "ExternalModActorTagRuntime.h"
 #include "ExternalModWorldPatchRuntime.h"
+#include "ExternalModQuestGraphRuntime.h"
 #include "ExternalModWorldGraphicsRuntime.h"
 #include "ExternalModPlayerResourcesRuntime.h"
 
@@ -200,6 +201,7 @@ class ExternalModManager {
     std::unique_ptr<ExternalModEffectRuntime> mEffectRuntime;
     std::unique_ptr<ExternalModActorTagRuntime> mActorTagRuntime;
     std::unique_ptr<ExternalModWorldPatchRuntime> mWorldPatchRuntime;
+    std::unique_ptr<ExternalModQuestGraphRuntime> mQuestGraphRuntime;
 
     static bool TryParseManifest(const std::string& content, ExternalModManifest& outManifest, std::string& outError);
     static bool TryParseEntryScript(const std::string& content, int32_t apiVersion, ExternalModRuntime& outRuntime,
@@ -222,6 +224,9 @@ class ExternalModManager {
     static bool TryParseWorldPatchsetDefinitions(const std::string& content, int32_t apiVersion,
                                                  std::vector<ExternalModWorldPatchsetDefinition>& outDefinitions,
                                                  std::string& outError);
+    static bool TryParseQuestGraphDefinitions(const std::string& content, int32_t apiVersion,
+                                              std::vector<ExternalModQuestGraphDefinition>& outDefinitions,
+                                              std::string& outError);
     static bool TryParseInputDefinitions(const std::string& content, std::vector<ExternalModInputBinding>& outBindings,
                                          std::vector<ExternalModCameraHotkeyDefinition>& outCameraHotkeys,
                                          std::vector<ExternalModHotkeyDefinition>& outHotkeys,
@@ -517,6 +522,9 @@ class ExternalModManager {
     void OnPlayerHealthChange(int16_t amount);
     void OnItemReceive(int16_t itemId);
     void OnActorHook(ExternalModHookType hookType, void* actor, const char* hookName);
+    // Feeds one gameplay event to the quests.graph.v1 runtime for every enabled package, with a
+    // per-package try/catch that disables the offending runtime on failure.
+    void DispatchQuestGraphEvent(const ExternalModQuestEvent& event);
     // ShouldActorInit consumer: returns false only on a strict world.patchsets.v1 suppressActor
     // match (scene + actorId + optional params); otherwise keeps the permissive default (true).
     bool ShouldAllowActorInit(void* actor);

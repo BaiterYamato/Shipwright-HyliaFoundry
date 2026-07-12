@@ -1266,6 +1266,34 @@ struct ExternalModWorldPatchsetDefinition {
     std::vector<ExternalModWorldPatchOp> ops;
 };
 
+struct ExternalModQuestTrigger {
+    std::string event;
+    int32_t flagType = -1;
+    bool hasFlagType = false;
+    int32_t flagId = -1;
+    bool hasFlagId = false;
+    int32_t sceneId = -1;
+    bool hasSceneId = false;
+    int32_t itemId = -1;
+    bool hasItemId = false;
+    int32_t actorId = -1;
+    bool hasActorId = false;
+};
+
+struct ExternalModQuestNode {
+    std::string id;
+    std::string text;
+    std::vector<ExternalModAction> onEnter;
+    std::vector<ExternalModQuestTrigger> advanceWhen;
+    std::vector<std::string> next;
+};
+
+struct ExternalModQuestGraphDefinition {
+    std::string id;
+    std::string startNodeId;
+    std::vector<ExternalModQuestNode> nodes;
+};
+
 enum class ExternalModItemStateEvent {
     Select,
     Deselect,
@@ -2141,6 +2169,7 @@ struct ExternalModRuntime {
     std::vector<ExternalModCombatHitRuleDefinition> combatHitRuleDefinitions;
     std::vector<ExternalModActorTagDefinition> actorTags;
     std::vector<ExternalModWorldPatchsetDefinition> worldPatchsets;
+    std::vector<ExternalModQuestGraphDefinition> questGraphs;
     std::vector<ExternalModProjectileProfile> projectileProfiles;
     std::vector<ExternalModAoEProfile> aoeProfiles;
     std::vector<ExternalModMovementProfile> movementProfiles;
@@ -2408,6 +2437,9 @@ struct ExternalModRuntime {
     bool persistentStateDirty = false;
     std::unordered_map<std::string, std::string> narrativeFlags;
     std::unordered_map<std::string, NarrativeQuestState> narrativeQuests;
+    // quests.graph.v1 volatile cache: quest graph id -> current node id. The persisted source of
+    // truth is narrativeQuests[questId].objectives["__node"]; this map is rebuilt on load/resume.
+    std::unordered_map<std::string, std::string> questCurrentNode;
     std::unordered_map<std::string, NarrativeTimelineState> activeTimelines;
     std::string activeDialogueId;
     std::string activeDialogueNodeId;
