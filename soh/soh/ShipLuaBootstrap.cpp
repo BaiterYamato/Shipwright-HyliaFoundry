@@ -1,4 +1,5 @@
 #include "ShipLuaBootstrap.h"
+#include "OotHotkeyRegistry.h"
 
 #include <filesystem>
 #include <memory>
@@ -16,6 +17,7 @@ namespace ShipLuaHost {
 namespace {
 
 std::unique_ptr<ShipLua::ModHost> gModHost;
+std::shared_ptr<OotHotkeyRegistry> gHotkeys;
 
 ShipLua::Logger CreateLogger() {
     return ShipLua::Logger([](ShipLua::LogLevel level, const std::string& modId, const std::string& message) {
@@ -45,6 +47,7 @@ ShipLua::LuaApiHostContext CreateHostContext() {
     ShipLua::LuaApiHostContext context;
     context.gameId = "oot";
     context.hostVersion = GetHostVersion();
+    context.hotkeys = gHotkeys;
     return context;
 }
 
@@ -100,6 +103,7 @@ void Initialize() {
         return;
     }
 
+    gHotkeys = std::make_shared<OotHotkeyRegistry>();
     ShipLua::LuaApiHostContext context = CreateHostContext();
     SPDLOG_INFO("ShipLua inicializando para {} {} (commit {})", context.gameId, context.hostVersion, gGitCommitHash);
     gModHost = std::make_unique<ShipLua::ModHost>(context, CreateLogger());
@@ -113,11 +117,16 @@ void Shutdown() {
     }
 
     gModHost.reset();
+    gHotkeys.reset();
     SPDLOG_INFO("ShipLua finalizado");
 }
 
 ShipLua::ModHost* GetModHost() {
     return gModHost.get();
+}
+
+OotHotkeyRegistry* Hotkeys() {
+    return gHotkeys.get();
 }
 
 } // namespace ShipLuaHost

@@ -124,6 +124,7 @@
 #include "soh/config/ConfigUpdaters.h"
 #include "soh/ShipInit.hpp"
 #include "soh/ShipLuaBootstrap.h"
+#include "soh/OotHotkeyRegistry.h"
 
 bool SoH_HandleConfigDrop(char* filePath);
 
@@ -1619,6 +1620,10 @@ extern "C" void Graph_StartFrame() {
     using Ship::KbScancode;
     int32_t dwScancode = OTRGlobals::Instance->context->GetWindow()->GetLastScancode();
     OTRGlobals::Instance->context->GetWindow()->SetLastScancode(-1);
+
+    if (ShipLuaHost::OotHotkeyRegistry* hotkeys = ShipLuaHost::Hotkeys(); hotkeys != nullptr) {
+        hotkeys->DispatchScancode(dwScancode);
+    }
 
     if (SOH::ExternalModManager::Instance().HandleCameraHotkeyScancode(dwScancode)) {
         return;
