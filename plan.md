@@ -86,3 +86,11 @@ Move the modloader to a hard-break `apiVersion: 4` baseline where new gameplay/c
 2. No per-mod engine edits in `soh/.../external-mods/*.cpp`.
 3. Faulty mod isolation is preserved (no global crash path).
 4. Runtime reference exports + docs stay in sync.
+
+## M8 — progresso (2026-07-12)
+Ataque ao M8 em fatias verticais (padrao M6/runtime dedicado; codigo escrito por subagentes Fable 5):
+- [x] actors.tags.v1 — commit bfc25f643 (ExternalModActorTagRuntime; dispatch em OnActorInit)
+- [x] world.patchsets.v1 — commit 447d52128 (ExternalModWorldPatchRuntime; hook novo ShouldActorInit; suppress/spawn/actions em OnSceneInit)
+- [x] quests.graph.v1 — commit 763d0ff7c (ExternalModQuestGraphRuntime; DAG topo-sort; eventos flagSet/sceneEnter/itemReceive/enemy|bossDefeat; integra narrativeQuests+persistencia)
+- [ ] dialog.nodes.v1 — PENDENTE (fase A: reusar motor de dialogo narrativo existente + aliases dialog.start/advance/choose; estender demo_actors_world_patch). Fable 5 bloqueou por limite de sessao (reset 20:10). Retomar rodando /loop apos o reset.
+Cada fatia: build Release OK + validate_mod OK. Demo unico demo_actors_world_patch acumula as capabilities. Smoke de runtime in-game pendente para o fim (apos dialog.nodes).
