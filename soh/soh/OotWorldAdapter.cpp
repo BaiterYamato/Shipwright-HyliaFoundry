@@ -1,8 +1,13 @@
 #include "OotWorldAdapter.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <utility>
+
+#include <ship/Context.h>
+#include <ship/resource/ResourceManager.h>
+#include <spdlog/spdlog.h>
 
 extern "C" {
 #include "functions.h"
@@ -21,6 +26,57 @@ using ShipLua::PortableItem;
 using ShipLua::PortablePlayerState;
 using ShipLua::Result;
 using ShipLua::WorldId;
+
+struct NativeAsset {
+    const char* logicalId;
+    const char* resourcePath;
+};
+
+constexpr std::array<NativeAsset, 3> kNativeAssets = {
+    NativeAsset{ "oot.player.sword.kokiri",
+                 "__OTR__objects/object_link_child/gLinkChildLeftFistAndKokiriSwordNearDL" },
+    NativeAsset{ "oot.player.sword.master",
+                 "__OTR__objects/object_link_boy/gLinkAdultLeftHandHoldingMasterSwordNearDL" },
+    NativeAsset{ "oot.player.sword.biggoron",
+                 "__OTR__objects/object_gi_longsword/gGiBiggoronSwordDL" },
+};
+
+ShipLua::WorldAssetCatalog ProbeNativeAssets() {
+    ShipLua::WorldAssetCatalog assets = ShipLua::CreateDefaultWorldAssetCatalog();
+    const auto context = Ship::Context::GetInstance();
+    const auto resourceManager = context != nullptr ? context->GetResourceManager() : nullptr;
+    const auto archiveManager = resourceManager != nullptr ? resourceManager->GetArchiveManager() : nullptr;
+
+    for (const NativeAsset& native : kNativeAssets) {
+        bool archiveValidated = false;
+        bool bundleLoaded = false;
+        if (archiveManager != nullptr && archiveManager->HasFile(native.resourcePath)) {
+            const auto archive = archiveManager->GetArchiveFromFile(native.resourcePath);
+            archiveValidated = archive != nullptr && archive->IsLoaded() &&
+                               (!archive->HasGameVersion() ||
+                                archiveManager->IsGameVersionValid(archive->GetGameVersion()));
+            if (archiveValidated) {
+                bundleLoaded = resourceManager->LoadResource(native.resourcePath) != nullptr;
+            }
+        }
+
+        const ShipLua::WorldAssetProbe probe{
+            .asset = { WorldId::Oot, native.logicalId },
+            .host = WorldId::Oot,
+            .factoryContract = "fast.display_list.bundle",
+            .contractVersion = 1,
+            .archiveValidated = archiveValidated,
+            .namespaceIsolated = true,
+            .bundleLoaded = bundleLoaded,
+        };
+        const auto recorded = assets.RecordProbe(probe);
+        if (!recorded.isOk()) {
+            SPDLOG_WARN("ShipLua não validou o asset OoT {}: {}", native.logicalId,
+                        recorded.message);
+        }
+    }
+    return assets;
+}
 
 constexpr std::uint16_t kOwnedSwordMask = 0x0007;
 
@@ -113,7 +169,8 @@ void ApplyItem(const OotWorldAdapter::PendingItem& pending) {
 
 } // namespace
 
-OotWorldAdapter::OotWorldAdapter(ShipLua::PortableItemCatalog catalog) : mCatalog(std::move(catalog)) {}
+OotWorldAdapter::OotWorldAdapter(ShipLua::PortableItemCatalog catalog)
+    : mCatalog(std::move(catalog)), mAssets(ProbeNativeAssets()) {}
 
 WorldId OotWorldAdapter::Id() const noexcept {
     return WorldId::Oot;
@@ -153,7 +210,7 @@ Result<PortablePlayerState> OotWorldAdapter::CapturePlayerState() {
 }
 
 bool OotWorldAdapter::CanResolveAsset(const AssetReference& asset) const noexcept {
-    return asset.owner == WorldId::Oot && asset.id.rfind("oot.", 0) == 0;
+    return mAssets.CanResolve(asset, WorldId::Oot);
 }
 
 Result<ShipLua::WorldImportPreview> OotWorldAdapter::PrepareImport(
