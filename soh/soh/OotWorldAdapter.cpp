@@ -5,6 +5,7 @@
 #include <utility>
 
 extern "C" {
+#include "functions.h"
 #include "z64.h"
 #include "variables.h"
 }
@@ -79,11 +80,19 @@ void SetSword(std::uint8_t equipValue, std::uint8_t itemId, bool equipped) {
 
 void ApplyItem(const OotWorldAdapter::PendingItem& pending) {
     const PortableItem& item = pending.source;
-    const std::uint8_t quantity = static_cast<std::uint8_t>(std::min<std::uint32_t>(item.quantity, 255));
+    const std::uint8_t quantity = static_cast<std::uint8_t>(std::min<std::uint32_t>(item.quantity, 99));
     if (pending.targetId == "shared.bow") {
+        if (((gSaveContext.inventory.upgrades & gUpgradeMasks[UPG_QUIVER]) >>
+             gUpgradeShifts[UPG_QUIVER]) == 0) {
+            Inventory_ChangeUpgrade(UPG_QUIVER, 1);
+        }
         gSaveContext.inventory.items[SLOT_BOW] = ITEM_BOW;
         gSaveContext.inventory.ammo[SLOT_BOW] = quantity;
     } else if (pending.targetId == "shared.bombs") {
+        if (((gSaveContext.inventory.upgrades & gUpgradeMasks[UPG_BOMB_BAG]) >>
+             gUpgradeShifts[UPG_BOMB_BAG]) == 0) {
+            Inventory_ChangeUpgrade(UPG_BOMB_BAG, 1);
+        }
         gSaveContext.inventory.items[SLOT_BOMB] = ITEM_BOMB;
         gSaveContext.inventory.ammo[SLOT_BOMB] = quantity;
     } else if (pending.targetId == "shared.bombchu") {
