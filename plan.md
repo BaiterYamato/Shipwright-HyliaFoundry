@@ -59,7 +59,7 @@ Move the modloader to a hard-break `apiVersion: 4` baseline where new gameplay/c
 - [ ] M7 surf v2 full runtime
   - `movement.surf.v2` full tuning and board/rider runtime paths.
 
-- [ ] M8 actors/world/quests stack
+- [x] M8 actors/world/quests stack
   - `actors.tags`, `world.patchsets`, `quests.graph`, `dialog.nodes` runtime execution.
 
 - [x] M9 open wasm runtime policy completion
@@ -92,5 +92,7 @@ Ataque ao M8 em fatias verticais (padrao M6/runtime dedicado; codigo escrito por
 - [x] actors.tags.v1 — commit bfc25f643 (ExternalModActorTagRuntime; dispatch em OnActorInit)
 - [x] world.patchsets.v1 — commit 447d52128 (ExternalModWorldPatchRuntime; hook novo ShouldActorInit; suppress/spawn/actions em OnSceneInit)
 - [x] quests.graph.v1 — commit 763d0ff7c (ExternalModQuestGraphRuntime; DAG topo-sort; eventos flagSet/sceneEnter/itemReceive/enemy|bossDefeat; integra narrativeQuests+persistencia)
-- [ ] dialog.nodes.v1 — PENDENTE (fase A: reusar motor de dialogo narrativo existente + aliases dialog.start/advance/choose; estender demo_actors_world_patch). Fable 5 bloqueou por limite de sessao (reset 20:10). Retomar rodando /loop apos o reset.
+- [x] dialog.nodes.v1 — commit f143902a8 (reusa 100% o motor de dialogo narrativo; aliases dialog.start/choose/advance; sem novo runtime)
+
+**M8 CONCLUIDO (2026-07-12).** Smoke de runtime na instalacao SoH-HyliaFoundry: demo_actors_world_patch habilita com as 4 capabilities, 18 runtimes, 0 erro de M8. Efeitos in-game (tag/patch/quest/dialog) disparam em cena durante gameplay. Follow-up nao-M8: shader de debug da volumetrics (DEBUG_TRANSMITTANCE) falha ao compilar - nao bloqueia o jogo.
 Cada fatia: build Release OK + validate_mod OK. Demo unico demo_actors_world_patch acumula as capabilities. Smoke de runtime in-game pendente para o fim (apos dialog.nodes).
