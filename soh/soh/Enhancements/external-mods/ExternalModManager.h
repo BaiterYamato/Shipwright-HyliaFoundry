@@ -395,6 +395,9 @@ class ExternalModManager {
     static bool TryParseNarrativeDialogueDefinitions(const std::string& content, int32_t apiVersion,
                                                      std::vector<ExternalModNarrativeDialogueDefinition>& outDefinitions,
                                                      std::string& outError);
+    static bool TryParseDialogNodeDefinitions(const std::string& content, int32_t apiVersion,
+                                              std::vector<ExternalModNarrativeDialogueDefinition>& outDefinitions,
+                                              std::string& outError);
     static bool TryParseNarrativeQuestDefinitions(const std::string& content, int32_t apiVersion,
                                                   std::vector<ExternalModNarrativeQuestDefinition>& outDefinitions,
                                                   std::string& outError);

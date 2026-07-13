@@ -1,0 +1,13 @@
+{
+  "apiVersion": 4,
+  "onGameLoaded": [
+    {
+      "action": "dialog.start",
+      "dialogueId": "com.sylian.demo.actors_world_patch:kokiri_greeter"
+    },
+    {
+      "action": "dialog.choose",
+      "optionId": "yes"
+    }
+  ]
+}

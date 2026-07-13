@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "dialogues": [
+    {
+      "id": "com.sylian.demo.actors_world_patch:kokiri_greeter",
+      "startNodeId": "hello",
+      "nodes": [
+        {
+          "id": "hello",
+          "speaker": "Kokiri Guide",
+          "line": "Bem-vindo ao runtime dialog.nodes.v1 do M8. Quer ouvir a dica da floresta?",
+          "onEnter": [
+            {
+              "action": "showNotification",
+              "text": "Dialogo M8: no hello ativo"
+            }
+          ],
+          "options": [
+            {
+              "id": "yes",
+              "text": "Sim, me conte.",
+              "nextNodeId": "bye",
+              "onChoose": [
+                {
+                  "action": "showNotification",
+                  "text": "Dialogo M8: opcao yes escolhida"
+                }
+              ]
+            },
+            {
+              "id": "no",
+              "text": "Agora nao.",
+              "nextNodeId": "bye"
+            }
+          ]
+        },
+        {
+          "id": "bye",
+          "speaker": "Kokiri Guide",
+          "line": "Procure Deku Sticks perto da loja. Boa sorte!"
+        }
+      ]
+    }
+  ]
+}

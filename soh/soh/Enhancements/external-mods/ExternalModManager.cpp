@@ -8505,27 +8505,29 @@ bool ParseAction(const nlohmann::json& json, int32_t apiVersion, ExternalModActi
         return true;
     }
 
-    if (actionType == "narrative.startDialogue") {
+    // "dialog.start"/"dialog.choose"/"dialog.advance" are the dialog.nodes.v1 aliases for the narrative
+    // dialogue actions; both spellings produce the same action types and fields.
+    if (actionType == "narrative.startDialogue" || actionType == "dialog.start") {
         outAction.type = ExternalModActionType::NarrativeStartDialogue;
         if (!ValidateRequiredString(json, "dialogueId", outAction.dialogueId, outError) &&
             !ValidateRequiredString(json, "id", outAction.dialogueId, outError)) {
-            outError = "narrative.startDialogue requires dialogueId/id";
+            outError = actionType + " requires dialogueId/id";
             return false;
         }
         return true;
     }
 
-    if (actionType == "narrative.chooseOption") {
+    if (actionType == "narrative.chooseOption" || actionType == "dialog.choose") {
         outAction.type = ExternalModActionType::NarrativeChooseOption;
         if (!ValidateRequiredString(json, "optionId", outAction.dialogueOptionId, outError) &&
             !ValidateRequiredString(json, "id", outAction.dialogueOptionId, outError)) {
-            outError = "narrative.chooseOption requires optionId/id";
+            outError = actionType + " requires optionId/id";
             return false;
         }
         return true;
     }
 
-    if (actionType == "narrative.advanceDialogue") {
+    if (actionType == "narrative.advanceDialogue" || actionType == "dialog.advance") {
         outAction.type = ExternalModActionType::NarrativeAdvanceDialogue;
         if (json.contains("nodeId") && !ValidateRequiredString(json, "nodeId", outAction.dialogueNodeId, outError)) {
             return false;
@@ -27683,6 +27685,81 @@ bool ExternalModManager::TryParseNarrativeDialogueDefinitions(
     return true;
 }
 
+bool ExternalModManager::TryParseDialogNodeDefinitions(const std::string& content, int32_t apiVersion,
+                                                       std::vector<ExternalModNarrativeDialogueDefinition>& outDefinitions,
+                                                       std::string& outError) {
+    if (apiVersion < kExternalModApiVersionV4) {
+        outError = "dialogDefinitions requires apiVersion 4";
+        return false;
+    }
+    // dialog.nodes.v1 reuses the narrative dialogue node shape and engine verbatim: parse with the shared
+    // narrative parser, layer the slice-specific checks (limits + node reference resolution) on top, and
+    // append into the same container the narrative dialogue actions dispatch from, so
+    // narrative.startDialogue/dialog.start, the active-dialogue state, OnDialogueStarted/
+    // OnDialogueChoiceCommitted, persistence, and the inspector all drive these dialogues unchanged.
+    // Phase B follow-up: surface active dialogues through the in-game textbox (OnOpenText /
+    // CustomMessageManager) instead of only blackboard/hook state.
+    std::vector<ExternalModNarrativeDialogueDefinition> parsed;
+    if (!TryParseNarrativeDialogueDefinitions(content, apiVersion, parsed, outError)) {
+        return false;
+    }
+    if (parsed.size() > 64) {
+        outError = "dialogs.json exceeds the 64-dialogue limit";
+        return false;
+    }
+    for (size_t dialogueIndex = 0; dialogueIndex < parsed.size(); ++dialogueIndex) {
+        const auto& dialogue = parsed[dialogueIndex];
+        const std::string dialoguePrefix = "dialogues[" + std::to_string(dialogueIndex) + "]";
+        if (dialogue.nodes.empty() || dialogue.nodes.size() > 128) {
+            outError = dialoguePrefix + " must have 1..128 nodes";
+            return false;
+        }
+        std::unordered_set<std::string> nodeIds;
+        for (const auto& node : dialogue.nodes) {
+            nodeIds.insert(node.id);
+        }
+        if (nodeIds.find(dialogue.startNodeId) == nodeIds.end()) {
+            outError = dialoguePrefix + ".startNodeId references unknown node: " + dialogue.startNodeId;
+            return false;
+        }
+        for (size_t nodeIndex = 0; nodeIndex < dialogue.nodes.size(); ++nodeIndex) {
+            const auto& node = dialogue.nodes[nodeIndex];
+            const std::string nodePrefix = dialoguePrefix + ".nodes[" + std::to_string(nodeIndex) + "]";
+            if (node.options.size() > 8) {
+                outError = nodePrefix + " must have at most 8 options";
+                return false;
+            }
+            if (!node.nextNodeId.empty() && nodeIds.find(node.nextNodeId) == nodeIds.end()) {
+                outError = nodePrefix + ".nextNodeId references unknown node: " + node.nextNodeId;
+                return false;
+            }
+            for (size_t optionIndex = 0; optionIndex < node.options.size(); ++optionIndex) {
+                const auto& option = node.options[optionIndex];
+                if (!option.nextNodeId.empty() && nodeIds.find(option.nextNodeId) == nodeIds.end()) {
+                    outError = nodePrefix + ".options[" + std::to_string(optionIndex) +
+                               "].nextNodeId references unknown node: " + option.nextNodeId;
+                    return false;
+                }
+            }
+        }
+        // A mod may declare both narrative.dialogue.v1 and dialog.nodes.v1 (the files differ:
+        // narrative/dialogue.json vs dialog/dialogs.json). A duplicate dialogue id would make
+        // narrative.startDialogue/dialog.start ambiguous, so reject it instead of silently overriding.
+        const bool duplicate = std::any_of(outDefinitions.begin(), outDefinitions.end(),
+                                           [&](const ExternalModNarrativeDialogueDefinition& existing) {
+                                               return existing.id == dialogue.id;
+                                           });
+        if (duplicate) {
+            outError = dialoguePrefix + " id already declared by narrative.dialogue.v1: " + dialogue.id;
+            return false;
+        }
+    }
+    for (auto& dialogue : parsed) {
+        outDefinitions.push_back(std::move(dialogue));
+    }
+    return true;
+}
+
 bool ExternalModManager::TryParseNarrativeQuestDefinitions(
     const std::string& content, int32_t apiVersion, std::vector<ExternalModNarrativeQuestDefinition>& outDefinitions,
     std::string& outError) {
@@ -31220,6 +31297,24 @@ bool ExternalModManager::LoadRuntimeForPackage(ExternalModPackage& package, std:
             }
             if (!TryParseNarrativeDialogueDefinitions(definitionsContent, runtime.apiVersion,
                                                       runtime.narrativeDialogueDefinitions, outError)) {
+                return false;
+            }
+        }
+
+        // dialog.nodes.v1 appends into runtime.narrativeDialogueDefinitions so the existing narrative
+        // dialogue engine drives these dialogues. It must run after the narrative.dialogue.v1 block above
+        // because TryParseNarrativeDialogueDefinitions clears that shared vector.
+        if (!package.manifest.dialogDefinitions.empty()) {
+            std::filesystem::path dialogsPath;
+            if (!IsSafePackageRelativePath(package.manifest.dialogDefinitions, dialogsPath, outError)) {
+                outError = "dialogDefinitions invalid path: " + outError;
+                return false;
+            }
+            std::string dialogsContent;
+            if (!ReadFileFromPackage(package, dialogsPath, kMaxDialogDefinitionBytes, dialogsContent, outError) ||
+                !TryParseDialogNodeDefinitions(dialogsContent, runtime.apiVersion, runtime.narrativeDialogueDefinitions,
+                                               outError)) {
+                outError = "dialog.nodes.v1 file=" + package.manifest.dialogDefinitions + " reason=" + outError;
                 return false;
             }
         }

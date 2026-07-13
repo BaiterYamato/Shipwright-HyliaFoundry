@@ -6,9 +6,11 @@
   "apiVersion": 4,
   "uiCategory": "mod",
   "loadPriority": 230,
+  "entryScript": "scripts/init.json",
   "actorTagDefinitions": "actors/actor_tags.json",
   "worldPatchDefinitions": "world/patchsets.json",
   "questDefinitions": "quests/quests.json",
+  "dialogDefinitions": "dialog/dialogs.json",
   "runtime": {
     "type": "data-only"
   },
@@ -16,12 +18,14 @@
   "capabilities": [
     "actors.tags.v1",
     "world.patchsets.v1",
-    "quests.graph.v1"
+    "quests.graph.v1",
+    "dialog.nodes.v1"
   ],
   "capabilityRationales": {
     "actors.tags.v1": "Marca Deku Babas com a tag demo:flora no OnActorInit e mostra uma notificacao de prova do runtime M8.",
     "world.patchsets.v1": "Spawna um arbusto extra na Kokiri Forest no OnSceneInit e mostra uma notificacao de prova do runtime M8.",
-    "quests.graph.v1": "Quest de 3 nos que avanca ao entrar na Kokiri Forest e ao receber um Deku Stick, provando o runtime de quests do M8."
+    "quests.graph.v1": "Quest de 3 nos que avanca ao entrar na Kokiri Forest e ao receber um Deku Stick, provando o runtime de quests do M8.",
+    "dialog.nodes.v1": "Dialogo de 2 nos com escolha de 2 opcoes iniciado via dialog.start no onGameLoaded, provando o runtime de dialogos do M8 sobre o motor narrativo existente."
   },
   "dependencies": [],
   "permissions": []
