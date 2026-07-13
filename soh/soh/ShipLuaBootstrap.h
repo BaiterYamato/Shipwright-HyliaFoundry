@@ -7,10 +7,12 @@ class ModHost;
 namespace ShipLuaHost {
 
 class OotHotkeyRegistry;
+class OotWorldAdapter;
 
 void Initialize();
 void Shutdown();
 ShipLua::ModHost* GetModHost();
 OotHotkeyRegistry* Hotkeys();
+OotWorldAdapter* WorldAdapter();
 
 } // namespace ShipLuaHost

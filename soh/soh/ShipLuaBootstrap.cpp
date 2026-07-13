@@ -1,5 +1,6 @@
 #include "ShipLuaBootstrap.h"
 #include "OotHotkeyRegistry.h"
+#include "OotWorldAdapter.h"
 
 #include <filesystem>
 #include <memory>
@@ -18,6 +19,7 @@ namespace {
 
 std::unique_ptr<ShipLua::ModHost> gModHost;
 std::shared_ptr<OotHotkeyRegistry> gHotkeys;
+std::shared_ptr<OotWorldAdapter> gWorldAdapter;
 
 ShipLua::Logger CreateLogger() {
     return ShipLua::Logger([](ShipLua::LogLevel level, const std::string& modId, const std::string& message) {
@@ -104,6 +106,13 @@ void Initialize() {
     }
 
     gHotkeys = std::make_shared<OotHotkeyRegistry>();
+    auto catalog = ShipLua::PortableItemCatalog::CreateDefault();
+    if (!catalog.isOk()) {
+        SPDLOG_ERROR("ShipLua não conseguiu criar o catálogo portátil OoT: {}", catalog.message);
+        gHotkeys.reset();
+        return;
+    }
+    gWorldAdapter = std::make_shared<OotWorldAdapter>(std::move(*catalog.value));
     ShipLua::LuaApiHostContext context = CreateHostContext();
     SPDLOG_INFO("ShipLua inicializando para {} {} (commit {})", context.gameId, context.hostVersion, gGitCommitHash);
     gModHost = std::make_unique<ShipLua::ModHost>(context, CreateLogger());
@@ -117,6 +126,7 @@ void Shutdown() {
     }
 
     gModHost.reset();
+    gWorldAdapter.reset();
     gHotkeys.reset();
     SPDLOG_INFO("ShipLua finalizado");
 }
@@ -127,6 +137,10 @@ ShipLua::ModHost* GetModHost() {
 
 OotHotkeyRegistry* Hotkeys() {
     return gHotkeys.get();
+}
+
+OotWorldAdapter* WorldAdapter() {
+    return gWorldAdapter.get();
 }
 
 } // namespace ShipLuaHost
