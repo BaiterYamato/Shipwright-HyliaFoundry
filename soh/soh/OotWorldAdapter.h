@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <shiplua/world/PortableItemCatalog.h>
+#include <shiplua/world/WorldAssetCatalog.h>
 #include <shiplua/world/WorldSession.h>
 
 namespace ShipLuaHost {
@@ -35,6 +36,7 @@ class OotWorldAdapter final : public ShipLua::IWorldAdapter {
 
   private:
     ShipLua::PortableItemCatalog mCatalog;
+    ShipLua::WorldAssetCatalog mAssets;
     std::optional<PendingImport> mPending;
 };
 
