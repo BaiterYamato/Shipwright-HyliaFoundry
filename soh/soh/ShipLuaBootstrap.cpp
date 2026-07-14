@@ -11,8 +11,22 @@
 #include <ship/Context.h>
 #include <shiplua/generated/ApiBindings.h>
 #include <shiplua/host/ModHost.h>
+#include <shiplua/runtime/LuaRuntime.h>
 
+extern "C" {
+#include <z64.h>
 #include "variables.h"
+#include "functions.h"
+#include "macros.h"
+extern PlayState* gPlayState;
+#include "lauxlib.h"
+#include "lua.h"
+}
+
+// OoT dog actor (En_Dog), defined in actor_table.h as 0x019B. The header is a
+// macro-expansion template (DEFINE_ACTOR), so we reference the literal value
+// rather than including it raw.
+constexpr s16 kOotActorEnDog = 0x019B;
 
 namespace ShipLuaHost {
 namespace {
@@ -49,8 +63,103 @@ ShipLua::LuaApiHostContext CreateHostContext() {
     ShipLua::LuaApiHostContext context;
     context.gameId = "oot";
     context.hostVersion = GetHostVersion();
+    context.capabilities = { "oot.player.jump", "oot.spawn_dog" };
     context.hotkeys = gHotkeys;
     return context;
+}
+
+// ship.oot.player.jump(): applies a host-controlled vertical impulse only when
+// the player is alive and standing on the ground. Mirrors the MM binding at
+// mm/2s2h/ShipLuaBootstrap.cpp. SoH does not define BGCHECKFLAG_GROUND, so we
+// test the ground bit directly (idiom from z_player.c). MoonJump.cpp uses the
+// same velocity literal (6.34375f), the canonical jump impulse for OoT/MM.
+int LuaPlayerJump(lua_State* L) {
+    PlayState* play = gPlayState;
+    if (play == nullptr) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    Player* player = GET_PLAYER(play);
+    if (player == nullptr || (player->stateFlags1 & PLAYER_STATE1_DEAD) != 0 ||
+        (player->actor.bgCheckFlags & 1) == 0) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    player->actor.velocity.y = 6.34375f;
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// ship.oot.spawn_dog(): spawns the OoT dog (En_Dog) at the player's position,
+// returning true on success. En_Dog is the Hyrule Market / Dog Lady NPC; its
+// init validates scene and params, so spawns outside Market scenes may not
+// behave as expected. params 0x8000 sets the "second dog / follow" branch that
+// avoids the Actor_Kill path taken by dogs without a valid scene path.
+int LuaSpawnDog(lua_State* L) {
+    PlayState* play = gPlayState;
+    if (play == nullptr) {
+        SPDLOG_WARN("ShipLua spawn_dog: gPlayState nulo (fora de gameplay)");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    Player* player = GET_PLAYER(play);
+    if (player == nullptr) {
+        SPDLOG_WARN("ShipLua spawn_dog: player nulo");
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    SPDLOG_INFO("ShipLua spawn_dog: sceneNum={} em pos=({:.0f},{:.0f},{:.0f})", (int)play->sceneNum,
+                player->actor.world.pos.x, player->actor.world.pos.y, player->actor.world.pos.z);
+
+    // SoH's Actor_Spawn takes an extra trailing s16 canRandomize (absent in MM).
+    Actor* dog = Actor_Spawn(&play->actorCtx, play, kOotActorEnDog, player->actor.world.pos.x,
+                             player->actor.world.pos.y, player->actor.world.pos.z, 0,
+                             player->actor.shape.rot.y, 0, (s16)0x8000, 0);
+    SPDLOG_INFO("ShipLua spawn_dog: Actor_Spawn -> {}", dog != nullptr ? "ator criado" : "NULL");
+    lua_pushboolean(L, dog != nullptr);
+    return 1;
+}
+
+// Installs the OoT-specific ship.oot.* table onto a mod runtime. Uses
+// require("ship") so it works regardless of how the core registers the module.
+void InstallOotApi(lua_State* L) {
+    if (L == nullptr) {
+        return;
+    }
+    lua_getglobal(L, "require");
+    lua_pushstring(L, "ship");
+    if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
+        lua_pop(L, 1);
+        return;
+    }
+    if (!lua_istable(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
+    const int shipTable = lua_gettop(L);
+    lua_getfield(L, shipTable, "oot");
+    if (!lua_istable(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+    }
+    const int ootTable = lua_gettop(L);
+    lua_pushcfunction(L, LuaSpawnDog);
+    lua_setfield(L, -2, "spawn_dog");
+
+    lua_getfield(L, ootTable, "player");
+    if (!lua_istable(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+    }
+    lua_pushcfunction(L, LuaPlayerJump);
+    lua_setfield(L, -2, "jump");
+    lua_setfield(L, ootTable, "player");
+
+    lua_setfield(L, shipTable, "oot");
+    lua_pop(L, 1);
 }
 
 void LoadModsAndDispatchReady(const ShipLua::LuaApiHostContext& context) {
@@ -80,6 +189,13 @@ void LoadModsAndDispatchReady(const ShipLua::LuaApiHostContext& context) {
         SPDLOG_WARN("ShipLua rejeitou o mod '{}': {}", modId, reason);
     }
     SPDLOG_INFO("ShipLua carregou {} mod(s) de '{}'", loaded.value->loadedIds.size(), modsRoot.string());
+
+    for (const std::string& modId : loaded.value->loadedIds) {
+        ShipLua::LuaRuntime* runtime = gModHost->GetRuntime(modId);
+        if (runtime != nullptr) {
+            InstallOotApi(runtime->State());
+        }
+    }
 
     ShipLua::EventPayload payload{
         { "game_id", context.gameId },
