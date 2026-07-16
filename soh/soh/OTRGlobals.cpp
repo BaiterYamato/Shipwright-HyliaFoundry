@@ -1678,9 +1678,15 @@ extern "C" void Graph_StartFrame() {
     OTRGlobals::Instance->context->GetWindow()->SetLastScancode(-1);
 
 #ifdef _WIN32
-    if (dwScancode == KbScancode::LUS_KB_F3 && (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) {
+    static bool logChordWasDown = false;
+    const SHORT f3State = GetAsyncKeyState(VK_F3);
+    const SHORT shiftState = GetAsyncKeyState(VK_SHIFT);
+    const bool logChordIsDown = (f3State & 0x8000) != 0 && (shiftState & 0x8000) != 0;
+    const bool logChordPressed = logChordIsDown || ((f3State & 1) != 0 && (shiftState & 0x8001) != 0);
+    if (logChordPressed && !logChordWasDown) {
         ShipLuaHost::OpenLogWindow();
     }
+    logChordWasDown = logChordIsDown;
 #endif
 
     if (ShipLuaHost::OotHotkeyRegistry* hotkeys = ShipLuaHost::Hotkeys(); hotkeys != nullptr) {

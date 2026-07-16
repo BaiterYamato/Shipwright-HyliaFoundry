@@ -437,6 +437,7 @@ void OpenLogWindow() {
         SPDLOG_ERROR("ShipLua não conseguiu abrir a janela de log (erro {})", GetLastError());
         return;
     }
+    SPDLOG_INFO("ShipLua abriu uma nova janela para acompanhar o log OoT");
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
 #else
