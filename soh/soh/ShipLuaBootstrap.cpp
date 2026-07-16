@@ -3,6 +3,7 @@
 #include "OotWorldAdapter.h"
 
 #include <filesystem>
+#include <cstdlib>
 #include <memory>
 #include <string>
 
@@ -11,8 +12,17 @@
 #include <ship/Context.h>
 #include <shiplua/generated/ApiBindings.h>
 #include <shiplua/host/ModHost.h>
+#include <shiplua/runtime/LuaRuntime.h>
 
+extern "C" {
+#include "functions.h"
+#include "lauxlib.h"
+#include "lua.h"
+#include "macros.h"
 #include "variables.h"
+#include "z64.h"
+extern PlayState* gPlayState;
+}
 
 namespace ShipLuaHost {
 namespace {
@@ -49,8 +59,79 @@ ShipLua::LuaApiHostContext CreateHostContext() {
     ShipLua::LuaApiHostContext context;
     context.gameId = "oot";
     context.hostVersion = GetHostVersion();
+    context.capabilities = { "oot.player.jump", "oot.spawn_dog" };
     context.hotkeys = gHotkeys;
+    if (const char* available = std::getenv("LINKSPAN_AVAILABLE_GAMES"); available != nullptr) {
+        const std::string games(available);
+        if (games.find("oot") != std::string::npos) {
+            context.availableGames.push_back("oot");
+        }
+        if (games.find("mm") != std::string::npos) {
+            context.availableGames.push_back("mm");
+        }
+    }
     return context;
+}
+
+int LuaPlayerJump(lua_State* state) {
+    PlayState* play = gPlayState;
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (player == nullptr || (player->stateFlags1 & PLAYER_STATE1_DEAD) != 0 ||
+        (player->actor.bgCheckFlags & 1) == 0) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    player->actor.velocity.y = 6.34375f;
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaSpawnDog(lua_State* state) {
+    PlayState* play = gPlayState;
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (player == nullptr ||
+        (play->sceneNum != SCENE_MARKET_DAY && play->sceneNum != SCENE_MARKET_NIGHT) ||
+        Object_GetIndex(&play->objectCtx, OBJECT_DOG) < 0) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    Actor* dog = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_DOG,
+                             player->actor.world.pos.x, player->actor.world.pos.y,
+                             player->actor.world.pos.z, 0, player->actor.shape.rot.y,
+                             0, static_cast<s16>(0x8000), true);
+    lua_pushboolean(state, dog != nullptr);
+    return 1;
+}
+
+void InstallOotApi(lua_State* state) {
+    if (state == nullptr) {
+        return;
+    }
+    lua_getglobal(state, "require");
+    lua_pushstring(state, "ship");
+    if (lua_pcall(state, 1, 1, 0) != LUA_OK || !lua_istable(state, -1)) {
+        lua_pop(state, 1);
+        return;
+    }
+    const int shipTable = lua_gettop(state);
+    lua_getfield(state, shipTable, "oot");
+    if (!lua_istable(state, -1)) {
+        lua_pop(state, 1);
+        lua_newtable(state);
+    }
+    const int ootTable = lua_gettop(state);
+    lua_pushcfunction(state, LuaSpawnDog);
+    lua_setfield(state, ootTable, "spawn_dog");
+    lua_getfield(state, ootTable, "player");
+    if (!lua_istable(state, -1)) {
+        lua_pop(state, 1);
+        lua_newtable(state);
+    }
+    lua_pushcfunction(state, LuaPlayerJump);
+    lua_setfield(state, -2, "jump");
+    lua_setfield(state, ootTable, "player");
+    lua_setfield(state, shipTable, "oot");
+    lua_pop(state, 1);
 }
 
 void LoadModsAndDispatchReady(const ShipLua::LuaApiHostContext& context) {
@@ -80,6 +161,13 @@ void LoadModsAndDispatchReady(const ShipLua::LuaApiHostContext& context) {
         SPDLOG_WARN("ShipLua rejeitou o mod '{}': {}", modId, reason);
     }
     SPDLOG_INFO("ShipLua carregou {} mod(s) de '{}'", loaded.value->loadedIds.size(), modsRoot.string());
+
+    for (const std::string& modId : loaded.value->loadedIds) {
+        ShipLua::LuaRuntime* runtime = gModHost->GetRuntime(modId);
+        if (runtime != nullptr) {
+            InstallOotApi(runtime->State());
+        }
+    }
 
     ShipLua::EventPayload payload{
         { "game_id", context.gameId },
