@@ -1621,6 +1621,12 @@ extern "C" void Graph_StartFrame() {
     int32_t dwScancode = OTRGlobals::Instance->context->GetWindow()->GetLastScancode();
     OTRGlobals::Instance->context->GetWindow()->SetLastScancode(-1);
 
+#ifdef _WIN32
+    if (dwScancode == KbScancode::LUS_KB_F3 && (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) {
+        ShipLuaHost::OpenLogWindow();
+    }
+#endif
+
     if (ShipLuaHost::OotHotkeyRegistry* hotkeys = ShipLuaHost::Hotkeys(); hotkeys != nullptr) {
         hotkeys->DispatchScancode(dwScancode);
     }
