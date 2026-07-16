@@ -3,16 +3,40 @@
 #include "OotWorldAdapter.h"
 
 #include <filesystem>
+#include <algorithm>
+#include <array>
+#include <cstdlib>
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
+#include <vector>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#endif
 
 #include <spdlog/spdlog.h>
 
 #include <ship/Context.h>
 #include <shiplua/generated/ApiBindings.h>
 #include <shiplua/host/ModHost.h>
+#include <shiplua/runtime/LuaRuntime.h>
+#include <shiplua/storage/AtomicFile.h>
+#include <shiplua/world/WorldHandoff.h>
 
+#include "soh/Enhancements/game-interactor/GameInteractor.h"
+
+extern "C" {
+#include "functions.h"
+#include "lauxlib.h"
+#include "lua.h"
+#include "macros.h"
 #include "variables.h"
+#include "z64.h"
+extern PlayState* gPlayState;
+}
 
 namespace ShipLuaHost {
 namespace {
@@ -20,6 +44,182 @@ namespace {
 std::unique_ptr<ShipLua::ModHost> gModHost;
 std::shared_ptr<OotHotkeyRegistry> gHotkeys;
 std::shared_ptr<OotWorldAdapter> gWorldAdapter;
+HOOK_ID gLoadGameHook = 0;
+
+constexpr int kSwitchWorldExitCode = 73;
+
+struct BridgeConfig {
+    std::filesystem::path sessionDirectory;
+    std::filesystem::path handoffPath;
+    std::array<std::byte, 16> sessionId{};
+    std::array<std::byte, 32> authenticationKey{};
+    std::uint64_t sequence = 0;
+};
+
+int HexDigit(char value) {
+    if (value >= '0' && value <= '9') {
+        return value - '0';
+    }
+    if (value >= 'a' && value <= 'f') {
+        return value - 'a' + 10;
+    }
+    if (value >= 'A' && value <= 'F') {
+        return value - 'A' + 10;
+    }
+    return -1;
+}
+
+template <std::size_t Size>
+bool ParseHex(const char* text, std::array<std::byte, Size>& output) {
+    if (text == nullptr || std::char_traits<char>::length(text) != Size * 2) {
+        return false;
+    }
+    for (std::size_t index = 0; index < Size; ++index) {
+        const int high = HexDigit(text[index * 2]);
+        const int low = HexDigit(text[index * 2 + 1]);
+        if (high < 0 || low < 0) {
+            return false;
+        }
+        output[index] = static_cast<std::byte>((high << 4) | low);
+    }
+    return true;
+}
+
+std::optional<BridgeConfig> GetBridgeConfig() {
+    const char* sessionDirectory = std::getenv("LINKSPAN_SESSION_DIR");
+    const char* handoffPath = std::getenv("LINKSPAN_HANDOFF_PATH");
+    const char* sequence = std::getenv("LINKSPAN_SEQUENCE");
+    if (sessionDirectory == nullptr || handoffPath == nullptr || sequence == nullptr) {
+        return std::nullopt;
+    }
+    BridgeConfig config;
+    config.sessionDirectory = sessionDirectory;
+    config.handoffPath = handoffPath;
+    if (!ParseHex(std::getenv("LINKSPAN_SESSION_ID"), config.sessionId) ||
+        !ParseHex(std::getenv("LINKSPAN_AUTH_KEY"), config.authenticationKey)) {
+        return std::nullopt;
+    }
+    char* end = nullptr;
+    config.sequence = std::strtoull(sequence, &end, 10);
+    if (end == sequence || *end != '\0' || config.sequence == 0) {
+        return std::nullopt;
+    }
+    return config;
+}
+
+bool BothGamesAvailable() {
+    const char* available = std::getenv("LINKSPAN_AVAILABLE_GAMES");
+    if (available == nullptr) {
+        return false;
+    }
+    const std::string games(available);
+    return games.find("oot") != std::string::npos && games.find("mm") != std::string::npos;
+}
+
+[[noreturn]] void ExitForWorldSwitch() {
+#ifdef _WIN32
+    // RequestWorldTravel runs inside a Lua callback. std::exit executes CRT
+    // teardown while that callback stack is still active and can trigger the
+    // Windows fail-fast code 0xC0000409 before the launcher receives code 73.
+    ::ExitProcess(static_cast<UINT>(kSwitchWorldExitCode));
+#else
+    std::_Exit(kSwitchWorldExitCode);
+#endif
+}
+
+ShipLua::Result<void> RequestWorldTravel(const ShipLua::WorldDestination& destination) {
+    const auto config = GetBridgeConfig();
+    if (!config.has_value() || !BothGamesAvailable() || destination.world != ShipLua::WorldId::Mm ||
+        gWorldAdapter == nullptr) {
+        return ShipLua::Result<void>::err(ShipLua::ErrorCode::Unsupported,
+                                          "ponte Link-Span para MM indisponível");
+    }
+    if (gPlayState == nullptr || gPlayState->sceneNum != SCENE_LINKS_HOUSE) {
+        return ShipLua::Result<void>::err(ShipLua::ErrorCode::InvalidState,
+                                          "o teleporte deve ser usado dentro da casa do Link");
+    }
+    const auto player = gWorldAdapter->CapturePlayerState();
+    if (!player.isOk()) {
+        return ShipLua::Result<void>::err(player.code, player.message);
+    }
+    ShipLua::WorldHandoff handoff;
+    handoff.sessionId = config->sessionId;
+    handoff.sequence = config->sequence;
+    handoff.source = ShipLua::WorldId::Oot;
+    handoff.destination = destination;
+    handoff.player = *player.value;
+    const auto written = ShipLua::WorldHandoffCodec::WriteFile(
+        config->handoffPath, handoff, config->authenticationKey);
+    if (!written.isOk()) {
+        return written;
+    }
+    const auto requested = ShipLua::AtomicFile::Write(config->sessionDirectory / "next-world", "mm\n");
+    if (!requested.isOk()) {
+        std::error_code ignored;
+        std::filesystem::remove(config->handoffPath, ignored);
+        return requested;
+    }
+    SPDLOG_INFO("Link-Span exportou o estado OoT e solicitou troca para MM ({})", destination.id);
+    spdlog::apply_all([](const std::shared_ptr<spdlog::logger>& logger) { logger->flush(); });
+    ExitForWorldSwitch();
+}
+
+void TryConsumeWorldHandoff() {
+    const auto config = GetBridgeConfig();
+    if (!config.has_value() || gWorldAdapter == nullptr ||
+        !std::filesystem::is_regular_file(config->handoffPath)) {
+        return;
+    }
+    const auto handoff = ShipLua::WorldHandoffCodec::ReadFile(
+        config->handoffPath, config->authenticationKey);
+    if (!handoff.isOk()) {
+        SPDLOG_ERROR("Link-Span rejeitou o handoff OoT: {}", handoff.message);
+        return;
+    }
+    if (handoff.value->sessionId != config->sessionId || handoff.value->sequence + 1 != config->sequence ||
+        handoff.value->destination.world != ShipLua::WorldId::Oot) {
+        SPDLOG_ERROR("Link-Span rejeitou um handoff destinado a outra sessão ou jogo");
+        return;
+    }
+    const auto prepared = gWorldAdapter->PrepareImport(handoff.value->player, handoff.value->destination);
+    if (!prepared.isOk()) {
+        SPDLOG_ERROR("Link-Span não preparou a importação OoT: {}", prepared.message);
+        return;
+    }
+    const auto committed = gWorldAdapter->CommitImport();
+    if (!committed.isOk()) {
+        gWorldAdapter->AbortImport();
+        SPDLOG_ERROR("Link-Span não confirmou a importação OoT: {}", committed.message);
+        return;
+    }
+    std::error_code error;
+    std::filesystem::remove(config->handoffPath, error);
+    SPDLOG_INFO("Link-Span importou o estado compartilhado em OoT ({})", handoff.value->destination.id);
+}
+
+#ifdef _WIN32
+std::filesystem::path RuntimeRoot() {
+    if (const wchar_t* configured = _wgetenv(L"LINKSPAN_ROOT"); configured != nullptr && *configured != L'\0') {
+        return configured;
+    }
+    std::wstring executable(32768, L'\0');
+    const DWORD length = GetModuleFileNameW(nullptr, executable.data(), static_cast<DWORD>(executable.size()));
+    if (length == 0 || length >= executable.size()) {
+        return std::filesystem::current_path();
+    }
+    executable.resize(length);
+    return std::filesystem::path(executable).parent_path();
+}
+
+std::wstring QuotePowerShellLiteral(std::wstring value) {
+    std::size_t position = 0;
+    while ((position = value.find(L'\'', position)) != std::wstring::npos) {
+        value.insert(position, 1, L'\'');
+        position += 2;
+    }
+    return L"'" + value + L"'";
+}
+#endif
 
 ShipLua::Logger CreateLogger() {
     return ShipLua::Logger([](ShipLua::LogLevel level, const std::string& modId, const std::string& message) {
@@ -49,8 +249,83 @@ ShipLua::LuaApiHostContext CreateHostContext() {
     ShipLua::LuaApiHostContext context;
     context.gameId = "oot";
     context.hostVersion = GetHostVersion();
+    context.capabilities = { "oot.player.jump", "oot.spawn_dog" };
     context.hotkeys = gHotkeys;
+    if (const char* available = std::getenv("LINKSPAN_AVAILABLE_GAMES"); available != nullptr) {
+        const std::string games(available);
+        if (games.find("oot") != std::string::npos) {
+            context.availableGames.push_back("oot");
+        }
+        if (games.find("mm") != std::string::npos) {
+            context.availableGames.push_back("mm");
+        }
+    }
+    if (BothGamesAvailable() && GetBridgeConfig().has_value()) {
+        context.capabilities.push_back("world.travel");
+        context.worldTravel = RequestWorldTravel;
+    }
     return context;
+}
+
+int LuaPlayerJump(lua_State* state) {
+    PlayState* play = gPlayState;
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (player == nullptr || (player->stateFlags1 & PLAYER_STATE1_DEAD) != 0 ||
+        (player->actor.bgCheckFlags & 1) == 0) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    player->actor.velocity.y = 6.34375f;
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaSpawnDog(lua_State* state) {
+    PlayState* play = gPlayState;
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (player == nullptr ||
+        (play->sceneNum != SCENE_MARKET_DAY && play->sceneNum != SCENE_MARKET_NIGHT) ||
+        Object_GetIndex(&play->objectCtx, OBJECT_DOG) < 0) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    Actor* dog = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_DOG,
+                             player->actor.world.pos.x, player->actor.world.pos.y,
+                             player->actor.world.pos.z, 0, player->actor.shape.rot.y,
+                             0, static_cast<s16>(0x8000), true);
+    lua_pushboolean(state, dog != nullptr);
+    return 1;
+}
+
+void InstallOotApi(lua_State* state) {
+    if (state == nullptr) {
+        return;
+    }
+    lua_getglobal(state, "require");
+    lua_pushstring(state, "ship");
+    if (lua_pcall(state, 1, 1, 0) != LUA_OK || !lua_istable(state, -1)) {
+        lua_pop(state, 1);
+        return;
+    }
+    const int shipTable = lua_gettop(state);
+    lua_getfield(state, shipTable, "oot");
+    if (!lua_istable(state, -1)) {
+        lua_pop(state, 1);
+        lua_newtable(state);
+    }
+    const int ootTable = lua_gettop(state);
+    lua_pushcfunction(state, LuaSpawnDog);
+    lua_setfield(state, ootTable, "spawn_dog");
+    lua_getfield(state, ootTable, "player");
+    if (!lua_istable(state, -1)) {
+        lua_pop(state, 1);
+        lua_newtable(state);
+    }
+    lua_pushcfunction(state, LuaPlayerJump);
+    lua_setfield(state, -2, "jump");
+    lua_setfield(state, ootTable, "player");
+    lua_setfield(state, shipTable, "oot");
+    lua_pop(state, 1);
 }
 
 void LoadModsAndDispatchReady(const ShipLua::LuaApiHostContext& context) {
@@ -80,6 +355,13 @@ void LoadModsAndDispatchReady(const ShipLua::LuaApiHostContext& context) {
         SPDLOG_WARN("ShipLua rejeitou o mod '{}': {}", modId, reason);
     }
     SPDLOG_INFO("ShipLua carregou {} mod(s) de '{}'", loaded.value->loadedIds.size(), modsRoot.string());
+
+    for (const std::string& modId : loaded.value->loadedIds) {
+        ShipLua::LuaRuntime* runtime = gModHost->GetRuntime(modId);
+        if (runtime != nullptr) {
+            InstallOotApi(runtime->State());
+        }
+    }
 
     ShipLua::EventPayload payload{
         { "game_id", context.gameId },
@@ -113,6 +395,8 @@ void Initialize() {
         return;
     }
     gWorldAdapter = std::make_shared<OotWorldAdapter>(std::move(*catalog.value));
+    gLoadGameHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnLoadGame>(
+        [](int32_t) { TryConsumeWorldHandoff(); });
     ShipLua::LuaApiHostContext context = CreateHostContext();
     SPDLOG_INFO("ShipLua inicializando para {} {} (commit {})", context.gameId, context.hostVersion, gGitCommitHash);
     gModHost = std::make_unique<ShipLua::ModHost>(context, CreateLogger());
@@ -126,6 +410,10 @@ void Shutdown() {
     }
 
     gModHost.reset();
+    if (gLoadGameHook != 0) {
+        GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnLoadGame>(gLoadGameHook);
+        gLoadGameHook = 0;
+    }
     gWorldAdapter.reset();
     gHotkeys.reset();
     SPDLOG_INFO("ShipLua finalizado");
@@ -141,6 +429,31 @@ OotHotkeyRegistry* Hotkeys() {
 
 OotWorldAdapter* WorldAdapter() {
     return gWorldAdapter.get();
+}
+
+void OpenLogWindow() {
+#ifdef _WIN32
+    const std::filesystem::path log = RuntimeRoot() / "logs" / "Ship of Harkinian.log";
+    std::filesystem::create_directories(log.parent_path());
+    std::wstring command =
+        L"powershell.exe -NoLogo -NoProfile -NoExit -Command \"$host.UI.RawUI.WindowTitle='Link-Span - log OoT'; "
+        L"Write-Host 'Aguardando o log de OoT...'; while(-not (Test-Path -LiteralPath " +
+        QuotePowerShellLiteral(log.wstring()) + L")){Start-Sleep -Milliseconds 250}; Get-Content -LiteralPath " +
+        QuotePowerShellLiteral(log.wstring()) + L" -Tail 200 -Wait\"";
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, CREATE_NEW_CONSOLE, nullptr,
+                        RuntimeRoot().c_str(), &startup, &process)) {
+        SPDLOG_ERROR("ShipLua não conseguiu abrir a janela de log (erro {})", GetLastError());
+        return;
+    }
+    SPDLOG_INFO("ShipLua abriu uma nova janela para acompanhar o log OoT");
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+#else
+    SPDLOG_WARN("ShipLua OpenLogWindow só está disponível no Windows");
+#endif
 }
 
 } // namespace ShipLuaHost

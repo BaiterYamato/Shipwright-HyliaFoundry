@@ -14,5 +14,6 @@ void Shutdown();
 ShipLua::ModHost* GetModHost();
 OotHotkeyRegistry* Hotkeys();
 OotWorldAdapter* WorldAdapter();
+void OpenLogWindow();
 
 } // namespace ShipLuaHost
