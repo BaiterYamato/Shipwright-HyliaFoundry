@@ -14,6 +14,11 @@ constexpr const char* kProviderName = "shipwright-native";
 constexpr const char* kProviderVersion = "0.1.0";
 constexpr const char* kCapabilityVersion = "0.1.0";
 
+std::vector<OotActorDefinitionFactory>& DefinitionFactories() {
+    static std::vector<OotActorDefinitionFactory> factories;
+    return factories;
+}
+
 ShipLua::CapabilityProvider MakeOffer(const ShipLua::SemVersion& providerVersion,
                                       const ShipLua::SemVersion& capabilityVersion, const char* permission,
                                       const char* description, std::size_t perModLimit) {
@@ -31,10 +36,27 @@ ShipLua::CapabilityProvider MakeOffer(const ShipLua::SemVersion& providerVersion
 
 } // namespace
 
+void RegisterOotActorDefinitionFactory(OotActorDefinitionFactory factory) {
+    if (factory) {
+        DefinitionFactories().emplace_back(std::move(factory));
+    }
+}
+
 OotActorProvider::OotActorProvider(std::vector<OotActorDefinition> allowlist, OotActorProviderHooks hooks,
                                    ShipLua::Logger logger, std::int16_t forbiddenActorId, ShipLua::HandleLimits limits)
     : mHooks(std::move(hooks)), mLogger(std::move(logger)), mHandles(1, limits),
       mGameThread(std::this_thread::get_id()) {
+    for (const OotActorDefinitionFactory& factory : DefinitionFactories()) {
+        try {
+            std::optional<OotActorDefinition> definition = factory();
+            if (definition.has_value()) {
+                allowlist.emplace_back(std::move(*definition));
+            }
+        } catch (const std::exception& error) {
+            mLogger.warn("host", "ignored OoT actor definition factory: " + std::string(error.what()));
+        } catch (...) { mLogger.warn("host", "ignored OoT actor definition factory after an unknown failure"); }
+    }
+
     for (OotActorDefinition& definition : allowlist) {
         if (!IsSafeKey(definition.key) || definition.actorId < 0 || definition.objectId < 0 ||
             definition.actorId == forbiddenActorId) {
@@ -121,6 +143,21 @@ ShipLua::Result<ShipLua::Handle> OotActorProvider::Spawn(const std::string& owne
     if (!objectReady) {
         return ShipLua::Result<ShipLua::Handle>::err(
             ShipLua::ErrorCode::InvalidState, "required OoT object is not loaded for actor '" + request.actor + "'");
+    }
+
+    if (definition->second.preflight) {
+        try {
+            const ShipLua::Result<void> preflight = definition->second.preflight();
+            if (!preflight.isOk()) {
+                return ShipLua::Result<ShipLua::Handle>::err(preflight.code, preflight.message);
+            }
+        } catch (const std::exception& error) {
+            return ShipLua::Result<ShipLua::Handle>::err(
+                ShipLua::ErrorCode::HostFailure, "OoT actor preflight failed: " + std::string(error.what()));
+        } catch (...) {
+            return ShipLua::Result<ShipLua::Handle>::err(ShipLua::ErrorCode::HostFailure,
+                                                         "OoT actor preflight failed");
+        }
     }
 
     auto handle = mHandles.Create(ShipLua::HandleKind::Actor, ownerModId);
