@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <string>
 
 extern "C" {
 #include "functions.h"
@@ -36,9 +37,17 @@ void MmElegyShellHuman_Update(Actor* actor, PlayState* play) {
 void MmElegyShellHuman_Draw(Actor* actor, PlayState* play) {
     (void)actor;
     Gfx* shell = ResourceMgr_LoadGfxByName(kElegyShellHumanResource);
-    if (shell != nullptr) {
-        Gfx_DrawDListOpa(play, shell);
+    if (shell == nullptr) {
+        return;
     }
+
+    OPEN_DISPS(play->state.gfxCtx);
+
+    Scene_SetRenderModeXlu(play, 0, 0x01);
+    gDPSetEnvColor(POLY_OPA_DISP++, 255, 255, 255, 255);
+    Gfx_DrawDListOpa(play, shell);
+
+    CLOSE_DISPS(play->state.gfxCtx);
 }
 
 ShipLua::Result<void> ValidateElegyShellResources() {
