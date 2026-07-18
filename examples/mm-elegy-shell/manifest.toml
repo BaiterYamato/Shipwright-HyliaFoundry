@@ -1,0 +1,17 @@
+id = "example.mm_elegy_shell"
+name = "MM Elegy shell in OoT"
+version = "0.1.0"
+api = ">=0.4 <0.5"
+entrypoint = "main.lua"
+description = "Spawns the Majora's Mask human Elegy shell through the OoT actor provider."
+authors = ["BaiterYamato"]
+games = ["oot"]
+
+[capabilities]
+required = ["actor.spawn", "actor.destroy", "actor.exists"]
+
+[permissions]
+grants = ["world.entities.create", "world.entities.destroy", "world.entities.read"]
+
+[limits]
+actors = 1
