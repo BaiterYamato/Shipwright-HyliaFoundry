@@ -1,6 +1,6 @@
 # Provider nativo de atores OoT
 
-`OOT-MODSDK-001` introduz o primeiro recorte do provider `shipwright-native` para a futura API genérica de atores do ShipLua.
+`OOT-MODSDK-001` implementa o provider `shipwright-native` para a API genérica de atores do ShipLua 0.4.
 
 ## Contrato deste recorte
 
@@ -17,10 +17,12 @@ IDs iniciais:
 
 | ID lógico | Ator OoT | Object obrigatório | Params fixos |
 |---|---|---|---|
-| `en_dog` | `ACTOR_EN_DOG` | `OBJECT_DOG` | `0x8000` |
-| `en_torch2` | `ACTOR_EN_TORCH2` | `OBJECT_TORCH2` | `0` |
+| `oot.en_dog` | `ACTOR_EN_DOG` | `OBJECT_DOG` | `0x8000` |
+| `oot.en_torch2` | `ACTOR_EN_TORCH2` | `OBJECT_TORCH2` | `0` |
 
-O provider registra as capabilities experimentais `actor.spawn`, `actor.destroy` e `actor.exists` com versão `0.1.0`. Os bindings `ship.actor.*`, a leitura das permissões genéricas no manifesto e o SDK Lua de alto nível pertencem ao PR seguinte (`MODSDK-005`); até lá, este contrato é consumido apenas pelo host nativo e pelos testes de conformidade.
+O provider registra as capabilities experimentais `actor.spawn`, `actor.destroy` e `actor.exists` com versão `0.1.0` e é publicado no `LuaApiHostContext`. Os bindings `ship.actor.spawn`, `ship.actor.destroy` e `ship.actor.exists` vêm do ShipLua 0.4 (`MODSDK-005`, PR `link-span#41`). O manifesto precisa declarar as capabilities, os grants `world.entities.create`, `world.entities.destroy` e `world.entities.read`, além de um limite `actors` maior que zero para spawn.
+
+Posições chegam como números genéricos e são convertidas para `float` somente na chamada nativa. Rotações são expressas em graus pela API portátil e convertidas para o formato binário de ângulo do OoT no limite do host.
 
 ## Lifecycle
 
@@ -41,3 +43,5 @@ O teste `oot_actor_provider_tests` cobre:
 - limite por mod;
 - cleanup por ator, mod e cena;
 - rejeição fora da thread principal.
+
+A validação integrada gera `x64/Release/soh.exe` em Release e executa 57/57 testes aplicáveis do host e do SDK embutido. O teste legado `prism`, que não produz executável nessa configuração do host, é excluído dessa contagem.

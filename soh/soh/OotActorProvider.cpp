@@ -84,7 +84,7 @@ ShipLua::Result<void> OotActorProvider::RegisterCapabilities(ShipLua::Capability
 }
 
 ShipLua::Result<ShipLua::Handle> OotActorProvider::Spawn(const std::string& ownerModId,
-                                                         const OotActorSpawnRequest& request) {
+                                                         const ShipLua::ActorSpawnRequest& request) {
     const auto thread = ValidateThread("spawn");
     if (!thread.isOk()) {
         return ShipLua::Result<ShipLua::Handle>::err(thread.code, thread.message);
@@ -93,9 +93,11 @@ ShipLua::Result<ShipLua::Handle> OotActorProvider::Spawn(const std::string& owne
         return ShipLua::Result<ShipLua::Handle>::err(ShipLua::ErrorCode::InvalidArgument,
                                                      "actor owner mod id cannot be empty");
     }
-    if (!std::isfinite(request.x) || !std::isfinite(request.y) || !std::isfinite(request.z)) {
+    if (!std::isfinite(request.x) || !std::isfinite(request.y) || !std::isfinite(request.z) ||
+        !std::isfinite(request.rotationX) || !std::isfinite(request.rotationY) ||
+        !std::isfinite(request.rotationZ)) {
         return ShipLua::Result<ShipLua::Handle>::err(ShipLua::ErrorCode::InvalidArgument,
-                                                     "actor position must be finite");
+                                                     "actor transform must be finite");
     }
     const auto definition = mAllowlist.find(request.actor);
     if (definition == mAllowlist.end()) {

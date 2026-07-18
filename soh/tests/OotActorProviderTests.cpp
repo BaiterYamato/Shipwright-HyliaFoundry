@@ -6,6 +6,7 @@
 #include <set>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 namespace {
@@ -30,14 +31,14 @@ struct Fixture {
     explicit Fixture(ShipLua::HandleLimits limits = { 16, 256 })
         : provider(
               {
-                  { "en_dog", 1, 10, static_cast<std::int16_t>(0x8000) },
-                  { "en_torch2", 2, 20, 0 },
+                  { "oot.en_dog", 1, 10, static_cast<std::int16_t>(0x8000) },
+                  { "oot.en_torch2", 2, 20, 0 },
                   { "player", 0, 30, 0 },
               },
               ShipLuaHost::OotActorProviderHooks{
                   [this](std::int16_t objectId) { return readyObjects.contains(objectId); },
                   [this](const ShipLuaHost::OotActorDefinition& definition,
-                         const ShipLuaHost::OotActorSpawnRequest&) -> void* {
+                         const ShipLua::ActorSpawnRequest&) -> void* {
                       auto actor = std::make_unique<FakeActor>();
                       actor->actorId = definition.actorId;
                       FakeActor* native = actor.get();
@@ -50,12 +51,12 @@ struct Fixture {
     }
 };
 
-ShipLuaHost::OotActorSpawnRequest DogRequest() {
-    ShipLuaHost::OotActorSpawnRequest request;
-    request.actor = "en_dog";
-    request.x = 1.0f;
-    request.y = 2.0f;
-    request.z = 3.0f;
+ShipLua::ActorSpawnRequest DogRequest() {
+    ShipLua::ActorSpawnRequest request;
+    request.actor = "oot.en_dog";
+    request.x = 1.0;
+    request.y = 2.0;
+    request.z = 3.0;
     return request;
 }
 
@@ -71,7 +72,7 @@ void TestCapabilitiesAndAllowlist() {
     Check(spawn->limits.perMod == 16, "provider descriptor should publish the per-mod limit");
     Check(!registry.Has("actor.spawn", "mm"), "OoT provider must not advertise MM support");
 
-    ShipLuaHost::OotActorSpawnRequest player = DogRequest();
+    ShipLua::ActorSpawnRequest player = DogRequest();
     player.actor = "player";
     const auto blocked = fixture.provider.Spawn("test.mod", player);
     Check(blocked.code == ShipLua::ErrorCode::Unsupported, "ACTOR_PLAYER must stay blocked");
@@ -95,8 +96,8 @@ void TestSpawnDestroyAndOwnership() {
 
 void TestObjectDependencyAndInvalidHandle() {
     Fixture fixture;
-    ShipLuaHost::OotActorSpawnRequest torch = DogRequest();
-    torch.actor = "en_torch2";
+    ShipLua::ActorSpawnRequest torch = DogRequest();
+    torch.actor = "oot.en_torch2";
     const auto missing = fixture.provider.Spawn("test.mod", torch);
     Check(missing.code == ShipLua::ErrorCode::InvalidState, "En_Torch2 must require its object dependency");
 
@@ -155,6 +156,7 @@ void TestLimitsAndGameThread() {
 } // namespace
 
 int main() {
+    static_assert(std::is_base_of_v<ShipLua::ActorProvider, ShipLuaHost::OotActorProvider>);
     TestCapabilitiesAndAllowlist();
     TestSpawnDestroyAndOwnership();
     TestObjectDependencyAndInvalidHandle();
