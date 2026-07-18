@@ -1,0 +1,43 @@
+name: format-compat-temporary
+
+on:
+  push:
+    branches:
+      - agent/OOT-COMPAT-001-mm-elegy-shell
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/OOT-COMPAT-001-mm-elegy-shell
+          fetch-depth: 0
+      - name: Install clang-format 14
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format-14
+      - name: Format compatibility changes
+        run: |
+          clang-format-14 -i \
+            soh/soh/MmElegyCompatActor.cpp \
+            soh/soh/OotActorProvider.cpp \
+            soh/soh/OotActorProvider.h \
+            soh/tests/OotActorProviderTests.cpp
+      - name: Commit formatting
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            soh/soh/MmElegyCompatActor.cpp \
+            soh/soh/OotActorProvider.cpp \
+            soh/soh/OotActorProvider.h \
+            soh/tests/OotActorProviderTests.cpp
+          git commit -m "style: apply clang-format 14"
+          git push origin HEAD:agent/OOT-COMPAT-001-mm-elegy-shell
