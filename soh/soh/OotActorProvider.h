@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -23,6 +24,9 @@ struct OotActorDefinition {
     std::int16_t actorId = -1;
     std::int16_t objectId = -1;
     std::int16_t params = 0;
+    // Optional host-side validation for actors backed by external resources.
+    // Expected failures are returned before a handle or native Actor is created.
+    std::function<ShipLua::Result<void>()> preflight;
 };
 
 struct OotActorProviderHooks {
@@ -30,6 +34,12 @@ struct OotActorProviderHooks {
     std::function<void*(const OotActorDefinition& definition, const ShipLua::ActorSpawnRequest& request)> spawn;
     std::function<void(void* actor)> kill;
 };
+
+// Additional host translation units can register factories without coupling
+// ShipLuaBootstrap to each compatibility actor. Factories run when the provider
+// is constructed, after the engine's ActorDB is available.
+using OotActorDefinitionFactory = std::function<std::optional<OotActorDefinition>()>;
+void RegisterOotActorDefinitionFactory(OotActorDefinitionFactory factory);
 
 // First native provider slice for the generic actor API. All public methods
 // are main-thread-only. Handles are owned by the creating mod, invalidated on
