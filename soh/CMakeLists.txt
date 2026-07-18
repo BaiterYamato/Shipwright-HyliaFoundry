@@ -234,6 +234,20 @@ set(ALL_FILES
 ################################################################################
 add_executable(${PROJECT_NAME} ${ALL_FILES})
 
+enable_testing()
+add_executable(oot_actor_provider_tests
+    tests/OotActorProviderTests.cpp
+    soh/OotActorProvider.cpp
+)
+target_include_directories(oot_actor_provider_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(oot_actor_provider_tests PRIVATE shiplua)
+if(MSVC)
+    set_property(TARGET oot_actor_provider_tests PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    target_compile_options(oot_actor_provider_tests PRIVATE /EHsc)
+endif()
+add_test(NAME oot_actor_provider_tests COMMAND oot_actor_provider_tests)
+
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 use_props(${PROJECT_NAME} "${CMAKE_CONFIGURATION_TYPES}" "${DEFAULT_CXX_PROPS}")
 endif()

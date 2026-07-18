@@ -1,4 +1,5 @@
 #include "ShipLuaBootstrap.h"
+#include "OotActorProvider.h"
 #include "OotHotkeyRegistry.h"
 #include "OotWorldAdapter.h"
 
@@ -42,9 +43,13 @@ namespace ShipLuaHost {
 namespace {
 
 std::unique_ptr<ShipLua::ModHost> gModHost;
+std::unique_ptr<OotActorProvider> gActorProvider;
+std::shared_ptr<ShipLua::CapabilityRegistry> gCapabilityRegistry;
 std::shared_ptr<OotHotkeyRegistry> gHotkeys;
 std::shared_ptr<OotWorldAdapter> gWorldAdapter;
 HOOK_ID gLoadGameHook = 0;
+HOOK_ID gActorDestroyHook = 0;
+HOOK_ID gPlayDestroyHook = 0;
 
 constexpr int kSwitchWorldExitCode = 73;
 
@@ -245,12 +250,68 @@ std::string GetHostVersion() {
            std::to_string(gBuildVersionPatch);
 }
 
-ShipLua::LuaApiHostContext CreateHostContext() {
+std::unique_ptr<OotActorProvider> CreateActorProvider() {
+    OotActorProviderHooks hooks;
+    hooks.objectReady = [](std::int16_t objectId) {
+        if (gPlayState == nullptr) {
+            return false;
+        }
+        const s32 objectIndex = Object_GetIndex(&gPlayState->objectCtx, objectId);
+        return objectIndex >= 0 && Object_IsLoaded(&gPlayState->objectCtx, objectIndex);
+    };
+    hooks.spawn = [](const OotActorDefinition& definition, const OotActorSpawnRequest& request) -> void* {
+        if (gPlayState == nullptr) {
+            return nullptr;
+        }
+        return Actor_Spawn(&gPlayState->actorCtx, gPlayState, definition.actorId, request.x, request.y, request.z,
+                           request.rotX, request.rotY, request.rotZ, definition.params, true);
+    };
+    hooks.kill = [](void* actor) {
+        if (actor != nullptr) {
+            Actor_Kill(static_cast<Actor*>(actor));
+        }
+    };
+    std::vector<OotActorDefinition> allowlist{
+        { "en_dog", ACTOR_EN_DOG, OBJECT_DOG, static_cast<std::int16_t>(0x8000) },
+        { "en_torch2", ACTOR_EN_TORCH2, OBJECT_TORCH2, 0 },
+    };
+    return std::make_unique<OotActorProvider>(std::move(allowlist), std::move(hooks), CreateLogger(), ACTOR_PLAYER);
+}
+
+ShipLua::Result<void> RegisterHostCapability(const std::string& id, const std::string& description) {
+    if (gCapabilityRegistry == nullptr) {
+        return ShipLua::Result<void>::err(ShipLua::ErrorCode::InvalidState, "capability registry is unavailable");
+    }
+    const auto providerVersion = ShipLua::SemVersion::Parse(GetHostVersion());
+    const auto capabilityVersion = ShipLua::SemVersion::Parse(std::string(ShipLua::Generated::kApiVersion));
+    if (!providerVersion.isOk() || !capabilityVersion.isOk()) {
+        return ShipLua::Result<void>::err(ShipLua::ErrorCode::HostFailure, "invalid Shipwright or ShipLua version");
+    }
+    ShipLua::CapabilityProvider offer;
+    offer.name = "shipwright-native";
+    offer.providerVersion = *providerVersion.value;
+    offer.capabilityVersion = *capabilityVersion.value;
+    offer.games = { "oot" };
+    offer.stability = ShipLua::CapabilityStability::Experimental;
+    offer.description = description;
+    return gCapabilityRegistry->Register(id, std::move(offer));
+}
+
+ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
     ShipLua::LuaApiHostContext context;
     context.gameId = "oot";
     context.hostVersion = GetHostVersion();
     context.capabilities = { "oot.player.jump", "oot.spawn_dog" };
     context.hotkeys = gHotkeys;
+    context.capabilityRegistry = gCapabilityRegistry;
+    auto registered = RegisterHostCapability("oot.player.jump", "Apply a validated jump impulse to OoT Link.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability("oot.spawn_dog", "Spawn the legacy OoT dog demo actor.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
     if (const char* available = std::getenv("LINKSPAN_AVAILABLE_GAMES"); available != nullptr) {
         const std::string games(available);
         if (games.find("oot") != std::string::npos) {
@@ -263,8 +324,13 @@ ShipLua::LuaApiHostContext CreateHostContext() {
     if (BothGamesAvailable() && GetBridgeConfig().has_value()) {
         context.capabilities.push_back("world.travel");
         context.worldTravel = RequestWorldTravel;
+        registered =
+            RegisterHostCapability("world.travel", "Travel to a logical destination in the other Link-Span host.");
+        if (!registered.isOk()) {
+            return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+        }
     }
-    return context;
+    return ShipLua::Result<ShipLua::LuaApiHostContext>::ok(std::move(context));
 }
 
 int LuaPlayerJump(lua_State* state) {
@@ -388,16 +454,52 @@ void Initialize() {
     }
 
     gHotkeys = std::make_shared<OotHotkeyRegistry>();
+    gCapabilityRegistry = std::make_shared<ShipLua::CapabilityRegistry>();
+    gActorProvider = CreateActorProvider();
+    const auto actorCapabilities = gActorProvider->RegisterCapabilities(*gCapabilityRegistry);
+    if (!actorCapabilities.isOk()) {
+        SPDLOG_ERROR("ShipLua failed to register the OoT actor provider: {}", actorCapabilities.message);
+        gActorProvider.reset();
+        gCapabilityRegistry.reset();
+        gHotkeys.reset();
+        return;
+    }
     auto catalog = ShipLua::PortableItemCatalog::CreateDefault();
     if (!catalog.isOk()) {
         SPDLOG_ERROR("ShipLua não conseguiu criar o catálogo portátil OoT: {}", catalog.message);
+        gActorProvider.reset();
+        gCapabilityRegistry.reset();
         gHotkeys.reset();
         return;
     }
     gWorldAdapter = std::make_shared<OotWorldAdapter>(std::move(*catalog.value));
     gLoadGameHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnLoadGame>(
         [](int32_t) { TryConsumeWorldHandoff(); });
-    ShipLua::LuaApiHostContext context = CreateHostContext();
+    gActorDestroyHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnActorDestroy>([](void* actor) {
+        if (gActorProvider == nullptr) {
+            return;
+        }
+        const auto destroyed = gActorProvider->OnNativeActorDestroyed(actor);
+        if (!destroyed.isOk()) {
+            SPDLOG_ERROR("ShipLua failed to invalidate a destroyed OoT actor: {}", destroyed.message);
+        }
+    });
+    gPlayDestroyHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayDestroy>([]() {
+        if (gActorProvider == nullptr) {
+            return;
+        }
+        const auto cleaned = gActorProvider->OnSceneChange();
+        if (!cleaned.isOk()) {
+            SPDLOG_ERROR("ShipLua failed to clean OoT actors during scene teardown: {}", cleaned.message);
+        }
+    });
+    auto contextResult = CreateHostContext();
+    if (!contextResult.isOk()) {
+        SPDLOG_ERROR("ShipLua failed to create the OoT host context: {}", contextResult.message);
+        Shutdown();
+        return;
+    }
+    ShipLua::LuaApiHostContext context = std::move(*contextResult.value);
     SPDLOG_INFO("ShipLua inicializando para {} {} (commit {})", context.gameId, context.hostVersion, gGitCommitHash);
     gModHost = std::make_unique<ShipLua::ModHost>(context, CreateLogger());
     LoadModsAndDispatchReady(context);
@@ -405,15 +507,31 @@ void Initialize() {
 }
 
 void Shutdown() {
-    if (gModHost == nullptr) {
+    if (gModHost == nullptr && gActorProvider == nullptr) {
         return;
     }
 
+    if (gActorProvider != nullptr) {
+        const auto cleaned = gActorProvider->Shutdown();
+        if (!cleaned.isOk()) {
+            SPDLOG_ERROR("ShipLua failed to shut down the OoT actor provider: {}", cleaned.message);
+        }
+    }
     gModHost.reset();
     if (gLoadGameHook != 0) {
         GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnLoadGame>(gLoadGameHook);
         gLoadGameHook = 0;
     }
+    if (gActorDestroyHook != 0) {
+        GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnActorDestroy>(gActorDestroyHook);
+        gActorDestroyHook = 0;
+    }
+    if (gPlayDestroyHook != 0) {
+        GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnPlayDestroy>(gPlayDestroyHook);
+        gPlayDestroyHook = 0;
+    }
+    gActorProvider.reset();
+    gCapabilityRegistry.reset();
     gWorldAdapter.reset();
     gHotkeys.reset();
     SPDLOG_INFO("ShipLua finalizado");
@@ -421,6 +539,10 @@ void Shutdown() {
 
 ShipLua::ModHost* GetModHost() {
     return gModHost.get();
+}
+
+OotActorProvider* ActorProvider() {
+    return gActorProvider.get();
 }
 
 OotHotkeyRegistry* Hotkeys() {
