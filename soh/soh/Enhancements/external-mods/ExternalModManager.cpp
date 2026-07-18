@@ -1,4 +1,4 @@
-﻿#include "ExternalModManager.h"
+#include "ExternalModManager.h"
 
 #include <algorithm>
 #include <array>
@@ -48,12 +48,12 @@
 #include "src/overlays/actors/ovl_En_Kusa/z_en_kusa.h"
 #include "src/overlays/actors/ovl_En_Wood02/z_en_wood02.h"
 
-extern "C" {
 #include <z64.h>
 #include "macros.h"
 #include "variables.h"
 #include "functions.h"
 
+extern "C" {
 GetItemEntry ItemTable_Retrieve(int16_t getItemID);
 GetItemID RetrieveGetItemIDFromItemID(ItemID itemID);
 

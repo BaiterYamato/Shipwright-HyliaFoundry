@@ -17,10 +17,8 @@
 #include <ship/resource/ResourceManager.h>
 #include <ship/resource/archive/ArchiveManager.h>
 
-extern "C" {
 #include <z64.h>
 #include "macros.h"
-}
 
 namespace SOH {
 
