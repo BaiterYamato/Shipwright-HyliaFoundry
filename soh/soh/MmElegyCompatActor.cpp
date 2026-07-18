@@ -43,9 +43,9 @@ void MmElegyShellHuman_Draw(Actor* actor, PlayState* play) {
 
 ShipLua::Result<void> ValidateElegyShellResources() {
     if (ResourceMgr_FileExists(kElegyShellHumanResource) == 0) {
-        return ShipLua::Result<void>::err(
-            ShipLua::ErrorCode::InvalidState,
-            "Majora's Mask Elegy shell asset is not mounted: " + std::string(kElegyShellHumanResource));
+        return ShipLua::Result<void>::err(ShipLua::ErrorCode::InvalidState,
+                                          "Majora's Mask Elegy shell asset is not mounted: " +
+                                              std::string(kElegyShellHumanResource));
     }
     if (ResourceMgr_LoadGfxByName(kElegyShellHumanResource) == nullptr) {
         return ShipLua::Result<void>::err(ShipLua::ErrorCode::HostFailure,

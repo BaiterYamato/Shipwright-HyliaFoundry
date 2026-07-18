@@ -152,11 +152,10 @@ ShipLua::Result<ShipLua::Handle> OotActorProvider::Spawn(const std::string& owne
                 return ShipLua::Result<ShipLua::Handle>::err(preflight.code, preflight.message);
             }
         } catch (const std::exception& error) {
-            return ShipLua::Result<ShipLua::Handle>::err(
-                ShipLua::ErrorCode::HostFailure, "OoT actor preflight failed: " + std::string(error.what()));
-        } catch (...) {
             return ShipLua::Result<ShipLua::Handle>::err(ShipLua::ErrorCode::HostFailure,
-                                                         "OoT actor preflight failed");
+                                                         "OoT actor preflight failed: " + std::string(error.what()));
+        } catch (...) {
+            return ShipLua::Result<ShipLua::Handle>::err(ShipLua::ErrorCode::HostFailure, "OoT actor preflight failed");
         }
     }
 
