@@ -25,6 +25,7 @@ struct FakeActor {
 
 struct Fixture {
     std::set<std::int16_t> readyObjects{ 10 };
+    bool compatibilityAssetReady = false;
     std::vector<std::unique_ptr<FakeActor>> actors;
     ShipLuaHost::OotActorProvider provider;
 
@@ -33,6 +34,14 @@ struct Fixture {
               {
                   { "oot.en_dog", 1, 10, static_cast<std::int16_t>(0x8000) },
                   { "oot.en_torch2", 2, 20, 0 },
+                  { "compat.mm.elegy_shell.human", 3, 10, 0,
+                    [this]() {
+                        if (!compatibilityAssetReady) {
+                            return ShipLua::Result<void>::err(ShipLua::ErrorCode::InvalidState,
+                                                              "compatibility asset is not mounted");
+                        }
+                        return ShipLua::Result<void>::ok();
+                    } },
                   { "player", 0, 30, 0 },
               },
               ShipLuaHost::OotActorProviderHooks{
@@ -62,7 +71,7 @@ ShipLua::ActorSpawnRequest DogRequest() {
 
 void TestCapabilitiesAndAllowlist() {
     Fixture fixture;
-    Check(fixture.provider.AllowedActorCount() == 2, "ACTOR_PLAYER must be removed from allowlist");
+    Check(fixture.provider.AllowedActorCount() == 3, "ACTOR_PLAYER must be removed from allowlist");
 
     ShipLua::CapabilityRegistry registry;
     Check(fixture.provider.RegisterCapabilities(registry).isOk(), "capabilities should register");
@@ -94,7 +103,7 @@ void TestSpawnDestroyAndOwnership() {
     Check(stale.code == ShipLua::ErrorCode::InvalidHandle, "destroyed handle must be stale");
 }
 
-void TestObjectDependencyAndInvalidHandle() {
+void TestObjectDependencyPreflightAndInvalidHandle() {
     Fixture fixture;
     ShipLua::ActorSpawnRequest torch = DogRequest();
     torch.actor = "oot.en_torch2";
@@ -103,6 +112,19 @@ void TestObjectDependencyAndInvalidHandle() {
 
     fixture.readyObjects.insert(20);
     Check(fixture.provider.Spawn("test.mod", torch).isOk(), "En_Torch2 should spawn after its object is ready");
+
+    ShipLua::ActorSpawnRequest shell = DogRequest();
+    shell.actor = "compat.mm.elegy_shell.human";
+    const std::size_t actorCountBeforePreflight = fixture.actors.size();
+    const auto assetMissing = fixture.provider.Spawn("test.mod", shell);
+    Check(assetMissing.code == ShipLua::ErrorCode::InvalidState,
+          "compatibility actor must reject spawn while its external asset is missing");
+    Check(fixture.actors.size() == actorCountBeforePreflight,
+          "failed preflight must not allocate a native actor or handle");
+
+    fixture.compatibilityAssetReady = true;
+    Check(fixture.provider.Spawn("test.mod", shell).isOk(),
+          "compatibility actor should spawn after its external asset is ready");
 
     ShipLua::Handle invalid;
     invalid.kind = ShipLua::HandleKind::Actor;
@@ -159,7 +181,7 @@ int main() {
     static_assert(std::is_base_of_v<ShipLua::ActorProvider, ShipLuaHost::OotActorProvider>);
     TestCapabilitiesAndAllowlist();
     TestSpawnDestroyAndOwnership();
-    TestObjectDependencyAndInvalidHandle();
+    TestObjectDependencyPreflightAndInvalidHandle();
     TestNativeDestroyAndLifecycleCleanup();
     TestLimitsAndGameThread();
     std::cout << "OotActorProviderTests: OK\n";
