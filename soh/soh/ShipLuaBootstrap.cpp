@@ -267,7 +267,7 @@ std::shared_ptr<OotActorProvider> CreateActorProvider() {
         return Actor_Spawn(&gPlayState->actorCtx, gPlayState, definition.actorId, static_cast<float>(request.x),
                            static_cast<float>(request.y), static_cast<float>(request.z),
                            DegreesToBinang(request.rotationX), DegreesToBinang(request.rotationY),
-                           DegreesToBinang(request.rotationZ), definition.params, true);
+                           DegreesToBinang(request.rotationZ), definition.params);
     };
     hooks.kill = [](void* actor) {
         if (actor != nullptr) {
@@ -359,7 +359,7 @@ int LuaSpawnDog(lua_State* state) {
     }
     Actor* dog =
         Actor_Spawn(&play->actorCtx, play, ACTOR_EN_DOG, player->actor.world.pos.x, player->actor.world.pos.y,
-                    player->actor.world.pos.z, 0, player->actor.shape.rot.y, 0, static_cast<s16>(0x8000), true);
+                    player->actor.world.pos.z, 0, player->actor.shape.rot.y, 0, static_cast<s16>(0x8000));
     lua_pushboolean(state, dog != nullptr);
     return 1;
 }
