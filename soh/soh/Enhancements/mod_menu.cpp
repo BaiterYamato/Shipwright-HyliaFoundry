@@ -399,5 +399,3 @@ void RegisterModMenuWidgets() {
 }
 
 static RegisterMenuInitFunc menuInitFunc(RegisterModMenuWidgets);
-
-

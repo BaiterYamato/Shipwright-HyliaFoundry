@@ -50,24 +50,23 @@ struct Fast64TextureMeta {
     int32_t decodedHeight = 0;
 };
 
-using Fast64TextureIncludeResolver =
-    std::function<bool(const std::string&, const Fast64TextureMeta&, std::vector<uint8_t>&, int32_t&, int32_t&,
-                       std::string&)>;
+using Fast64TextureIncludeResolver = std::function<bool(const std::string&, const Fast64TextureMeta&,
+                                                        std::vector<uint8_t>&, int32_t&, int32_t&, std::string&)>;
 
 class ExternalModFast64 {
-public:
+  public:
     static bool ConvertFast64SourceToResources(const std::string& modelContent, const std::string& objectName,
                                                const Fast64TextureIncludeResolver& includeResolver,
                                                ExternalModModelTextureFilter configuredTextureFilter,
                                                const std::string& debugLabel, Fast64ConversionOutput& outConversion,
                                                std::string& outError);
 
-    static bool InspectFast64ArchiveBytes(const std::vector<uint8_t>& archiveBytes, Fast64ArchiveInspection& outInspection,
-                                          std::string& outError);
+    static bool InspectFast64ArchiveBytes(const std::vector<uint8_t>& archiveBytes,
+                                          Fast64ArchiveInspection& outInspection, std::string& outError);
 
-    static std::shared_ptr<Ship::Archive> CreateGeneratedFast64Archive(const std::filesystem::path& virtualArchivePath,
-                                                                       std::map<std::string, std::vector<uint8_t>> resources,
-                                                                       std::string& outError);
+    static std::shared_ptr<Ship::Archive>
+    CreateGeneratedFast64Archive(const std::filesystem::path& virtualArchivePath,
+                                 std::map<std::string, std::vector<uint8_t>> resources, std::string& outError);
 
     static std::filesystem::path BuildGeneratedFast64ArchivePath(const std::string& modId, const std::string& itemId,
                                                                  const std::string& objectName);

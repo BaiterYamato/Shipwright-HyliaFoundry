@@ -21,7 +21,7 @@ extern "C" PlayState* gPlayState;
 namespace {
 std::unordered_set<std::string> gResourceMgrLoadGfxWarnings{};
 std::unordered_set<std::string> gResourceMgrLoadGfxInfos{};
-}
+} // namespace
 
 extern "C" uint32_t ResourceMgr_GetNumGameVersions() {
     return Ship::Context::GetInstance()->GetResourceManager()->GetArchiveManager()->GetGameVersions().size();

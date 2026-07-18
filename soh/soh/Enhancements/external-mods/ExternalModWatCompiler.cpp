@@ -49,7 +49,8 @@ bool CompileWatToWasm(const std::string& sourceText, const std::string& sourceNa
     }
 
     wabt::Errors errors;
-    auto lexer = wabt::WastLexer::CreateBufferLexer(sourceName, sanitizedSource.data(), sanitizedSource.size(), &errors);
+    auto lexer =
+        wabt::WastLexer::CreateBufferLexer(sourceName, sanitizedSource.data(), sanitizedSource.size(), &errors);
     if (lexer == nullptr) {
         outDiagnostics = "Failed to create WAT lexer";
         return false;

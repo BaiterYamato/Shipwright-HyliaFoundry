@@ -188,12 +188,14 @@ void DrawExternalModControlsSection() {
         return;
     }
 
-    ImGui::TextDisabled("Toggle and bindings are saved. Use Reload External Mods after editing ZIP/pasta manifests or scripts.");
+    ImGui::TextDisabled(
+        "Toggle and bindings are saved. Use Reload External Mods after editing ZIP/pasta manifests or scripts.");
 
     if (ImGui::Button("Open Extra Inventory (I)")) {
-        if (auto context = Ship::Context::GetInstance(); context != nullptr && context->GetWindow() != nullptr &&
-                                                     context->GetWindow()->GetGui() != nullptr) {
-            if (auto window = context->GetWindow()->GetGui()->GetGuiWindow("External Mod Inventory"); window != nullptr) {
+        if (auto context = Ship::Context::GetInstance();
+            context != nullptr && context->GetWindow() != nullptr && context->GetWindow()->GetGui() != nullptr) {
+            if (auto window = context->GetWindow()->GetGui()->GetGuiWindow("External Mod Inventory");
+                window != nullptr) {
                 window->ToggleVisibility();
                 context->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
             }
@@ -207,7 +209,8 @@ void DrawExternalModControlsSection() {
         std::string reloadMessage;
         ExternalModManager::Instance().ReloadPackages(reloadMessage);
         Notification::Emit({
-            .message = reloadMessage.empty() ? "[ExternalMods] Reload completed." : ("[ExternalMods] Reload completed with warnings: " + reloadMessage),
+            .message = reloadMessage.empty() ? "[ExternalMods] Reload completed."
+                                             : ("[ExternalMods] Reload completed with warnings: " + reloadMessage),
             .remainingTime = 8.0f,
         });
     }
@@ -220,7 +223,7 @@ void DrawExternalModControlsSection() {
         const bool manifestValid = package.valid;
         const ImVec4 statusColor =
             runtimeEnabled ? ImVec4(0.35f, 0.85f, 0.45f, 1.0f)
-                         : (manifestValid ? ImVec4(0.95f, 0.78f, 0.25f, 1.0f) : ImVec4(0.95f, 0.35f, 0.35f, 1.0f));
+                           : (manifestValid ? ImVec4(0.95f, 0.78f, 0.25f, 1.0f) : ImVec4(0.95f, 0.35f, 0.35f, 1.0f));
 
         ImGui::TextColored(statusColor, "%s", runtimeEnabled ? "Enabled" : "Disabled");
         ImGui::SameLine();
@@ -265,8 +268,8 @@ void DrawExternalModControlsSection() {
         if (ImGui::Checkbox((std::string("Enable##") + package.manifest.id).c_str(), &modEnabled)) {
             CVarSetInteger(enabledCVar.c_str(), modEnabled ? 1 : 0);
             package.runtime.enabled = manifestValid && modEnabled;
-            if (auto context = Ship::Context::GetInstance(); context != nullptr && context->GetWindow() != nullptr &&
-                                                            context->GetWindow()->GetGui() != nullptr) {
+            if (auto context = Ship::Context::GetInstance();
+                context != nullptr && context->GetWindow() != nullptr && context->GetWindow()->GetGui() != nullptr) {
                 context->GetWindow()->GetGui()->SaveConsoleVariablesNextFrame();
             }
         }
@@ -345,8 +348,10 @@ void DrawExternalModControlsSection() {
                     }
                 }
                 if (item.hasGrantItemId || item.hasGrantAmmo) {
-                    const std::string grantItemText = item.hasGrantItemId ? std::to_string(item.grantItemId) : "<slot-default>";
-                    const std::string grantAmmoText = item.hasGrantAmmo ? std::to_string(item.grantAmmo) : "<unchanged>";
+                    const std::string grantItemText =
+                        item.hasGrantItemId ? std::to_string(item.grantItemId) : "<slot-default>";
+                    const std::string grantAmmoText =
+                        item.hasGrantAmmo ? std::to_string(item.grantAmmo) : "<unchanged>";
                     ImGui::TextDisabled("grant: itemId=%s ammo=%s", grantItemText.c_str(), grantAmmoText.c_str());
                 }
                 ImGui::TextDisabled("state: granted=%s cooldown=%d/%d", item.granted ? "yes" : "no",
@@ -356,11 +361,13 @@ void DrawExternalModControlsSection() {
 
         if (!package.runtime.inputBindings.empty()) {
             ImGui::Text("Bindings:");
-            ImGui::TextDisabled("Tip: map to Mod Action buttons, then bind any keyboard/gamepad key in Settings > Controls > Modifier Buttons.");
+            ImGui::TextDisabled("Tip: map to Mod Action buttons, then bind any keyboard/gamepad key in Settings > "
+                                "Controls > Modifier Buttons.");
             for (const auto& binding : package.runtime.inputBindings) {
                 ImGui::PushID(binding.id.c_str());
                 const auto cvarName = ExternalModManager::BuildBindingCVarName(package.manifest.id, binding.id);
-                const auto label = std::string("Binding: ") + binding.id + "##" + package.manifest.id + "." + binding.id;
+                const auto label =
+                    std::string("Binding: ") + binding.id + "##" + package.manifest.id + "." + binding.id;
                 UIWidgets::CVarBtnSelector(label.c_str(), cvarName.c_str(),
                                            UIWidgets::BtnSelectorOptions()
                                                .DefaultValue(binding.defaultMask)

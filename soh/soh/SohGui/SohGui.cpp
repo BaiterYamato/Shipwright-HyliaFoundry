@@ -140,9 +140,8 @@ void SetupGuiElements() {
 
     mModMenuWindow = std::make_shared<ModMenuWindow>(CVAR_WINDOW("ModMenu"), "Mod Menu", ImVec2(820, 630));
     gui->AddGuiWindow(mModMenuWindow);
-    mExternalModInventoryWindow =
-        std::make_shared<SOH::ExternalModInventoryWindow>(CVAR_WINDOW("ExternalModInventory"),
-                                                          "External Mod Inventory", ImVec2(900, 560));
+    mExternalModInventoryWindow = std::make_shared<SOH::ExternalModInventoryWindow>(
+        CVAR_WINDOW("ExternalModInventory"), "External Mod Inventory", ImVec2(900, 560));
     gui->AddGuiWindow(mExternalModInventoryWindow);
     mAudioEditorWindow = std::make_shared<AudioEditor>(CVAR_WINDOW("AudioEditor"), "Audio Editor", ImVec2(820, 630));
     gui->AddGuiWindow(mAudioEditorWindow);

@@ -53,7 +53,8 @@ class ExternalModWasmRuntime {
     ExternalModWasmRuntime();
     ~ExternalModWasmRuntime();
 
-    bool Initialize(const std::vector<uint8_t>& moduleBytes, const ExternalModWasmConfig& config, std::string& outError);
+    bool Initialize(const std::vector<uint8_t>& moduleBytes, const ExternalModWasmConfig& config,
+                    std::string& outError);
     bool InvokeExport(const std::string& exportName, const std::vector<int32_t>& args, std::string& outError);
     bool InvokeExport(const std::string& exportName, std::string& outError);
 

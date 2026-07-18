@@ -109,4 +109,3 @@ void GameInteractor_ExecuteOnRandoEntranceDiscovered(u16 entranceIndex, u8 isRev
 #ifdef __cplusplus
 }
 #endif
-

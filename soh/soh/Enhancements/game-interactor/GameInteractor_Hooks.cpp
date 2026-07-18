@@ -400,5 +400,3 @@ void GameInteractor_ExecuteOnRandoEntranceDiscovered(u16 entranceIndex, u8 isRev
     GameInteractor::Instance->ExecuteHooks<GameInteractor::OnRandoEntranceDiscovered>(entranceIndex,
                                                                                       isReversedEntrance);
 }
-
-
