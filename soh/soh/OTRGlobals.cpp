@@ -116,6 +116,8 @@
 
 #include "soh/config/ConfigUpdaters.h"
 #include "soh/ShipInit.hpp"
+#include "soh/ShipLuaBootstrap.h"
+#include "soh/OotHotkeyRegistry.h"
 
 #ifdef _MSC_VER
 #define strdup _strdup
@@ -1532,6 +1534,7 @@ extern "C" void InitOTR(int argc, char* argv[]) {
     CustomMessageManager::Instance = new CustomMessageManager();
     ItemTableManager::Instance = new ItemTableManager();
     GameInteractor::Instance = new GameInteractor();
+    ShipLuaHost::Initialize();
     SaveManager::Instance = new SaveManager();
 
     std::shared_ptr<Ship::Config> conf = OTRGlobals::Instance->context->GetConfig();
@@ -1609,6 +1612,7 @@ extern "C" void SaveManager_ThreadPoolWait() {
 
 extern "C" void DeinitOTR() {
     SaveManager_ThreadPoolWait();
+    ShipLuaHost::Shutdown();
     OTRAudio_Exit();
     if (CVarGetInteger(CVAR_REMOTE_CROWD_CONTROL("Enabled"), 0)) {
         CrowdControl::Instance->Disable();
@@ -1672,6 +1676,10 @@ extern "C" void Graph_StartFrame() {
     using Ship::KbScancode;
     int32_t dwScancode = OTRGlobals::Instance->context->GetWindow()->GetLastScancode();
     OTRGlobals::Instance->context->GetWindow()->SetLastScancode(-1);
+
+    if (ShipLuaHost::OotHotkeyRegistry* hotkeys = ShipLuaHost::Hotkeys(); hotkeys != nullptr) {
+        hotkeys->DispatchScancode(dwScancode);
+    }
 
     switch (dwScancode) {
         case KbScancode::LUS_KB_F1: {
