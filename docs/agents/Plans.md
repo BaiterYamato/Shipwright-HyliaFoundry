@@ -568,3 +568,20 @@ This file is the fixed, append-only plan ledger for this repository.
   - docs/SHIPLUA_OOT_ACTOR_PROVIDER.md
   - extern/ship-lua
   - x64/Release/soh.exe
+
+## [PLN-20260718-0001][UPDATE] 2026-07-18T19:58:14Z
+- status: done
+- note: Integrated MODSDK-005 from link-span#41 into the OoT host: OotActorProvider now implements the generic ActorProvider contract, ship.actor is wired into LuaApiHostContext, logical IDs are game-qualified, portable rotation degrees are converted to OoT binang, embedded SDK test paths are host-independent, and the complete Release validation passed.
+- validation:
+  - MSVC Release build generated x64/Release/soh.exe
+  - standalone ShipLua CTest: 56/56 passed
+  - embedded Shipwright CTest excluding the unavailable legacy prism target: 57/57 passed
+- refs:
+  - soh/soh/OotActorProvider.h
+  - soh/soh/OotActorProvider.cpp
+  - soh/soh/ShipLuaBootstrap.cpp
+  - soh/tests/OotActorProviderTests.cpp
+  - docs/SHIPLUA_OOT_ACTOR_PROVIDER.md
+  - extern/ship-lua
+  - https://github.com/BaiterYamato/link-span/pull/41
+  - x64/Release/soh.exe

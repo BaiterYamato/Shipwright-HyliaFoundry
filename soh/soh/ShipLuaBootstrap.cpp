@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdlib>
 #include <cstdint>
 #include <memory>
@@ -43,7 +44,7 @@ namespace ShipLuaHost {
 namespace {
 
 std::unique_ptr<ShipLua::ModHost> gModHost;
-std::unique_ptr<OotActorProvider> gActorProvider;
+std::shared_ptr<OotActorProvider> gActorProvider;
 std::shared_ptr<ShipLua::CapabilityRegistry> gCapabilityRegistry;
 std::shared_ptr<OotHotkeyRegistry> gHotkeys;
 std::shared_ptr<OotWorldAdapter> gWorldAdapter;
@@ -250,7 +251,12 @@ std::string GetHostVersion() {
            std::to_string(gBuildVersionPatch);
 }
 
-std::unique_ptr<OotActorProvider> CreateActorProvider() {
+std::int16_t DegreesToBinang(double degrees) {
+    const double normalized = std::remainder(degrees, 360.0);
+    return static_cast<std::int16_t>(std::lround(normalized * (65536.0 / 360.0)));
+}
+
+std::shared_ptr<OotActorProvider> CreateActorProvider() {
     OotActorProviderHooks hooks;
     hooks.objectReady = [](std::int16_t objectId) {
         if (gPlayState == nullptr) {
@@ -259,12 +265,14 @@ std::unique_ptr<OotActorProvider> CreateActorProvider() {
         const s32 objectIndex = Object_GetIndex(&gPlayState->objectCtx, objectId);
         return objectIndex >= 0 && Object_IsLoaded(&gPlayState->objectCtx, objectIndex);
     };
-    hooks.spawn = [](const OotActorDefinition& definition, const OotActorSpawnRequest& request) -> void* {
+    hooks.spawn = [](const OotActorDefinition& definition, const ShipLua::ActorSpawnRequest& request) -> void* {
         if (gPlayState == nullptr) {
             return nullptr;
         }
-        return Actor_Spawn(&gPlayState->actorCtx, gPlayState, definition.actorId, request.x, request.y, request.z,
-                           request.rotX, request.rotY, request.rotZ, definition.params, true);
+        return Actor_Spawn(&gPlayState->actorCtx, gPlayState, definition.actorId, static_cast<float>(request.x),
+                           static_cast<float>(request.y), static_cast<float>(request.z),
+                           DegreesToBinang(request.rotationX), DegreesToBinang(request.rotationY),
+                           DegreesToBinang(request.rotationZ), definition.params, true);
     };
     hooks.kill = [](void* actor) {
         if (actor != nullptr) {
@@ -272,10 +280,10 @@ std::unique_ptr<OotActorProvider> CreateActorProvider() {
         }
     };
     std::vector<OotActorDefinition> allowlist{
-        { "en_dog", ACTOR_EN_DOG, OBJECT_DOG, static_cast<std::int16_t>(0x8000) },
-        { "en_torch2", ACTOR_EN_TORCH2, OBJECT_TORCH2, 0 },
+        { "oot.en_dog", ACTOR_EN_DOG, OBJECT_DOG, static_cast<std::int16_t>(0x8000) },
+        { "oot.en_torch2", ACTOR_EN_TORCH2, OBJECT_TORCH2, 0 },
     };
-    return std::make_unique<OotActorProvider>(std::move(allowlist), std::move(hooks), CreateLogger(), ACTOR_PLAYER);
+    return std::make_shared<OotActorProvider>(std::move(allowlist), std::move(hooks), CreateLogger(), ACTOR_PLAYER);
 }
 
 ShipLua::Result<void> RegisterHostCapability(const std::string& id, const std::string& description) {
@@ -304,6 +312,7 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
     context.capabilities = { "oot.player.jump", "oot.spawn_dog" };
     context.hotkeys = gHotkeys;
     context.capabilityRegistry = gCapabilityRegistry;
+    context.actors = gActorProvider;
     auto registered = RegisterHostCapability("oot.player.jump", "Apply a validated jump impulse to OoT Link.");
     if (!registered.isOk()) {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);

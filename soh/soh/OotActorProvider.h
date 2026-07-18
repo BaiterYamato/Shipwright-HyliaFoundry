@@ -8,6 +8,7 @@
 #include <thread>
 #include <vector>
 
+#include <shiplua/actor/ActorProvider.h>
 #include <shiplua/capability/CapabilityRegistry.h>
 #include <shiplua/handles/HandleRegistry.h>
 #include <shiplua/runtime/Logger.h>
@@ -24,26 +25,16 @@ struct OotActorDefinition {
     std::int16_t params = 0;
 };
 
-struct OotActorSpawnRequest {
-    std::string actor;
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
-    std::int16_t rotX = 0;
-    std::int16_t rotY = 0;
-    std::int16_t rotZ = 0;
-};
-
 struct OotActorProviderHooks {
     std::function<bool(std::int16_t objectId)> objectReady;
-    std::function<void*(const OotActorDefinition& definition, const OotActorSpawnRequest& request)> spawn;
+    std::function<void*(const OotActorDefinition& definition, const ShipLua::ActorSpawnRequest& request)> spawn;
     std::function<void(void* actor)> kill;
 };
 
 // First native provider slice for the generic actor API. All public methods
 // are main-thread-only. Handles are owned by the creating mod, invalidated on
 // scene changes and never contain an Actor*.
-class OotActorProvider {
+class OotActorProvider final : public ShipLua::ActorProvider {
   public:
     OotActorProvider(std::vector<OotActorDefinition> allowlist, OotActorProviderHooks hooks,
                      ShipLua::Logger logger = {}, std::int16_t forbiddenActorId = 0,
@@ -51,14 +42,16 @@ class OotActorProvider {
 
     ShipLua::Result<void> RegisterCapabilities(ShipLua::CapabilityRegistry& registry) const;
 
-    ShipLua::Result<ShipLua::Handle> Spawn(const std::string& ownerModId, const OotActorSpawnRequest& request);
-    ShipLua::Result<void> Destroy(const std::string& ownerModId, const ShipLua::Handle& handle);
-    ShipLua::Result<bool> Exists(const std::string& ownerModId, const ShipLua::Handle& handle) const;
+    ShipLua::Result<ShipLua::Handle> Spawn(const std::string& ownerModId,
+                                          const ShipLua::ActorSpawnRequest& request) override;
+    ShipLua::Result<void> Destroy(const std::string& ownerModId, const ShipLua::Handle& handle) override;
+    ShipLua::Result<bool> Exists(const std::string& ownerModId,
+                                const ShipLua::Handle& handle) const override;
 
     // Called by the host before the native Actor memory is released.
     ShipLua::Result<bool> OnNativeActorDestroyed(void* actor);
     // Called immediately before unloading one mod.
-    ShipLua::Result<std::size_t> ReleaseMod(const std::string& modId);
+    ShipLua::Result<std::size_t> ReleaseMod(const std::string& modId) override;
     // Called from OnPlayDestroy, while native actors are still valid.
     ShipLua::Result<std::size_t> OnSceneChange();
     ShipLua::Result<std::size_t> Shutdown();
