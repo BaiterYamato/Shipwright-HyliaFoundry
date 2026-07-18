@@ -1,10 +1,8 @@
-﻿#include "ExternalModItemRuntime.h"
+#include "ExternalModItemRuntime.h"
 
 #include <algorithm>
 
-extern "C" {
 #include <z64.h>
-}
 
 namespace SOH {
 

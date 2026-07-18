@@ -24,9 +24,7 @@ bool IsPathWithinBase(const std::filesystem::path& basePath, const std::filesyst
         const auto mismatch = std::mismatch(canonicalBase.begin(), canonicalBase.end(), canonicalCandidate.begin(),
                                             canonicalCandidate.end());
         return mismatch.first == canonicalBase.end();
-    } catch (...) {
-        return false;
-    }
+    } catch (...) { return false; }
 }
 
 } // namespace
@@ -86,7 +84,8 @@ bool ExternalModPackageIO::ReadFileFromZip(const std::filesystem::path& zipPath,
     zip_stat_t stat;
     zip_stat_init(&stat);
     if (zip_stat(archive, zipEntry.c_str(), ZIP_FL_ENC_GUESS, &stat) != 0) {
-        if (zipEntryBackslash == zipEntry || zip_stat(archive, zipEntryBackslash.c_str(), ZIP_FL_ENC_GUESS, &stat) != 0) {
+        if (zipEntryBackslash == zipEntry ||
+            zip_stat(archive, zipEntryBackslash.c_str(), ZIP_FL_ENC_GUESS, &stat) != 0) {
             outError = "Zip entry not found: " + zipEntry;
             zip_close(archive);
             return false;

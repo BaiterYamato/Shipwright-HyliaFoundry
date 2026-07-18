@@ -516,7 +516,8 @@ static void KaleidoScope_DrawExternalModsInventoryPage(PlayState* play) {
 
         if (CHECK_BTN_ANY(input->press.button, assignButtons)) {
             ExternalModsPauseCellInfo selectedCell = { 0 };
-            if (ExternalMods_GetVirtualInventoryPageCell(sExternalModsItemPage, sExternalModsItemCursor, &selectedCell) &&
+            if (ExternalMods_GetVirtualInventoryPageCell(sExternalModsItemPage, sExternalModsItemCursor,
+                                                         &selectedCell) &&
                 selectedCell.occupied) {
                 int32_t targetButton = 0;
                 if (CHECK_BTN_ALL(input->press.button, BTN_CLEFT)) {

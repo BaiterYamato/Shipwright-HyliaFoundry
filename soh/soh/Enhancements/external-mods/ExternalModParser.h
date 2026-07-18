@@ -7,7 +7,7 @@
 namespace SOH {
 
 class ExternalModParser {
-public:
+  public:
     static bool TryParseManifest(const std::string& content, ExternalModManifest& outManifest, std::string& outError);
     static bool TryParseEntryScript(const std::string& content, int32_t apiVersion, ExternalModRuntime& outRuntime,
                                     std::string& outError);

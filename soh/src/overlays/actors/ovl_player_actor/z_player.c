@@ -16830,5 +16830,3 @@ void Player_StartTalking(PlayState* play, Actor* actor) {
         func_80835EA4(play, 0xB);
     }
 }
-
-

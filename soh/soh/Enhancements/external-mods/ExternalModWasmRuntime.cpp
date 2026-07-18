@@ -26,9 +26,8 @@ bool IsSafeExportName(const std::string& name) {
     if (name.empty() || name.size() > 64) {
         return false;
     }
-    return std::all_of(name.begin(), name.end(), [](unsigned char c) {
-        return std::isalnum(c) || c == '_' || c == '-';
-    });
+    return std::all_of(name.begin(), name.end(),
+                       [](unsigned char c) { return std::isalnum(c) || c == '_' || c == '-'; });
 }
 
 bool IsSupportedHostModule(const std::string& moduleName) {
@@ -112,7 +111,8 @@ bool ExternalModWasmRuntime::Initialize(const std::vector<uint8_t>& moduleBytes,
     options.stop_on_first_error = true;
     options.read_debug_names = true;
 
-    if (Failed(ReadBinaryInterp(mConfig.modId, mModuleBytes.data(), mModuleBytes.size(), options, &errors, &moduleDesc))) {
+    if (Failed(
+            ReadBinaryInterp(mConfig.modId, mModuleBytes.data(), mModuleBytes.size(), options, &errors, &moduleDesc))) {
         outError = errors.empty() ? "ReadBinaryInterp failed" : FormatErrorsToString(errors, Location::Type::Binary);
         return false;
     }
@@ -132,8 +132,8 @@ bool ExternalModWasmRuntime::Initialize(const std::vector<uint8_t>& moduleBytes,
     };
 
     auto hostInvoke = [this, implPtr = impl.get()](const std::string& moduleName, const std::string& funcName,
-                                                    Thread& thread, const Values& params, Values& results,
-                                                    Trap::Ptr* outTrap) -> Result {
+                                                   Thread& thread, const Values& params, Values& results,
+                                                   Trap::Ptr* outTrap) -> Result {
         auto writeTrap = [&](const std::string& msg) -> Result {
             if (outTrap != nullptr) {
                 *outTrap = Trap::New(*implPtr->store, msg);
@@ -418,23 +418,21 @@ bool ExternalModWasmRuntime::Initialize(const std::vector<uint8_t>& moduleBytes,
 
     for (const auto& importDesc : impl->module->desc().imports) {
         if (importDesc.type.type->kind != ExternKind::Func) {
-            return makeTrapError("Unsupported non-function import: " + importDesc.type.module + "." + importDesc.type.name);
+            return makeTrapError("Unsupported non-function import: " + importDesc.type.module + "." +
+                                 importDesc.type.name);
         }
 
         if (!IsSupportedHostModule(importDesc.type.module)) {
-            return makeTrapError("Unsupported import module: " + importDesc.type.module +
-                                 " (supported: env, host)");
+            return makeTrapError("Unsupported import module: " + importDesc.type.module + " (supported: env, host)");
         }
 
         auto* funcType = wabt::cast<FuncType>(importDesc.type.type.get());
-        auto hostFunc = HostFunc::New(
-            *impl->store, *funcType,
-            [moduleName = importDesc.type.module, funcName = importDesc.type.name, hostInvoke](Thread& thread,
-                                                                                                 const Values& params,
-                                                                                                 Values& results,
-                                                                                                 Trap::Ptr* outTrap) -> Result {
-                return hostInvoke(moduleName, funcName, thread, params, results, outTrap);
-            });
+        auto hostFunc =
+            HostFunc::New(*impl->store, *funcType,
+                          [moduleName = importDesc.type.module, funcName = importDesc.type.name, hostInvoke](
+                              Thread& thread, const Values& params, Values& results, Trap::Ptr* outTrap) -> Result {
+                              return hostInvoke(moduleName, funcName, thread, params, results, outTrap);
+                          });
 
         impl->hostFuncs.push_back(hostFunc);
         importRefs.push_back(hostFunc->self());

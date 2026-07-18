@@ -39,13 +39,13 @@ extern "C" void OTRPlay_SpawnScene(PlayState* play, s32 sceneId, s32 spawn) {
         sceneVersion = ResourceMgr_IsGameMasterQuest() ? "mq" : "nonmq";
     }
     const std::string defaultScenePath = StringHelper::Sprintf("scenes/%s/%s/%s", sceneVersion.c_str(),
-                                                                scene->sceneFile.fileName, scene->sceneFile.fileName);
+                                                               scene->sceneFile.fileName, scene->sceneFile.fileName);
     std::string scenePath = defaultScenePath;
     s32 resolvedSpawn = spawn;
 
     SOH::ExternalModPendingSceneLoadRequest pendingSceneRequest;
-    const bool hasPendingSceneRequest =
-        SOH::ExternalModManager::Instance().TryConsumePendingSceneLoadRequest(static_cast<int16_t>(sceneId), pendingSceneRequest);
+    const bool hasPendingSceneRequest = SOH::ExternalModManager::Instance().TryConsumePendingSceneLoadRequest(
+        static_cast<int16_t>(sceneId), pendingSceneRequest);
     if (hasPendingSceneRequest) {
         scenePath = pendingSceneRequest.sceneResourcePath;
         resolvedSpawn = pendingSceneRequest.spawnId;
@@ -81,9 +81,10 @@ extern "C" void OTRPlay_SpawnScene(PlayState* play, s32 sceneId, s32 spawn) {
                     const auto fallbackSceneId = static_cast<s32>(gEntranceTable[fallbackEntranceIndex].scene);
                     const auto fallbackSpawn = static_cast<s32>(gEntranceTable[fallbackEntranceIndex].spawn);
                     if (fallbackSceneId != sceneId || fallbackSpawn != spawn) {
-                        SPDLOG_WARN(
-                            "[ExternalMods] Redirecting namespaced scene fallback for {}.{} to fallback entrance scene={:#x} spawn={}",
-                            pendingSceneRequest.modId, pendingSceneRequest.sceneId, fallbackSceneId, fallbackSpawn);
+                        SPDLOG_WARN("[ExternalMods] Redirecting namespaced scene fallback for {}.{} to fallback "
+                                    "entrance scene={:#x} spawn={}",
+                                    pendingSceneRequest.modId, pendingSceneRequest.sceneId, fallbackSceneId,
+                                    fallbackSpawn);
                         OTRPlay_SpawnScene(play, fallbackSceneId, fallbackSpawn);
                         return;
                     }
@@ -94,12 +95,12 @@ extern "C" void OTRPlay_SpawnScene(PlayState* play, s32 sceneId, s32 spawn) {
             if (play->sceneSegment != nullptr) {
                 scenePath = defaultScenePath;
                 if (pendingSceneRequest.fallbackPlayable) {
-                    SPDLOG_WARN("[ExternalMods] Falling back to host scene path for {}.{}: {}", pendingSceneRequest.modId,
-                                pendingSceneRequest.sceneId, scenePath);
+                    SPDLOG_WARN("[ExternalMods] Falling back to host scene path for {}.{}: {}",
+                                pendingSceneRequest.modId, pendingSceneRequest.sceneId, scenePath);
                 } else {
-                    SPDLOG_WARN(
-                        "[ExternalMods] Namespaced scene strict mode failed for {}.{}; runtime disabled and host scene loaded: {}",
-                        pendingSceneRequest.modId, pendingSceneRequest.sceneId, scenePath);
+                    SPDLOG_WARN("[ExternalMods] Namespaced scene strict mode failed for {}.{}; runtime disabled and "
+                                "host scene loaded: {}",
+                                pendingSceneRequest.modId, pendingSceneRequest.sceneId, scenePath);
                 }
             }
         }

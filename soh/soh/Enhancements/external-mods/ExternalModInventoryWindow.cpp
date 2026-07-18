@@ -108,9 +108,8 @@ void ExternalModInventoryWindow::DrawElement() {
     const int32_t pageCount = std::max(1, manager.GetExtraInventoryPageCount());
     mCurrentPage = std::clamp(mCurrentPage, 0, pageCount - 1);
 
-    const int32_t occupiedCount = static_cast<int32_t>(std::count_if(allCells.begin(), allCells.end(), [](const auto& cell) {
-        return cell.occupied;
-    }));
+    const int32_t occupiedCount = static_cast<int32_t>(
+        std::count_if(allCells.begin(), allCells.end(), [](const auto& cell) { return cell.occupied; }));
 
     ImGui::Text("Virtual inventory: %d/%d", occupiedCount, static_cast<int32_t>(allCells.size()));
     ImGui::TextDisabled("Hotkey: I  |  Drag/drop para reorganizar  |  Page + equip C/D");
@@ -136,7 +135,8 @@ void ExternalModInventoryWindow::DrawElement() {
         return;
     }
 
-    const auto tableFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings;
+    const auto tableFlags =
+        ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings;
     if (ImGui::BeginTable("ExternalModInventoryGrid", kExternalModInventoryGridColumns, tableFlags)) {
         for (int32_t i = 0; i < kExternalModInventoryCellsPerPage; ++i) {
             if (i % kExternalModInventoryGridColumns == 0) {
@@ -167,7 +167,8 @@ void ExternalModInventoryWindow::DrawElement() {
             }
 
             if (ImGui::BeginDragDropTarget()) {
-                if (const auto* payload = ImGui::AcceptDragDropPayload("ExternalModInventoryCell"); payload != nullptr) {
+                if (const auto* payload = ImGui::AcceptDragDropPayload("ExternalModInventoryCell");
+                    payload != nullptr) {
                     if (payload->DataSize == sizeof(int32_t)) {
                         const int32_t fromIndex = *reinterpret_cast<const int32_t*>(payload->Data);
                         const int32_t toIndex =
@@ -210,8 +211,9 @@ void ExternalModInventoryWindow::DrawElement() {
 
     ImGui::Text("Item: %s", selectedCell.displayName.c_str());
     ImGui::TextDisabled("Mod: %s", selectedCell.modName.c_str());
-    ImGui::TextDisabled("Placement: %s",
-                        selectedCell.placement == ExternalModItemPlacement::Virtual ? "virtual" : GetSlotName(selectedCell.slot));
+    ImGui::TextDisabled("Placement: %s", selectedCell.placement == ExternalModItemPlacement::Virtual
+                                             ? "virtual"
+                                             : GetSlotName(selectedCell.slot));
 
     for (int32_t buttonIndex = 1; buttonIndex <= 7; ++buttonIndex) {
         const uint8_t buttonMask = static_cast<uint8_t>(1u << (buttonIndex - 1));

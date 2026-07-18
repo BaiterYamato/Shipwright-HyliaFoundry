@@ -32,7 +32,8 @@ class ExternalModManager {
     void ApplyGetItemVisualOverrides(::GetItemEntry& entry) const;
     std::vector<ExternalModInventoryCellView> GetExtraInventoryGrid() const;
     int32_t GetExtraInventoryPageCount() const;
-    bool GetExtraInventoryPageCell(int32_t pageIndex, int32_t pageCellIndex, ExternalModInventoryCellView& outCell) const;
+    bool GetExtraInventoryPageCell(int32_t pageIndex, int32_t pageCellIndex,
+                                   ExternalModInventoryCellView& outCell) const;
     bool MoveExtraInventoryCell(size_t fromIndex, size_t toIndex, std::string& outError);
     bool EquipExtraInventoryCellToButton(size_t cellIndex, int32_t buttonIndex, std::string& outError);
     void OnVanillaButtonEquipped(int32_t buttonIndex);
@@ -148,14 +149,12 @@ class ExternalModManager {
                                           std::vector<ExternalModStatusDefinition>& outDefinitions,
                                           std::string& outError);
     static bool TryParseDamageDefinitions(const std::string& content, int32_t apiVersion,
-                                          std::vector<ExternalModDamageProfile>& outDefinitions,
-                                          std::string& outError);
+                                          std::vector<ExternalModDamageProfile>& outDefinitions, std::string& outError);
     static bool TryParseTargetingDefinitions(const std::string& content, int32_t apiVersion,
                                              std::vector<ExternalModTargetingProfile>& outDefinitions,
                                              std::string& outError);
     static bool TryParseItemUseProfiles(const std::string& content, int32_t apiVersion,
-                                        std::vector<ExternalModItemUseProfile>& outDefinitions,
-                                        std::string& outError);
+                                        std::vector<ExternalModItemUseProfile>& outDefinitions, std::string& outError);
     static bool TryParseProjectileDefinitions(const std::string& content, int32_t apiVersion,
                                               std::vector<ExternalModProjectileProfile>& outDefinitions,
                                               std::string& outError);
@@ -170,7 +169,8 @@ class ExternalModManager {
 
     static bool ReadManifestFromDirectory(const std::filesystem::path& dirPath, std::string& outContent,
                                           std::string& outError);
-    static bool ReadManifestFromZip(const std::filesystem::path& zipPath, std::string& outContent, std::string& outError);
+    static bool ReadManifestFromZip(const std::filesystem::path& zipPath, std::string& outContent,
+                                    std::string& outError);
 
     static bool ReadFileFromDirectory(const std::filesystem::path& filePath, uint64_t maxBytes, std::string& outContent,
                                       std::string& outError);
@@ -178,8 +178,9 @@ class ExternalModManager {
                                 uint64_t maxBytes, std::vector<char>& outBytes, std::string& outError);
     static bool ReadFileFromPackage(const ExternalModPackage& package, const std::filesystem::path& packageRelativePath,
                                     uint64_t maxBytes, std::string& outContent, std::string& outError);
-    static bool ReadBinaryFromPackage(const ExternalModPackage& package, const std::filesystem::path& packageRelativePath,
-                                      uint64_t maxBytes, std::vector<uint8_t>& outBytes, std::string& outError);
+    static bool ReadBinaryFromPackage(const ExternalModPackage& package,
+                                      const std::filesystem::path& packageRelativePath, uint64_t maxBytes,
+                                      std::vector<uint8_t>& outBytes, std::string& outError);
 
     static void UnmountAssetsForPackage(ExternalModPackage& package);
     static bool MountAssetsForPackage(ExternalModPackage& package, std::string& outError);
@@ -218,7 +219,8 @@ class ExternalModManager {
     int32_t WasmHostSpawnProjectile(const std::string& modId, const std::string& profileId,
                                     const std::string& overridesJson);
     int32_t WasmHostSpawnAoE(const std::string& modId, const std::string& profileId, const std::string& originJson);
-    int32_t WasmHostApplyMovementProfile(const std::string& modId, const std::string& profileId, int32_t durationFrames);
+    int32_t WasmHostApplyMovementProfile(const std::string& modId, const std::string& profileId,
+                                         int32_t durationFrames);
     int32_t WasmHostApplyImpulse(const std::string& modId, int32_t mode, float strength, float x, float y, float z);
     int32_t WasmHostGetGroundInfo(const std::string& modId, ExternalModWasmGroundInfo& outInfo);
     int32_t WasmHostRaycast(const std::string& modId, const std::string& queryJson, ExternalModWasmRaycastHit& outHit);
