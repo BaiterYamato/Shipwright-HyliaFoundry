@@ -537,3 +537,51 @@ This file is the fixed, append-only plan ledger for this repository.
   - docs/agents/skills/soh-git-checkpoint-merge/scripts/finalize-plan-merge.ps1
   - libultraship
   - docs/agents/Plans.md
+
+## [PLN-20260718-0001] OOT-MODSDK-001 generic OoT actor provider
+- createdUtc: 2026-07-18T16:58:12Z
+- status: in_progress
+- scope: mixed
+- summary: Implement the first bounded OoT actor provider slice over ShipLua SDK 0.3: safe allowlisted spawn, owned handles, destroy/exists, lifecycle cleanup, tests, and provider documentation.
+- milestones:
+  1. Align the host submodule with integrated ShipLua SDK 0.3 and define the bounded OoT actor-provider contract
+  2. Implement allowlisted main-thread spawn plus owned handle lifecycle without exposing engine pointers
+  3. Install Lua bindings and capability descriptors with permission-aware errors and per-mod observability
+  4. Add deterministic host tests for En_Dog, En_Torch2 rejection/availability, ACTOR_PLAYER denial, invalid handles, and cleanup
+  5. Run Windows Release validation, update documentation/ledger, checkpoint, and publish the host PR
+- tags: shiplua, modsdk, oot, actors, provider
+- refs:
+  - soh/soh/ShipLuaBootstrap.cpp
+  - soh/soh/OotActorProvider.h
+  - soh/soh/OotActorProvider.cpp
+  - extern/ship-lua
+  - docs/agents/Plans.md
+
+## [PLN-20260718-0001][UPDATE] 2026-07-18T18:20:01Z
+- status: done
+- note: Implemented the bounded OOT-MODSDK-001 native actor provider: allowlisted main-thread spawn, owned opaque handles, destroy/exists, capability descriptors, actor/mod/scene cleanup, tests, documentation, and ShipLua SDK 0.3 submodule integration. Generic ship.actor Lua bindings remain correctly scoped to MODSDK-005.
+- refs:
+  - soh/soh/OotActorProvider.h
+  - soh/soh/OotActorProvider.cpp
+  - soh/soh/ShipLuaBootstrap.cpp
+  - soh/tests/OotActorProviderTests.cpp
+  - docs/SHIPLUA_OOT_ACTOR_PROVIDER.md
+  - extern/ship-lua
+  - x64/Release/soh.exe
+
+## [PLN-20260718-0001][UPDATE] 2026-07-18T19:58:14Z
+- status: done
+- note: Integrated MODSDK-005 from link-span#41 into the OoT host: OotActorProvider now implements the generic ActorProvider contract, ship.actor is wired into LuaApiHostContext, logical IDs are game-qualified, portable rotation degrees are converted to OoT binang, embedded SDK test paths are host-independent, and the complete Release validation passed.
+- validation:
+  - MSVC Release build generated x64/Release/soh.exe
+  - standalone ShipLua CTest: 56/56 passed
+  - embedded Shipwright CTest excluding the unavailable legacy prism target: 57/57 passed
+- refs:
+  - soh/soh/OotActorProvider.h
+  - soh/soh/OotActorProvider.cpp
+  - soh/soh/ShipLuaBootstrap.cpp
+  - soh/tests/OotActorProviderTests.cpp
+  - docs/SHIPLUA_OOT_ACTOR_PROVIDER.md
+  - extern/ship-lua
+  - https://github.com/BaiterYamato/link-span/pull/41
+  - x64/Release/soh.exe
