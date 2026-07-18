@@ -94,8 +94,7 @@ ShipLua::Result<ShipLua::Handle> OotActorProvider::Spawn(const std::string& owne
                                                      "actor owner mod id cannot be empty");
     }
     if (!std::isfinite(request.x) || !std::isfinite(request.y) || !std::isfinite(request.z) ||
-        !std::isfinite(request.rotationX) || !std::isfinite(request.rotationY) ||
-        !std::isfinite(request.rotationZ)) {
+        !std::isfinite(request.rotationX) || !std::isfinite(request.rotationY) || !std::isfinite(request.rotationZ)) {
         return ShipLua::Result<ShipLua::Handle>::err(ShipLua::ErrorCode::InvalidArgument,
                                                      "actor transform must be finite");
     }

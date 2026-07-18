@@ -75,8 +75,7 @@ int HexDigit(char value) {
     return -1;
 }
 
-template <std::size_t Size>
-bool ParseHex(const char* text, std::array<std::byte, Size>& output) {
+template <std::size_t Size> bool ParseHex(const char* text, std::array<std::byte, Size>& output) {
     if (text == nullptr || std::char_traits<char>::length(text) != Size * 2) {
         return false;
     }
@@ -137,8 +136,7 @@ ShipLua::Result<void> RequestWorldTravel(const ShipLua::WorldDestination& destin
     const auto config = GetBridgeConfig();
     if (!config.has_value() || !BothGamesAvailable() || destination.world != ShipLua::WorldId::Mm ||
         gWorldAdapter == nullptr) {
-        return ShipLua::Result<void>::err(ShipLua::ErrorCode::Unsupported,
-                                          "ponte Link-Span para MM indisponível");
+        return ShipLua::Result<void>::err(ShipLua::ErrorCode::Unsupported, "ponte Link-Span para MM indisponível");
     }
     if (gPlayState == nullptr || gPlayState->sceneNum != SCENE_LINKS_HOUSE) {
         return ShipLua::Result<void>::err(ShipLua::ErrorCode::InvalidState,
@@ -154,8 +152,7 @@ ShipLua::Result<void> RequestWorldTravel(const ShipLua::WorldDestination& destin
     handoff.source = ShipLua::WorldId::Oot;
     handoff.destination = destination;
     handoff.player = *player.value;
-    const auto written = ShipLua::WorldHandoffCodec::WriteFile(
-        config->handoffPath, handoff, config->authenticationKey);
+    const auto written = ShipLua::WorldHandoffCodec::WriteFile(config->handoffPath, handoff, config->authenticationKey);
     if (!written.isOk()) {
         return written;
     }
@@ -172,12 +169,10 @@ ShipLua::Result<void> RequestWorldTravel(const ShipLua::WorldDestination& destin
 
 void TryConsumeWorldHandoff() {
     const auto config = GetBridgeConfig();
-    if (!config.has_value() || gWorldAdapter == nullptr ||
-        !std::filesystem::is_regular_file(config->handoffPath)) {
+    if (!config.has_value() || gWorldAdapter == nullptr || !std::filesystem::is_regular_file(config->handoffPath)) {
         return;
     }
-    const auto handoff = ShipLua::WorldHandoffCodec::ReadFile(
-        config->handoffPath, config->authenticationKey);
+    const auto handoff = ShipLua::WorldHandoffCodec::ReadFile(config->handoffPath, config->authenticationKey);
     if (!handoff.isOk()) {
         SPDLOG_ERROR("Link-Span rejeitou o handoff OoT: {}", handoff.message);
         return;
@@ -345,8 +340,7 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
 int LuaPlayerJump(lua_State* state) {
     PlayState* play = gPlayState;
     Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
-    if (player == nullptr || (player->stateFlags1 & PLAYER_STATE1_DEAD) != 0 ||
-        (player->actor.bgCheckFlags & 1) == 0) {
+    if (player == nullptr || (player->stateFlags1 & PLAYER_STATE1_DEAD) != 0 || (player->actor.bgCheckFlags & 1) == 0) {
         lua_pushboolean(state, 0);
         return 1;
     }
@@ -358,16 +352,14 @@ int LuaPlayerJump(lua_State* state) {
 int LuaSpawnDog(lua_State* state) {
     PlayState* play = gPlayState;
     Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
-    if (player == nullptr ||
-        (play->sceneNum != SCENE_MARKET_DAY && play->sceneNum != SCENE_MARKET_NIGHT) ||
+    if (player == nullptr || (play->sceneNum != SCENE_MARKET_DAY && play->sceneNum != SCENE_MARKET_NIGHT) ||
         Object_GetIndex(&play->objectCtx, OBJECT_DOG) < 0) {
         lua_pushboolean(state, 0);
         return 1;
     }
-    Actor* dog = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_DOG,
-                             player->actor.world.pos.x, player->actor.world.pos.y,
-                             player->actor.world.pos.z, 0, player->actor.shape.rot.y,
-                             0, static_cast<s16>(0x8000), true);
+    Actor* dog =
+        Actor_Spawn(&play->actorCtx, play, ACTOR_EN_DOG, player->actor.world.pos.x, player->actor.world.pos.y,
+                    player->actor.world.pos.z, 0, player->actor.shape.rot.y, 0, static_cast<s16>(0x8000), true);
     lua_pushboolean(state, dog != nullptr);
     return 1;
 }

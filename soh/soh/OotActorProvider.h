@@ -43,10 +43,9 @@ class OotActorProvider final : public ShipLua::ActorProvider {
     ShipLua::Result<void> RegisterCapabilities(ShipLua::CapabilityRegistry& registry) const;
 
     ShipLua::Result<ShipLua::Handle> Spawn(const std::string& ownerModId,
-                                          const ShipLua::ActorSpawnRequest& request) override;
+                                           const ShipLua::ActorSpawnRequest& request) override;
     ShipLua::Result<void> Destroy(const std::string& ownerModId, const ShipLua::Handle& handle) override;
-    ShipLua::Result<bool> Exists(const std::string& ownerModId,
-                                const ShipLua::Handle& handle) const override;
+    ShipLua::Result<bool> Exists(const std::string& ownerModId, const ShipLua::Handle& handle) const override;
 
     // Called by the host before the native Actor memory is released.
     ShipLua::Result<bool> OnNativeActorDestroyed(void* actor);
