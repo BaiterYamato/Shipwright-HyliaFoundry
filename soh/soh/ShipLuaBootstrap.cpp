@@ -23,6 +23,9 @@
 #include <spdlog/spdlog.h>
 
 #include <ship/Context.h>
+#include <ship/resource/ResourceManager.h>
+#include <ship/resource/archive/ArchiveManager.h>
+#include <ship/resource/archive/O2rArchive.h>
 #include <shiplua/generated/ApiBindings.h>
 #include <shiplua/host/ModHost.h>
 #include <shiplua/runtime/LuaRuntime.h>
@@ -289,6 +292,12 @@ std::shared_ptr<OotActorProvider> CreateActorProvider() {
                 return nullptr;
             }
         }
+        if (spawned != nullptr && definition.key == "oot.mm_elegy_statue") {
+            if (!ShipLuaPuppet_AttachStatue(spawned)) {
+                Actor_Kill(spawned);
+                return nullptr;
+            }
+        }
         return spawned;
     };
     hooks.kill = [](void* actor) {
@@ -302,6 +311,8 @@ std::shared_ptr<OotActorProvider> CreateActorProvider() {
         // Host: En_Item00 (gameplay_keep, sempre carregado); update/draw são
         // substituídos por ShipLuaPuppet_Attach logo após o spawn.
         { "oot.link_child_puppet", ACTOR_EN_ITEM00, OBJECT_GAMEPLAY_KEEP, 0 },
+        // Estátua da Elegia do MM: assets transplantados via mm-elegy-assets.o2r.
+        { "oot.mm_elegy_statue", ACTOR_EN_ITEM00, OBJECT_GAMEPLAY_KEEP, 0 },
     };
     return std::make_shared<OotActorProvider>(std::move(allowlist), std::move(hooks), CreateLogger(), ACTOR_PLAYER);
 }
@@ -420,6 +431,120 @@ void InstallOotApi(lua_State* state) {
     lua_pop(state, 1);
 }
 
+// Prefixo de namespace dos assets do MM dentro do OOT: todo o mm.o2r fica
+// endereçável como "mm/<caminho original>".
+constexpr const char* kMmNamespace = "mm/";
+
+// Archive que lê DIRETO do mm.o2r da instalação do MM, sem copiar nada:
+// - toda entrada é exposta com o prefixo "mm/" (100% do arquivo, sem colisão);
+// - entradas cujo caminho original NÃO existe no OOT também ganham alias no
+//   hash original, para as referências internas dos resources (DL→textura
+//   etc., gravadas por hash do caminho sem prefixo) resolverem sozinhas.
+// Só as ~5% de entradas que colidem com caminhos do OOT ficam sem alias.
+class MmCrossWorldArchive final : public Ship::Archive {
+  public:
+    MmCrossWorldArchive(const std::string& path, Ship::ArchiveManager* manager)
+        : Ship::Archive(path), mInner(std::make_shared<Ship::O2rArchive>(path)), mManager(manager) {
+    }
+
+    bool Open() override {
+        mInner->Load();
+        if (!mInner->IsLoaded()) {
+            return false;
+        }
+        std::size_t aliased = 0;
+        std::size_t blocked = 0;
+        const auto files = mInner->ListFiles();
+        for (const auto& [hash, filePath] : *files) {
+            IndexFile(kMmNamespace + filePath);
+            if (mManager != nullptr && !mManager->HasFile(filePath)) {
+                IndexFile(filePath);
+                ++aliased;
+            } else {
+                ++blocked;
+            }
+        }
+        mOwnIndex = ListFiles();
+        SPDLOG_INFO("ShipLua exp\xC3\xB4s {} assets do MM sob 'mm/' ({} com alias direto, {} bloqueados por "
+                    "colis\xC3\xA3o de caminho)",
+                    files->size(), aliased, blocked);
+        return !files->empty();
+    }
+
+    bool Close() override {
+        mOwnIndex.reset();
+        mInner->Unload();
+        return true;
+    }
+
+    std::shared_ptr<Ship::File> LoadFile(const std::string& filePath) override {
+        if (!HasFile(filePath)) {
+            return nullptr;
+        }
+        if (filePath.rfind(kMmNamespace, 0) == 0) {
+            return mInner->LoadFile(filePath.substr(std::char_traits<char>::length(kMmNamespace)));
+        }
+        return mInner->LoadFile(filePath);
+    }
+
+    std::shared_ptr<Ship::File> LoadFile(uint64_t hash) override {
+        if (mOwnIndex == nullptr) {
+            return nullptr;
+        }
+        const auto it = mOwnIndex->find(hash);
+        if (it == mOwnIndex->end()) {
+            return nullptr;
+        }
+        return LoadFile(it->second);
+    }
+
+    bool WriteFile(const std::string&, const std::vector<uint8_t>&) override {
+        return false;
+    }
+
+  private:
+    std::shared_ptr<Ship::O2rArchive> mInner;
+    Ship::ArchiveManager* mManager = nullptr;
+    std::shared_ptr<std::unordered_map<uint64_t, std::string>> mOwnIndex;
+};
+
+// Monta em runtime o mm.o2r da instalação irmã do MM (../MM por convenção,
+// override via SHIPLUA_MM_ROOT). Vice-versa equivalente vive no host MM.
+void MountCrossWorldArchives() {
+    Ship::Context* shipContext = Ship::Context::GetRawInstance();
+    if (shipContext == nullptr || shipContext->GetResourceManager() == nullptr) {
+        return;
+    }
+    const auto archiveManager = shipContext->GetResourceManager()->GetArchiveManager();
+    if (archiveManager == nullptr) {
+        return;
+    }
+
+    std::filesystem::path siblingRoot;
+    if (const char* configured = std::getenv("SHIPLUA_MM_ROOT"); configured != nullptr && *configured != '\0') {
+        siblingRoot = configured;
+    } else {
+        std::error_code ec;
+        siblingRoot = std::filesystem::absolute(Ship::Context::GetAppDirectoryPath(""), ec);
+        siblingRoot = siblingRoot.parent_path() / "MM";
+    }
+
+    const std::filesystem::path mmArchive = siblingRoot / "mm.o2r";
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(mmArchive, ec)) {
+        SPDLOG_INFO("ShipLua: mm.o2r n\xC3\xA3o encontrado em '{}' — assets do MM indispon\xC3\xADveis no OOT",
+                    siblingRoot.string());
+        return;
+    }
+
+    if (archiveManager->AddArchive(std::make_shared<MmCrossWorldArchive>(mmArchive.string(), archiveManager.get())) !=
+        nullptr) {
+        SPDLOG_INFO("ShipLua montou o mm.o2r do MM em modo cross-world: {}", mmArchive.string());
+    } else {
+        SPDLOG_WARN("ShipLua n\xC3\xA3o conseguiu montar '{}'", mmArchive.string());
+    }
+}
+
 void LoadModsAndDispatchReady(const ShipLua::LuaApiHostContext& context) {
     Ship::Context* shipContext = Ship::Context::GetRawInstance();
     if (shipContext == nullptr) {
@@ -530,6 +655,7 @@ void Initialize() {
     ShipLua::LuaApiHostContext context = std::move(*contextResult.value);
     SPDLOG_INFO("ShipLua inicializando para {} {} (commit {})", context.gameId, context.hostVersion, gGitCommitHash);
     gModHost = std::make_unique<ShipLua::ModHost>(context, CreateLogger());
+    MountCrossWorldArchives();
     LoadModsAndDispatchReady(context);
     SPDLOG_INFO("ShipLua inicializado");
 }

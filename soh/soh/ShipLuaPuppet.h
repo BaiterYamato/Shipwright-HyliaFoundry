@@ -11,6 +11,10 @@ namespace ShipLuaHost {
 // e prepara esqueleto + buffers do objeto do child Link. Main-thread only.
 bool ShipLuaPuppet_Attach(void* actor, void* play);
 
+// Variante estática: desenha uma display list resolvida por caminho __OTR__
+// (ex.: a estátua da Elegia transplantada do mm.o2r). Main-thread only.
+bool ShipLuaPuppet_AttachStatue(void* actor);
+
 // Libera o estado do puppet quando o ator morre ou a cena é destruída.
 void ShipLuaPuppet_HandleActorDestroy(void* actor);
 void ShipLuaPuppet_Reset();

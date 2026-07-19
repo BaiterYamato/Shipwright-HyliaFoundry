@@ -19,6 +19,7 @@ extern PlayState* gPlayState;
 extern FlexSkeletonHeader* gPlayerSkelHeaders[];
 extern s16 gLinkObjectIds[];
 s32 Player_OverrideLimbDrawPause(PlayState* play, s32 limbIndex, Gfx** dList, Vec3f* pos, Vec3s* rot, void* arg);
+void Gfx_DrawDListOpa(PlayState* play, Gfx* dlist);
 }
 
 namespace ShipLuaHost {
@@ -29,11 +30,18 @@ namespace {
 constexpr uintptr_t kKeepOffset = 0x3800;
 constexpr uintptr_t kLinkObjectOffset = 0x8800;
 constexpr float kChildLinkScale = 0.0064f;
+// Escala default de ator no MM (Actor_Init), usada pela estátua da Elegia.
+constexpr float kMmElegyStatueScale = 0.01f;
+
+// Asset lido em runtime de dentro do mm.o2r da instalação do MM, via o
+// namespace cross-world "mm/" montado pelo bootstrap.
+static const ALIGN_ASSET(2) char sElegyShellHumanDL[] = "__OTR__mm/objects/gameplay_keep/gElegyShellHumanDL";
 
 struct PuppetState {
     std::unique_ptr<uint8_t[]> buffer;
     SkelAnime skelAnime{};
     bool ready = false;
+    bool isStatue = false;
 };
 
 std::map<Actor*, std::unique_ptr<PuppetState>> sPuppets;
@@ -56,9 +64,19 @@ static void ShipLuaPuppetUpdate(Actor* actor, PlayState* play) {
     if (state == nullptr || !state->ready) {
         return;
     }
-    LinkAnimation_Update(play, &state->skelAnime);
+    if (!state->isStatue) {
+        LinkAnimation_Update(play, &state->skelAnime);
+    }
     actor->focus.pos = actor->world.pos;
     actor->focus.pos.y += 40.0f;
+}
+
+static void ShipLuaStatueDraw(Actor* actor, PlayState* play) {
+    ShipLuaHost::PuppetState* state = ShipLuaHost::FindPuppet(actor);
+    if (state == nullptr || !state->ready) {
+        return;
+    }
+    Gfx_DrawDListOpa(play, (Gfx*)ShipLuaHost::sElegyShellHumanDL);
 }
 
 static void ShipLuaPuppetDraw(Actor* actor, PlayState* play) {
@@ -128,6 +146,24 @@ bool ShipLuaPuppet_Attach(void* actorPtr, void* playPtr) {
 
     sPuppets[actor] = std::move(state);
     SPDLOG_INFO("ShipLua puppet child-link anexado ao ator {}", static_cast<void*>(actor));
+    return true;
+}
+
+bool ShipLuaPuppet_AttachStatue(void* actorPtr) {
+    Actor* actor = static_cast<Actor*>(actorPtr);
+    if (actor == nullptr) {
+        return false;
+    }
+    auto state = std::make_unique<PuppetState>();
+    state->isStatue = true;
+    state->ready = true;
+
+    Actor_SetScale(actor, kMmElegyStatueScale);
+    actor->update = ShipLuaPuppetUpdate;
+    actor->draw = ShipLuaStatueDraw;
+
+    sPuppets[actor] = std::move(state);
+    SPDLOG_INFO("ShipLua estátua da Elegia (MM) anexada ao ator {}", static_cast<void*>(actor));
     return true;
 }
 
