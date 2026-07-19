@@ -457,7 +457,13 @@ class MmCrossWorldArchive final : public Ship::Archive {
         const auto files = mInner->ListFiles();
         for (const auto& [hash, filePath] : *files) {
             IndexFile(kMmNamespace + filePath);
-            if (mManager != nullptr && !mManager->HasFile(filePath)) {
+            // Alias no hash original apenas para dados de render: sistemas como
+            // o de áudio do SoH ENUMERAM o índice global (audio/*) e quebram ao
+            // encontrar entradas do MM em formato próprio. objects/ e textures/
+            // só são resolvidos por referência direta (hash/caminho), nunca por
+            // varredura — seguros de aliasar.
+            const bool renderData = filePath.rfind("objects/", 0) == 0 || filePath.rfind("textures/", 0) == 0;
+            if (renderData && mManager != nullptr && !mManager->HasFile(filePath)) {
                 IndexFile(filePath);
                 ++aliased;
             } else {
