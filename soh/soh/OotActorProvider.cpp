@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <exception>
 #include <utility>
 
@@ -34,7 +35,7 @@ ShipLua::CapabilityProvider MakeOffer(const ShipLua::SemVersion& providerVersion
 OotActorProvider::OotActorProvider(std::vector<OotActorDefinition> allowlist, OotActorProviderHooks hooks,
                                    ShipLua::Logger logger, std::int16_t forbiddenActorId, ShipLua::HandleLimits limits)
     : mHooks(std::move(hooks)), mLogger(std::move(logger)), mHandles(1, limits),
-      mGameThread(std::this_thread::get_id()) {
+      mGameThread(std::this_thread::get_id()), mForbiddenActorId(forbiddenActorId) {
     for (OotActorDefinition& definition : allowlist) {
         if (!IsSafeKey(definition.key) || definition.actorId < 0 || definition.objectId < 0 ||
             definition.actorId == forbiddenActorId) {
@@ -98,29 +99,67 @@ ShipLua::Result<ShipLua::Handle> OotActorProvider::Spawn(const std::string& owne
         return ShipLua::Result<ShipLua::Handle>::err(ShipLua::ErrorCode::InvalidArgument,
                                                      "actor transform must be finite");
     }
+    // Nomes curados vêm da allowlist; qualquer outro ator é acessível pelo id
+    // genérico "oot.id.<actorId>[.<params>]" (decimal ou 0x-hex). O engine já
+    // recusa spawns sem o objeto carregado (Actor_Spawn retorna NULL) — só o
+    // player fica proibido, porque um segundo Player corrompe o jogo.
+    OotActorDefinition resolved;
     const auto definition = mAllowlist.find(request.actor);
-    if (definition == mAllowlist.end()) {
-        return ShipLua::Result<ShipLua::Handle>::err(
-            ShipLua::ErrorCode::Unsupported, "OoT actor '" + request.actor + "' is not in the native allowlist");
+    if (definition != mAllowlist.end()) {
+        resolved = definition->second;
+    } else {
+        auto parseNumber = [](const std::string& text, long& out) {
+            if (text.empty()) {
+                return false;
+            }
+            char* end = nullptr;
+            out = std::strtol(text.c_str(), &end, 0);
+            return end != nullptr && *end == '\0';
+        };
+        constexpr const char* kGenericPrefix = "oot.id.";
+        if (request.actor.rfind(kGenericPrefix, 0) != 0) {
+            return ShipLua::Result<ShipLua::Handle>::err(
+                ShipLua::ErrorCode::Unsupported, "OoT actor '" + request.actor +
+                                                     "' desconhecido — use um nome do catálogo ou oot.id.<actorId>");
+        }
+        const std::string payload = request.actor.substr(std::char_traits<char>::length(kGenericPrefix));
+        const std::size_t dot = payload.find('.');
+        long actorId = 0;
+        long params = 0;
+        if (!parseNumber(payload.substr(0, dot), actorId) ||
+            (dot != std::string::npos && !parseNumber(payload.substr(dot + 1), params))) {
+            return ShipLua::Result<ShipLua::Handle>::err(ShipLua::ErrorCode::InvalidArgument,
+                                                         "formato inválido: use oot.id.<actorId>[.<params>]");
+        }
+        if (actorId <= 0 || actorId > 0x7FFF || actorId == mForbiddenActorId) {
+            return ShipLua::Result<ShipLua::Handle>::err(ShipLua::ErrorCode::InvalidArgument,
+                                                         "actorId fora da faixa permitida");
+        }
+        resolved.key = request.actor;
+        resolved.actorId = static_cast<std::int16_t>(actorId);
+        resolved.objectId = -1; // engine valida o objeto no Actor_Spawn
+        resolved.params = static_cast<std::int16_t>(params);
     }
     if (!mHooks.objectReady || !mHooks.spawn || !mHooks.kill) {
         return ShipLua::Result<ShipLua::Handle>::err(ShipLua::ErrorCode::InvalidState,
                                                      "OoT actor provider hooks are incomplete");
     }
 
-    bool objectReady = false;
-    try {
-        objectReady = mHooks.objectReady(definition->second.objectId);
-    } catch (const std::exception& error) {
-        return ShipLua::Result<ShipLua::Handle>::err(
-            ShipLua::ErrorCode::HostFailure, "OoT object dependency check failed: " + std::string(error.what()));
-    } catch (...) {
-        return ShipLua::Result<ShipLua::Handle>::err(ShipLua::ErrorCode::HostFailure,
-                                                     "OoT object dependency check failed");
-    }
-    if (!objectReady) {
-        return ShipLua::Result<ShipLua::Handle>::err(
-            ShipLua::ErrorCode::InvalidState, "required OoT object is not loaded for actor '" + request.actor + "'");
+    if (resolved.objectId >= 0) {
+        bool objectReady = false;
+        try {
+            objectReady = mHooks.objectReady(resolved.objectId);
+        } catch (const std::exception& error) {
+            return ShipLua::Result<ShipLua::Handle>::err(
+                ShipLua::ErrorCode::HostFailure, "OoT object dependency check failed: " + std::string(error.what()));
+        } catch (...) {
+            return ShipLua::Result<ShipLua::Handle>::err(ShipLua::ErrorCode::HostFailure,
+                                                         "OoT object dependency check failed");
+        }
+        if (!objectReady) {
+            return ShipLua::Result<ShipLua::Handle>::err(
+                ShipLua::ErrorCode::InvalidState, "required OoT object is not loaded for actor '" + request.actor + "'");
+        }
     }
 
     auto handle = mHandles.Create(ShipLua::HandleKind::Actor, ownerModId);
@@ -130,7 +169,7 @@ ShipLua::Result<ShipLua::Handle> OotActorProvider::Spawn(const std::string& owne
 
     void* nativeActor = nullptr;
     try {
-        nativeActor = mHooks.spawn(definition->second, request);
+        nativeActor = mHooks.spawn(resolved, request);
     } catch (const std::exception& error) {
         (void)mHandles.Destroy(*handle.value, ownerModId);
         return ShipLua::Result<ShipLua::Handle>::err(ShipLua::ErrorCode::HostFailure,

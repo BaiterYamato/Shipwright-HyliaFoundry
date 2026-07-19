@@ -79,6 +79,7 @@ class OotActorProvider final : public ShipLua::ActorProvider {
     bool SameHandle(const ActorRecord& record, const ShipLua::Handle& handle) const;
 
     std::map<std::string, OotActorDefinition> mAllowlist;
+    std::int16_t mForbiddenActorId = 0;
     OotActorProviderHooks mHooks;
     ShipLua::Logger mLogger;
     ShipLua::HandleRegistry mHandles;
