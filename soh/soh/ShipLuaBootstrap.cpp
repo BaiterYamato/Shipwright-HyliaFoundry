@@ -22,7 +22,10 @@
 
 #include <spdlog/spdlog.h>
 
+#include <cstring>
+
 #include <ship/Context.h>
+#include <ship/resource/File.h>
 #include <ship/resource/ResourceManager.h>
 #include <ship/resource/archive/ArchiveManager.h>
 #include <ship/resource/archive/O2rArchive.h>
@@ -486,10 +489,65 @@ class MmCrossWorldArchive final : public Ship::Archive {
         if (!HasFile(filePath)) {
             return nullptr;
         }
+        std::shared_ptr<Ship::File> file;
         if (filePath.rfind(kMmNamespace, 0) == 0) {
-            return mInner->LoadFile(filePath.substr(std::char_traits<char>::length(kMmNamespace)));
+            file = mInner->LoadFile(filePath.substr(std::char_traits<char>::length(kMmNamespace)));
+        } else {
+            file = mInner->LoadFile(filePath);
         }
-        return mInner->LoadFile(filePath);
+        SanitizeMmDisplayList(file);
+        return file;
+    }
+
+    // Display lists do 2ship contêm comandos fora do dialeto do SoH:
+    // G_DL_INDEX (0x3D) salta para a tabela de setup-DLs pela convenção do
+    // 2ship (segmento inexistente aqui — o salto cairia em lixo e derruba o
+    // interpretador), e 0x43+ têm numeração divergente entre os dois LUS.
+    // Neutraliza/remapeia no load; os comandos de material inline da própria
+    // DL permanecem, e o host já aplica o setup do OOT antes do draw.
+    static void SanitizeMmDisplayList(const std::shared_ptr<Ship::File>& file) {
+        if (file == nullptr || file->Buffer == nullptr || file->Buffer->size() < 0x48) {
+            return;
+        }
+        std::vector<char>& bytes = *file->Buffer;
+        if (std::memcmp(bytes.data() + 4, "TLDO", 4) != 0) {
+            return;
+        }
+        for (std::size_t i = 0x40; i + 8 <= bytes.size();) {
+            const uint8_t opcode = static_cast<uint8_t>(bytes[i + 3]);
+            std::size_t advance = 8;
+            switch (opcode) {
+                case 0x20: // SETTIMG_OTR_HASH
+                case 0x24: // VTX_OTR_FILEPATH
+                case 0x25: // SETTIMG_OTR_FILEPATH
+                case 0x27: // DL_OTR_FILEPATH
+                case 0x29: // MTX_OTR_FILEPATH
+                case 0x31: // DL_OTR_HASH
+                case 0x32: // VTX_OTR_HASH
+                case 0x33: // MARKER
+                case 0x35: // BRANCH_Z_OTR
+                case 0x36: // MTX_OTR
+                case 0x42: // MOVEMEM_HASH
+                    advance = 16;
+                    break;
+                case 0x3D: // G_DL_INDEX (convenção 2ship) — neutraliza
+                case 0x43: // G_LOAD_SHADER do MM (inexistente no SoH) — neutraliza
+                    std::memset(bytes.data() + i, 0, 8);
+                    break;
+                case 0x44: // SETTILESIZE_INTERP: MM 0x44 → SoH 0x45
+                    bytes[i + 3] = 0x45;
+                    break;
+                case 0x45: // SETTARGETINTERPINDEX: MM 0x45 → SoH 0x46
+                    bytes[i + 3] = 0x46;
+                    break;
+                default:
+                    break;
+            }
+            i += advance;
+            if (opcode == 0xDF) { // G_ENDDL
+                break;
+            }
+        }
     }
 
     std::shared_ptr<Ship::File> LoadFile(uint64_t hash) override {
