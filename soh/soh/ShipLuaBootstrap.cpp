@@ -448,8 +448,8 @@ class MmCrossWorldArchive final : public Ship::Archive {
     }
 
     bool Open() override {
-        mInner->Load();
-        if (!mInner->IsLoaded()) {
+        if (!mInner->Open()) {
+            SPDLOG_WARN("ShipLua n\xC3\xA3o abriu o archive interno '{}'", GetPath());
             return false;
         }
         std::size_t aliased = 0;
@@ -473,8 +473,7 @@ class MmCrossWorldArchive final : public Ship::Archive {
 
     bool Close() override {
         mOwnIndex.reset();
-        mInner->Unload();
-        return true;
+        return mInner->Close();
     }
 
     std::shared_ptr<Ship::File> LoadFile(const std::string& filePath) override {
@@ -537,8 +536,9 @@ void MountCrossWorldArchives() {
         return;
     }
 
-    if (archiveManager->AddArchive(std::make_shared<MmCrossWorldArchive>(mmArchive.string(), archiveManager.get())) !=
-        nullptr) {
+    const auto crossWorld = std::make_shared<MmCrossWorldArchive>(mmArchive.string(), archiveManager.get());
+    crossWorld->Load();
+    if (crossWorld->IsLoaded() && archiveManager->AddArchive(crossWorld) != nullptr) {
         SPDLOG_INFO("ShipLua montou o mm.o2r do MM em modo cross-world: {}", mmArchive.string());
     } else {
         SPDLOG_WARN("ShipLua n\xC3\xA3o conseguiu montar '{}'", mmArchive.string());
