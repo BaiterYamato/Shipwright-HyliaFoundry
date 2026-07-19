@@ -2,6 +2,7 @@
 #include "OotActorProvider.h"
 #include "OotHotkeyRegistry.h"
 #include "OotWorldAdapter.h"
+#include "ShipLuaPuppet.h"
 
 #include <filesystem>
 #include <algorithm>
@@ -264,10 +265,31 @@ std::shared_ptr<OotActorProvider> CreateActorProvider() {
         if (gPlayState == nullptr) {
             return nullptr;
         }
-        return Actor_Spawn(&gPlayState->actorCtx, gPlayState, definition.actorId, static_cast<float>(request.x),
-                           static_cast<float>(request.y), static_cast<float>(request.z),
-                           DegreesToBinang(request.rotationX), DegreesToBinang(request.rotationY),
-                           DegreesToBinang(request.rotationZ), definition.params);
+        float x = static_cast<float>(request.x);
+        float y = static_cast<float>(request.y);
+        float z = static_cast<float>(request.z);
+        std::int16_t rotationY = DegreesToBinang(request.rotationY);
+        // Posição (0,0,0) significa "na frente do player": os mods ainda não
+        // têm ship.transform.relative_to_player (plan-sdk §8.4).
+        if (request.x == 0 && request.y == 0 && request.z == 0) {
+            if (Player* player = GET_PLAYER(gPlayState); player != nullptr) {
+                const float forward = 60.0f;
+                x = player->actor.world.pos.x + Math_SinS(player->actor.shape.rot.y) * forward;
+                y = player->actor.world.pos.y;
+                z = player->actor.world.pos.z + Math_CosS(player->actor.shape.rot.y) * forward;
+                rotationY = static_cast<std::int16_t>(player->actor.shape.rot.y + 0x8000);
+            }
+        }
+        Actor* spawned = Actor_Spawn(&gPlayState->actorCtx, gPlayState, definition.actorId, x, y, z,
+                                     DegreesToBinang(request.rotationX), rotationY,
+                                     DegreesToBinang(request.rotationZ), definition.params);
+        if (spawned != nullptr && definition.key == "oot.link_child_puppet") {
+            if (!ShipLuaPuppet_Attach(spawned, gPlayState)) {
+                Actor_Kill(spawned);
+                return nullptr;
+            }
+        }
+        return spawned;
     };
     hooks.kill = [](void* actor) {
         if (actor != nullptr) {
@@ -277,6 +299,9 @@ std::shared_ptr<OotActorProvider> CreateActorProvider() {
     std::vector<OotActorDefinition> allowlist{
         { "oot.en_dog", ACTOR_EN_DOG, OBJECT_DOG, static_cast<std::int16_t>(0x8000) },
         { "oot.en_torch2", ACTOR_EN_TORCH2, OBJECT_TORCH2, 0 },
+        // Host: En_Item00 (gameplay_keep, sempre carregado); update/draw são
+        // substituídos por ShipLuaPuppet_Attach logo após o spawn.
+        { "oot.link_child_puppet", ACTOR_EN_ITEM00, OBJECT_GAMEPLAY_KEEP, 0 },
     };
     return std::make_shared<OotActorProvider>(std::move(allowlist), std::move(hooks), CreateLogger(), ACTOR_PLAYER);
 }
@@ -477,6 +502,7 @@ void Initialize() {
     gLoadGameHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnLoadGame>(
         [](int32_t) { TryConsumeWorldHandoff(); });
     gActorDestroyHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnActorDestroy>([](void* actor) {
+        ShipLuaPuppet_HandleActorDestroy(actor);
         if (gActorProvider == nullptr) {
             return;
         }
@@ -486,6 +512,7 @@ void Initialize() {
         }
     });
     gPlayDestroyHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayDestroy>([]() {
+        ShipLuaPuppet_Reset();
         if (gActorProvider == nullptr) {
             return;
         }
