@@ -56,6 +56,8 @@ std::shared_ptr<ShipLua::CapabilityRegistry> gCapabilityRegistry;
 std::shared_ptr<OotHotkeyRegistry> gHotkeys;
 std::shared_ptr<OotWorldAdapter> gWorldAdapter;
 HOOK_ID gLoadGameHook = 0;
+HOOK_ID gImportTickHook = 0;
+std::optional<ShipLua::WorldHandoff> gPendingHandoff;
 HOOK_ID gActorDestroyHook = 0;
 HOOK_ID gPlayDestroyHook = 0;
 
@@ -189,20 +191,56 @@ void TryConsumeWorldHandoff() {
         SPDLOG_ERROR("Link-Span rejeitou um handoff destinado a outra sessão ou jogo");
         return;
     }
-    const auto prepared = gWorldAdapter->PrepareImport(handoff.value->player, handoff.value->destination);
+    // Nada é aplicado aqui: o hook de load também dispara fora de um jogo
+    // carregado (intro/arquivo novo), e escrever o save + forçar entrance
+    // nesse ponto corrompe o estado. Guarda o handoff — e o arquivo em disco —
+    // até um frame realmente jogável.
+    gPendingHandoff = *handoff.value;
+    SPDLOG_INFO("Link-Span recebeu um handoff para OoT ({}) — aguardando um save carregado",
+                handoff.value->destination.id);
+}
+
+// Só importa com um jogo de verdade rodando: PlayState ativo, save com vida
+// (arquivo carregado, não a intro) e nenhuma transição em curso.
+bool WorldImportIsSafe() {
+    if (gPlayState == nullptr) {
+        return false;
+    }
+    if (gSaveContext.healthCapacity <= 0) {
+        return false;
+    }
+    return gPlayState->transitionTrigger == TRANS_TRIGGER_OFF;
+}
+
+void TickWorldImport() {
+    if (!gPendingHandoff.has_value() || gWorldAdapter == nullptr || !WorldImportIsSafe()) {
+        return;
+    }
+    const auto config = GetBridgeConfig();
+    if (!config.has_value()) {
+        gPendingHandoff.reset();
+        return;
+    }
+
+    const ShipLua::WorldHandoff handoff = *gPendingHandoff;
+    const auto prepared = gWorldAdapter->PrepareImport(handoff.player, handoff.destination);
     if (!prepared.isOk()) {
+        gPendingHandoff.reset();
         SPDLOG_ERROR("Link-Span não preparou a importação OoT: {}", prepared.message);
         return;
     }
     const auto committed = gWorldAdapter->CommitImport();
     if (!committed.isOk()) {
         gWorldAdapter->AbortImport();
+        gPendingHandoff.reset();
         SPDLOG_ERROR("Link-Span não confirmou a importação OoT: {}", committed.message);
         return;
     }
+    // Só agora o handoff pode sumir do disco: a viagem foi mesmo aplicada.
+    gPendingHandoff.reset();
     std::error_code error;
     std::filesystem::remove(config->handoffPath, error);
-    SPDLOG_INFO("Link-Span importou o estado compartilhado em OoT ({})", handoff.value->destination.id);
+    SPDLOG_INFO("Link-Span importou o estado compartilhado em OoT ({})", handoff.destination.id);
 }
 
 #ifdef _WIN32
@@ -721,6 +759,8 @@ void Initialize() {
     gWorldAdapter = std::make_shared<OotWorldAdapter>(std::move(*catalog.value));
     gLoadGameHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnLoadGame>(
         [](int32_t) { TryConsumeWorldHandoff(); });
+    gImportTickHook =
+        GameInteractor::Instance->RegisterGameHook<GameInteractor::OnGameFrameUpdate>([]() { TickWorldImport(); });
     gActorDestroyHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnActorDestroy>([](void* actor) {
         ShipLuaPuppet_HandleActorDestroy(actor);
         if (gActorProvider == nullptr) {
@@ -771,6 +811,11 @@ void Shutdown() {
         GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnLoadGame>(gLoadGameHook);
         gLoadGameHook = 0;
     }
+    if (gImportTickHook != 0) {
+        GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnGameFrameUpdate>(gImportTickHook);
+        gImportTickHook = 0;
+    }
+    gPendingHandoff.reset();
     if (gActorDestroyHook != 0) {
         GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnActorDestroy>(gActorDestroyHook);
         gActorDestroyHook = 0;
