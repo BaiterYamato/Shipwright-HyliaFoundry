@@ -440,6 +440,7 @@ int LuaPlayerJump(lua_State* state) {
 // o valor anterior do enhancement é restaurado.
 bool gBunnyHoodForced = false;
 int gBunnyHoodPreviousMode = BUNNY_HOOD_VANILLA;
+int gBunnyHoodPreviousPersistent = 0;
 
 int LuaSetBunnyHood(lua_State* state) {
     const bool equip = lua_toboolean(state, 1) != 0;
@@ -454,17 +455,25 @@ int LuaSetBunnyHood(lua_State* state) {
     if (equip) {
         if (!gBunnyHoodForced) {
             gBunnyHoodPreviousMode = CVarGetInteger(CVAR_ENHANCEMENT("MMBunnyHood"), BUNNY_HOOD_VANILLA);
+            gBunnyHoodPreviousPersistent = CVarGetInteger(CVAR_ENHANCEMENT("PersistentMasks"), 0);
             gBunnyHoodForced = true;
         }
         CVarSetInteger(CVAR_ENHANCEMENT("MMBunnyHood"), BUNNY_HOOD_FAST_AND_JUMP);
+        // Sem PersistentMasks, Player_ProcessItemButtons zera currentMask no
+        // frame seguinte quando a máscara não está num botão C — e a Bunny
+        // Hood some antes de ser desenhada.
+        CVarSetInteger(CVAR_ENHANCEMENT("PersistentMasks"), 1);
         player->currentMask = PLAYER_MASK_BUNNY;
+        gSaveContext.ship.maskMemory = PLAYER_MASK_BUNNY;
         SPDLOG_INFO("ShipLua set_bunny_hood: Bunny Hood equipada com o comportamento de MM");
     } else {
         if (player->currentMask == PLAYER_MASK_BUNNY) {
             player->currentMask = PLAYER_MASK_NONE;
         }
+        gSaveContext.ship.maskMemory = PLAYER_MASK_NONE;
         if (gBunnyHoodForced) {
             CVarSetInteger(CVAR_ENHANCEMENT("MMBunnyHood"), gBunnyHoodPreviousMode);
+            CVarSetInteger(CVAR_ENHANCEMENT("PersistentMasks"), gBunnyHoodPreviousPersistent);
             gBunnyHoodForced = false;
         }
         SPDLOG_INFO("ShipLua set_bunny_hood: Bunny Hood removida");
