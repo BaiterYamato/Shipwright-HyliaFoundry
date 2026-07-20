@@ -36,6 +36,9 @@
 #include <shiplua/world/WorldHandoff.h>
 
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
+#include "soh/Enhancements/enhancementTypes.h"
+#include "soh/cvar_prefixes.h"
+#include <libultraship/bridge.h>
 
 extern "C" {
 #include "functions.h"
@@ -381,7 +384,7 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
     ShipLua::LuaApiHostContext context;
     context.gameId = "oot";
     context.hostVersion = GetHostVersion();
-    context.capabilities = { "oot.player.jump", "oot.spawn_dog" };
+    context.capabilities = { "oot.player.jump", "oot.spawn_dog", "oot.player.bunny_hood" };
     context.hotkeys = gHotkeys;
     context.capabilityRegistry = gCapabilityRegistry;
     context.actors = gActorProvider;
@@ -390,6 +393,11 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
     registered = RegisterHostCapability("oot.spawn_dog", "Spawn the legacy OoT dog demo actor.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability("oot.player.bunny_hood",
+                                        "Equip the OoT Bunny Hood with Majora's Mask speed and jump behaviour.");
     if (!registered.isOk()) {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
@@ -422,6 +430,46 @@ int LuaPlayerJump(lua_State* state) {
         return 1;
     }
     player->actor.velocity.y = 6.34375f;
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+// ship.oot.player.set_bunny_hood(equipped): veste a Bunny Hood do OoT e liga
+// o comportamento de Majora's Mask (corrida mais rápida e pulo maior), que o
+// próprio host já implementa atrás do enhancement MMBunnyHood. Ao desequipar,
+// o valor anterior do enhancement é restaurado.
+bool gBunnyHoodForced = false;
+int gBunnyHoodPreviousMode = BUNNY_HOOD_VANILLA;
+
+int LuaSetBunnyHood(lua_State* state) {
+    const bool equip = lua_toboolean(state, 1) != 0;
+    PlayState* play = gPlayState;
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (player == nullptr || (player->stateFlags1 & PLAYER_STATE1_DEAD) != 0) {
+        SPDLOG_WARN("ShipLua set_bunny_hood: fora de gameplay");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    if (equip) {
+        if (!gBunnyHoodForced) {
+            gBunnyHoodPreviousMode = CVarGetInteger(CVAR_ENHANCEMENT("MMBunnyHood"), BUNNY_HOOD_VANILLA);
+            gBunnyHoodForced = true;
+        }
+        CVarSetInteger(CVAR_ENHANCEMENT("MMBunnyHood"), BUNNY_HOOD_FAST_AND_JUMP);
+        player->currentMask = PLAYER_MASK_BUNNY;
+        SPDLOG_INFO("ShipLua set_bunny_hood: Bunny Hood equipada com o comportamento de MM");
+    } else {
+        if (player->currentMask == PLAYER_MASK_BUNNY) {
+            player->currentMask = PLAYER_MASK_NONE;
+        }
+        if (gBunnyHoodForced) {
+            CVarSetInteger(CVAR_ENHANCEMENT("MMBunnyHood"), gBunnyHoodPreviousMode);
+            gBunnyHoodForced = false;
+        }
+        SPDLOG_INFO("ShipLua set_bunny_hood: Bunny Hood removida");
+    }
+
     lua_pushboolean(state, 1);
     return 1;
 }
@@ -467,6 +515,8 @@ void InstallOotApi(lua_State* state) {
     }
     lua_pushcfunction(state, LuaPlayerJump);
     lua_setfield(state, -2, "jump");
+    lua_pushcfunction(state, LuaSetBunnyHood);
+    lua_setfield(state, -2, "set_bunny_hood");
     lua_setfield(state, ootTable, "player");
     lua_setfield(state, shipTable, "oot");
     lua_pop(state, 1);
