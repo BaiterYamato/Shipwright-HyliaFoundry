@@ -7,6 +7,7 @@
 #include <spdlog/spdlog.h>
 
 #include "soh/frame_interpolation.h"
+#include "soh/ResourceManagerHelpers.h"
 
 extern "C" {
 #include "functions.h"
@@ -152,6 +153,13 @@ bool ShipLuaPuppet_Attach(void* actorPtr, void* playPtr) {
 bool ShipLuaPuppet_AttachStatue(void* actorPtr) {
     Actor* actor = static_cast<Actor*>(actorPtr);
     if (actor == nullptr) {
+        return false;
+    }
+    // O draw desreferencia o resource da DL: sem o mm.o2r vizinho montado, o
+    // caminho mm/ não resolve e o interpretador quebra. Confira ANTES.
+    if (!ResourceMgr_FileExists(sElegyShellHumanDL)) {
+        SPDLOG_WARN("ShipLua: assets da estátua indisponíveis — o mm.o2r do MM não está montado "
+                    "(coloque as duas instalações lado a lado ou use SHIPLUA_MM_ROOT)");
         return false;
     }
     auto state = std::make_unique<PuppetState>();
