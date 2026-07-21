@@ -1054,7 +1054,7 @@ int LuaSetHeldItemModel(lua_State* state) {
 
 // PASSO 3 — ship.player.get/set: acesso a campos do player por nome, com
 // validação, em vez de uma função nativa dedicada por ideia.
-enum class FieldKind { Health, HealthCapacity, Magic, Rupees, PosX, PosY, PosZ, RotY, Speed };
+enum class FieldKind { Health, HealthCapacity, Magic, Rupees, PosX, PosY, PosZ, RotY, Speed, VelX, VelY, VelZ, OnGround };
 
 struct PlayerField {
     const char* name;
@@ -1064,7 +1064,7 @@ struct PlayerField {
     bool writable;
 };
 
-constexpr std::array<PlayerField, 9> kPlayerFields = { {
+constexpr std::array<PlayerField, 13> kPlayerFields = { {
     { "health", FieldKind::Health, 0, 20 * 16, true },
     { "health_capacity", FieldKind::HealthCapacity, 16, 20 * 16, true },
     { "magic", FieldKind::Magic, 0, 96, true },
@@ -1074,6 +1074,14 @@ constexpr std::array<PlayerField, 9> kPlayerFields = { {
     { "pos_z", FieldKind::PosZ, -100000, 100000, true },
     { "rot_y", FieldKind::RotY, -32768, 32767, true },
     { "speed", FieldKind::Speed, -50, 50, true },
+    // vel_x/y/z + on_ground: física real do actor (Vec3f velocity, bgCheckFlags
+    // bit 0). Faltava a componente vertical — "speed"/linearVelocity é só o
+    // escalar planar. Com isto + game.frame (já existente), um mod implementa
+    // pulo duplo/planador/air-dash inteiro em Lua, sem hook nativo dedicado.
+    { "vel_x", FieldKind::VelX, -100, 100, true },
+    { "vel_y", FieldKind::VelY, -100, 100, true },
+    { "vel_z", FieldKind::VelZ, -100, 100, true },
+    { "on_ground", FieldKind::OnGround, 0, 1, false },
 } };
 
 const PlayerField* FindPlayerField(const char* name) {
@@ -1102,6 +1110,14 @@ double ReadPlayerField(const PlayerField& field, Player* player) {
             return player->actor.shape.rot.y;
         case FieldKind::Speed:
             return player->linearVelocity;
+        case FieldKind::VelX:
+            return player->actor.velocity.x;
+        case FieldKind::VelY:
+            return player->actor.velocity.y;
+        case FieldKind::VelZ:
+            return player->actor.velocity.z;
+        case FieldKind::OnGround:
+            return (player->actor.bgCheckFlags & 1) ? 1.0 : 0.0;
     }
     return 0.0;
 }
@@ -1135,6 +1151,17 @@ void WritePlayerField(const PlayerField& field, Player* player, double value) {
         case FieldKind::Speed:
             player->linearVelocity = static_cast<float>(value);
             break;
+        case FieldKind::VelX:
+            player->actor.velocity.x = static_cast<float>(value);
+            break;
+        case FieldKind::VelY:
+            player->actor.velocity.y = static_cast<float>(value);
+            break;
+        case FieldKind::VelZ:
+            player->actor.velocity.z = static_cast<float>(value);
+            break;
+        case FieldKind::OnGround:
+            break; // somente leitura
     }
 }
 
