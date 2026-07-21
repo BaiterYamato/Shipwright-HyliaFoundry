@@ -85,6 +85,7 @@ HOOK_ID gImportTickHook = 0;
 std::optional<ShipLua::WorldHandoff> gPendingHandoff;
 HOOK_ID gActorDestroyHook = 0;
 HOOK_ID gPlayDestroyHook = 0;
+HOOK_ID gCustomBodyRestoreHook = 0;
 
 constexpr int kSwitchWorldExitCode = 73;
 
@@ -410,7 +411,7 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
                              "oot.player.mask",         "player.speed",       "player.fields",
                              "oot.player.attach_model", "mod.assets",         "oot.player.immunity",
                              "oot.player.weight",       "oot.player.roll",    "hooks.bridge",
-                             "oot.player.goron_body",   "oot.player.held_item_model" };
+                             "oot.player.custom_body",  "oot.player.held_item_model" };
     context.hotkeys = gHotkeys;
     context.capabilityRegistry = gCapabilityRegistry;
     context.actors = gActorProvider;
@@ -432,8 +433,9 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
     registered = RegisterHostCapability(
-        "oot.player.goron_body",
-        "Replace the player's visual body with MM's Goron skeleton, read live from the mm.o2r cross-world archive.");
+        "oot.player.custom_body",
+        "Replace the player's visual body with any mod-provided skeleton and named animations, surviving scene "
+        "changes automatically.");
     if (!registered.isOk()) {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
@@ -648,171 +650,315 @@ int LuaSetRollMode(lua_State* state) {
 }
 
 // ---------------------------------------------------------------------------
-// Corpo visual do Goron — v1. O bloqueio original era real: o esqueleto do
-// Goron do MM tem 25 limbs, os buffers do próprio Player são fixos para 22
-// (PLAYER_LIMB_MAX). A saída (achada minerando um fork de referência que já
-// resolveu isto em produção) é NÃO reaproveitar o skelAnime do Player: usar
-// um SkelAnime independente, inicializado com jointTable/morphTable NULL —
-// SkelAnime_InitLink então aloca do tamanho real do header (25), não de um
-// tamanho fixo. Para esconder o corpo vanilla enquanto o nosso desenha,
-// usamos PLAYER_STATE2_DISABLE_DRAW — uma flag vanilla já existente (o
-// balconista a usa para esconder o Link atrás do balcão), não invenção
-// nossa. O ator hospedeiro (En_Item00) segue a posição do player a cada
-// frame; seu próprio draw roda pelo Actor_Draw normal, então a matriz de
-// mundo já vem pronta — o mesmo padrão do puppet do Kafei/Rauru, só que
-// seguindo o player em vez de ficar parado.
+// Corpo visual customizado do player — v2, generalizada a partir da v1 (que
+// só sabia fazer Goron). O mecanismo inteiro já era genérico; só a API não
+// era. Nenhum nome de forma é conhecido pelo host: skeleton e animações são
+// caminhos de resource arbitrários que o MOD fornece via ship.oot.player.
+// set_body({skeleton=..., anims={nome=path,...}, default_anim=...}) — Zora,
+// Deku, um lobo (Wolfos/Wolf Link), ou qualquer skeleton compatível com
+// SkelAnime_InitLink cabem sem tocar em C++ de novo.
+//
+// O bloqueio original era real: skeletons com mais limbs que PLAYER_LIMB_MAX
+// (22) não cabem nos buffers fixos do Player. A saída (achada minerando um
+// fork de referência que já resolveu isto em produção) é NÃO reaproveitar o
+// skelAnime do Player: usar um SkelAnime independente, inicializado com
+// jointTable/morphTable NULL — SkelAnime_InitLink então aloca do tamanho real
+// do header, seja lá qual for. Para esconder o corpo vanilla enquanto o nosso
+// desenha, usamos PLAYER_STATE2_DISABLE_DRAW — flag vanilla já existente (o
+// balconista a usa para esconder o Link atrás do balcão), não invenção nossa.
+// O ator hospedeiro (En_Item00) segue a posição do player a cada frame; seu
+// próprio draw roda pelo Actor_Draw normal, então a matriz de mundo já vem
+// pronta — mesmo padrão do puppet do Kafei/Rauru, só que seguindo o player.
+//
+// Qual animação toca a cada frame é decidido pelo hook.oot.player.
+// body_anim_select (Transform): o mod recebe speed/on_ground e devolve o
+// NOME da animação (uma chave da tabela `anims` que ele mesmo definiu) — o
+// host não sabe o que "andar" ou "nadar" significa para a forma de cada mod.
+// Sem callback (ou resultado inválido), cai num fallback só quando o mod usa
+// as chaves convencionais "idle"/"walk"/"run" (compat com a v1 e o caminho
+// mais comum).
+//
 // Nota: "misc/link_animetion/*_Data" é o blob bruto de keyframes; o
 // LinkAnimationHeader de verdade (o que SkelAnime_InitLink/LinkAnimation_Change
 // esperam) é o símbolo SEM o sufixo _Data, em objects/gameplay_keep/. Usar o
 // _Data direto faz o parser ler a estrutura errada e crashar dentro do
 // próprio SkelAnime_InitLink (achado por um crash real, não suposição).
-static const ALIGN_ASSET(2) char sGoronBodySkel[] = "__OTR__mm/objects/object_link_goron/gLinkGoronSkel";
-static const ALIGN_ASSET(2) char sGoronBodyIdleAnim[] = "__OTR__mm/objects/gameplay_keep/gPlayerAnim_pg_wait";
-static const ALIGN_ASSET(2) char sGoronBodyWalkAnim[] =
-    "__OTR__mm/objects/gameplay_keep/gPlayerAnim_link_normal_walk_free";
-static const ALIGN_ASSET(2) char sGoronBodyRunAnim[] =
-    "__OTR__mm/objects/gameplay_keep/gPlayerAnim_link_normal_run_free";
+// Definida mais abaixo (seção "ponte de hooks") — declarada aqui porque
+// CustomBodyActorUpdate, logo abaixo, precisa dela antes dessa seção existir
+// no arquivo.
+std::optional<ShipLua::EventValue> DispatchHookTransform(const char* name, ShipLua::EventPayload payload);
 
-bool gGoronBodyActive = false;
-Actor* gGoronBodyActor = nullptr;
-SkelAnime gGoronBodySkelAnime{};
-int gGoronBodyAnimState = -1; // -1 = ainda não escolhido; 0=idle 1=walk 2=run
+struct CustomBodySpec {
+    std::string skeletonPath;
+    std::map<std::string, std::string> anims; // nome lógico (do mod) -> path
+    std::string defaultAnim;
+};
 
-void GoronBodyFreeSkelBuffers() {
-    if (gGoronBodySkelAnime.jointTable != nullptr) {
-        ZELDA_ARENA_FREE_DEBUG(gGoronBodySkelAnime.jointTable);
-        gGoronBodySkelAnime.jointTable = nullptr;
+bool gCustomBodyActive = false;
+Actor* gCustomBodyActor = nullptr;
+SkelAnime gCustomBodySkelAnime{};
+std::string gCustomBodyCurrentAnim;
+CustomBodySpec gCustomBodySpec;
+// true entre OnPlayDestroy e o próximo OnSceneInit quando o corpo estava
+// ativo na cena anterior — sinaliza para religar automaticamente na cena
+// nova, usando a spec já guardada em gCustomBodySpec (nunca limpa por troca
+// de cena, só pelo toggle manual).
+bool gCustomBodyPendingRestore = false;
+
+void CustomBodyFreeSkelBuffers() {
+    if (gCustomBodySkelAnime.jointTable != nullptr) {
+        ZELDA_ARENA_FREE_DEBUG(gCustomBodySkelAnime.jointTable);
+        gCustomBodySkelAnime.jointTable = nullptr;
     }
-    if (gGoronBodySkelAnime.morphTable != nullptr) {
-        ZELDA_ARENA_FREE_DEBUG(gGoronBodySkelAnime.morphTable);
-        gGoronBodySkelAnime.morphTable = nullptr;
+    if (gCustomBodySkelAnime.morphTable != nullptr) {
+        ZELDA_ARENA_FREE_DEBUG(gCustomBodySkelAnime.morphTable);
+        gCustomBodySkelAnime.morphTable = nullptr;
     }
 }
 
-// Desliga o corpo e destrói o ator hospedeiro se ainda existir. Chamado pelo
-// toggle e pela limpeza de cena — nunca deixa o player travado invisível.
-void GoronBodyDeactivate(PlayState* play) {
-    if (!gGoronBodyActive) {
-        return;
+// Desliga o corpo e destrói o ator hospedeiro se ainda existir. clearSpec
+// distingue o toggle manual (limpa tudo, inclusive a spec guardada) da
+// limpeza interna de troca de cena (mantém a spec para religar sozinho).
+void CustomBodyDeactivate(PlayState* play, bool clearSpec) {
+    if (gCustomBodyActive) {
+        Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+        if (player != nullptr) {
+            player->stateFlags2 &= ~PLAYER_STATE2_DISABLE_DRAW;
+        }
+        if (gCustomBodyActor != nullptr && play != nullptr) {
+            Actor_Kill(gCustomBodyActor);
+        }
     }
-    gGoronBodyActive = false;
-    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
-    if (player != nullptr) {
-        player->stateFlags2 &= ~PLAYER_STATE2_DISABLE_DRAW;
+    gCustomBodyActive = false;
+    gCustomBodyActor = nullptr;
+    CustomBodyFreeSkelBuffers();
+    gCustomBodyCurrentAnim.clear();
+    if (clearSpec) {
+        gCustomBodySpec = CustomBodySpec{};
+        gCustomBodyPendingRestore = false;
     }
-    if (gGoronBodyActor != nullptr && play != nullptr) {
-        Actor_Kill(gGoronBodyActor);
-    }
-    gGoronBodyActor = nullptr;
-    GoronBodyFreeSkelBuffers();
-    gGoronBodyAnimState = -1;
 }
 
-// Chamado em OnPlayDestroy: a troca de cena já descartou (ou está descartando)
-// a arena Zelda de onde jointTable/morphTable foram alocados — chamar
-// ZELDA_ARENA_FREE_DEBUG aqui seria double-free num ponteiro pendente (o
-// mesmo bug que o fork de referência documentou e corrigiu). Só zera os
-// ponteiros; o ator hospedeiro já foi destruído pela própria troca de cena,
-// então também não chamamos Actor_Kill nele. O player some visualmente até
-// o mod religar — limitação conhecida da v1.
-void GoronBodyResetForSceneChange() {
-    gGoronBodyActive = false;
-    gGoronBodyActor = nullptr;
-    gGoronBodySkelAnime.jointTable = nullptr;
-    gGoronBodySkelAnime.morphTable = nullptr;
-    gGoronBodyAnimState = -1;
+// Chamado em OnPlayDestroy: a troca de cena já descartou (ou está
+// descartando) a arena Zelda de onde jointTable/morphTable foram alocados —
+// chamar ZELDA_ARENA_FREE_DEBUG aqui seria double-free num ponteiro pendente
+// (o mesmo bug que o fork de referência documentou e corrigiu). Só zera os
+// ponteiros; o ator hospedeiro já foi destruído pela própria troca de cena.
+// Marca pending-restore para OnSceneInit religar sozinho na cena nova.
+void CustomBodyResetForSceneChange() {
+    gCustomBodyPendingRestore = gCustomBodyActive;
+    gCustomBodyActive = false;
+    gCustomBodyActor = nullptr;
+    gCustomBodySkelAnime.jointTable = nullptr;
+    gCustomBodySkelAnime.morphTable = nullptr;
+    gCustomBodyCurrentAnim.clear();
 }
 
-extern "C" void GoronBodyActorUpdate(Actor* actor, PlayState* play) {
-    if (!gGoronBodyActive) {
+// Núcleo comum entre o toggle manual e a auto-restauração pós-troca-de-cena:
+// aloca o skelAnime a partir de gCustomBodySpec e spawna o ator hospedeiro.
+// Não mexe em gCustomBodySpec — quem chama já garantiu que está preenchida.
+bool CustomBodyActivateFromSpec(PlayState* play);
+
+extern "C" void CustomBodyActorUpdate(Actor* actor, PlayState* play) {
+    if (!gCustomBodyActive) {
         return;
     }
     Player* player = GET_PLAYER(play);
     if (player == nullptr) {
-        GoronBodyDeactivate(play);
+        CustomBodyDeactivate(play, false);
         return;
     }
     // Reafirma todo frame: certas transições de ação do próprio vanilla
     // reescrevem stateFlags2 inteiro (não fazem só |=/&= de bits pontuais),
     // o que apaga a flag se ela só for setada uma vez no toggle — sintoma
-    // visto em jogo: braço de manga verde do Link aparecendo por trás da
-    // cabeça do Goron. Setar aqui garante que ela nunca fica limpa por mais
-    // de um frame.
+    // visto em jogo: braço de manga verde do Link vazando atrás da cabeça
+    // custom. Setar aqui garante que ela nunca fica limpa por mais de 1 frame.
     player->stateFlags2 |= PLAYER_STATE2_DISABLE_DRAW;
     actor->world.pos = player->actor.world.pos;
     actor->shape.rot = player->actor.shape.rot;
 
-    // Seleção de animação por velocidade — mesmos limiares do fork de
-    // referência (>=0.5 anda, >4.0 corre, senão parado).
+    std::string wanted;
     const f32 speed = fabsf(player->linearVelocity);
-    const int wanted = (speed > 4.0f) ? 2 : (speed >= 0.5f ? 1 : 0);
-    if (wanted != gGoronBodyAnimState) {
-        gGoronBodyAnimState = wanted;
-        const char* anim = wanted == 2 ? sGoronBodyRunAnim : wanted == 1 ? sGoronBodyWalkAnim : sGoronBodyIdleAnim;
-        LinkAnimation_Change(play, &gGoronBodySkelAnime, (LinkAnimationHeader*)anim, 1.0f, 0.0f, 0.0f,
-                             ANIMMODE_LOOP, 0.0f);
+    const auto result = DispatchHookTransform(
+        "hook.oot.player.body_anim_select",
+        ShipLua::EventPayload{
+            {"speed", static_cast<double>(speed)},
+            {"on_ground", (player->actor.bgCheckFlags & 1) != 0},
+        });
+    if (result.has_value() && std::holds_alternative<std::string>(result->value)) {
+        const std::string& requested = std::get<std::string>(result->value);
+        if (gCustomBodySpec.anims.find(requested) != gCustomBodySpec.anims.end()) {
+            wanted = requested;
+        }
     }
-    LinkAnimation_Update(play, &gGoronBodySkelAnime);
+    if (wanted.empty()) {
+        // Fallback sem callback (ou resultado inválido): só funciona se o
+        // mod usou as chaves convencionais — senão fica parado no default.
+        const char* byThreshold = (speed > 4.0f) ? "run" : (speed >= 0.5f ? "walk" : "idle");
+        wanted = gCustomBodySpec.anims.find(byThreshold) != gCustomBodySpec.anims.end() ? byThreshold
+                                                                                        : gCustomBodySpec.defaultAnim;
+    }
+
+    if (wanted != gCustomBodyCurrentAnim) {
+        const auto animPath = gCustomBodySpec.anims.find(wanted);
+        if (animPath != gCustomBodySpec.anims.end()) {
+            gCustomBodyCurrentAnim = wanted;
+            const std::string prefixed = std::string("__OTR__") + animPath->second;
+            LinkAnimation_Change(play, &gCustomBodySkelAnime, (LinkAnimationHeader*)prefixed.c_str(), 1.0f, 0.0f,
+                                 0.0f, ANIMMODE_LOOP, 0.0f);
+        }
+    }
+    LinkAnimation_Update(play, &gCustomBodySkelAnime);
 }
 
-extern "C" void GoronBodyActorDraw(Actor* actor, PlayState* play) {
-    if (!gGoronBodyActive) {
+extern "C" void CustomBodyActorDraw(Actor* actor, PlayState* play) {
+    if (!gCustomBodyActive) {
         return;
     }
     OPEN_DISPS(play->state.gfxCtx);
-    SkelAnime_DrawFlexOpa(play, gGoronBodySkelAnime.skeleton, gGoronBodySkelAnime.jointTable,
-                          gGoronBodySkelAnime.dListCount, nullptr, nullptr, actor);
+    SkelAnime_DrawFlexOpa(play, gCustomBodySkelAnime.skeleton, gCustomBodySkelAnime.jointTable,
+                          gCustomBodySkelAnime.dListCount, nullptr, nullptr, actor);
     CLOSE_DISPS(play->state.gfxCtx);
 }
 
-int LuaSetGoronBody(lua_State* state) {
-    const bool enabled = lua_toboolean(state, 1) != 0;
-    PlayState* play = gPlayState;
+bool CustomBodyActivateFromSpec(PlayState* play) {
     Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
     if (player == nullptr) {
-        SPDLOG_WARN("ShipLua set_goron_body: fora de gameplay");
-        lua_pushboolean(state, 0);
-        return 1;
+        return false;
+    }
+    const std::string skelPrefixed = std::string("__OTR__") + gCustomBodySpec.skeletonPath;
+    const auto defaultAnimPath = gCustomBodySpec.anims.find(gCustomBodySpec.defaultAnim);
+    if (!ResourceMgr_FileExists(skelPrefixed.c_str()) || defaultAnimPath == gCustomBodySpec.anims.end()) {
+        SPDLOG_WARN("ShipLua set_body: assets indispon\xC3\xADveis para a spec atual");
+        return false;
+    }
+    const std::string animPrefixed = std::string("__OTR__") + defaultAnimPath->second;
+    if (!ResourceMgr_FileExists(animPrefixed.c_str())) {
+        SPDLOG_WARN("ShipLua set_body: assets indispon\xC3\xADveis para a spec atual");
+        return false;
     }
 
-    if (!enabled) {
-        GoronBodyDeactivate(play);
-        SPDLOG_INFO("ShipLua set_goron_body: corpo do Goron desligado");
-        lua_pushboolean(state, 1);
-        return 1;
-    }
-
-    if (!ResourceMgr_FileExists(sGoronBodySkel) || !ResourceMgr_FileExists(sGoronBodyIdleAnim)) {
-        SPDLOG_WARN("ShipLua set_goron_body: assets indispon\xC3\xADveis — o mm.o2r do MM est\xC3\xA1 montado?");
-        lua_pushboolean(state, 0);
-        return 1;
-    }
-
-    GoronBodyFreeSkelBuffers();
+    CustomBodyFreeSkelBuffers();
     // flags=9: mesmo modo usado pelo próprio Player e pelo puppet do Kafei —
     // buffers do chamador quando não-NULL, mas aqui passamos NULL para os
-    // dois: aloca do tamanho real do header (25 limbs do Goron), não de
-    // PLAYER_LIMB_MAX (22).
-    SkelAnime_InitLink(play, &gGoronBodySkelAnime, (FlexSkeletonHeader*)sGoronBodySkel,
-                       (LinkAnimationHeader*)sGoronBodyIdleAnim, 9, nullptr, nullptr, 0);
-    gGoronBodyAnimState = 0;
+    // dois: aloca do tamanho real do header do skeleton fornecido pelo mod,
+    // não de PLAYER_LIMB_MAX.
+    SkelAnime_InitLink(play, &gCustomBodySkelAnime, (FlexSkeletonHeader*)skelPrefixed.c_str(),
+                       (LinkAnimationHeader*)animPrefixed.c_str(), 9, nullptr, nullptr, 0);
+    gCustomBodyCurrentAnim = gCustomBodySpec.defaultAnim;
 
     Actor* actor = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_ITEM00, player->actor.world.pos.x,
                                player->actor.world.pos.y, player->actor.world.pos.z, 0, 0, 0, 0);
     if (actor == nullptr) {
-        SPDLOG_WARN("ShipLua set_goron_body: n\xC3\xA3o consegui spawnar o ator hospedeiro");
-        GoronBodyFreeSkelBuffers();
+        SPDLOG_WARN("ShipLua set_body: n\xC3\xA3o consegui spawnar o ator hospedeiro");
+        CustomBodyFreeSkelBuffers();
+        return false;
+    }
+    actor->update = CustomBodyActorUpdate;
+    actor->draw = CustomBodyActorDraw;
+    gCustomBodyActor = actor;
+    gCustomBodyActive = true;
+    player->stateFlags2 |= PLAYER_STATE2_DISABLE_DRAW;
+    return true;
+}
+
+// ship.oot.player.set_body(spec): spec = { skeleton = "caminho/sem/prefixo",
+// anims = { nome = "caminho", ... }, default_anim = "nome" (opcional, usa
+// "idle" ou a 1a chave se omitido) }. spec = nil desliga e esquece a forma.
+int LuaSetPlayerBody(lua_State* state) {
+    PlayState* play = gPlayState;
+    if (lua_isnil(state, 1)) {
+        CustomBodyDeactivate(play, true);
+        SPDLOG_INFO("ShipLua set_body: corpo customizado desligado");
+        lua_pushboolean(state, 1);
+        return 1;
+    }
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (player == nullptr) {
+        SPDLOG_WARN("ShipLua set_body: fora de gameplay");
         lua_pushboolean(state, 0);
         return 1;
     }
-    actor->update = GoronBodyActorUpdate;
-    actor->draw = GoronBodyActorDraw;
-    gGoronBodyActor = actor;
-    gGoronBodyActive = true;
-    player->stateFlags2 |= PLAYER_STATE2_DISABLE_DRAW;
+    luaL_checktype(state, 1, LUA_TTABLE);
 
-    SPDLOG_INFO("ShipLua set_goron_body: corpo do Goron ligado");
+    lua_getfield(state, 1, "skeleton");
+    const char* skeleton = luaL_optstring(state, -1, nullptr);
+    if (skeleton == nullptr || *skeleton == '\0') {
+        SPDLOG_WARN("ShipLua set_body: 'skeleton' \xC3\xA9 obrigat\xC3\xB3rio");
+        lua_pop(state, 1);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    CustomBodySpec spec;
+    spec.skeletonPath = skeleton;
+    lua_pop(state, 1);
+
+    lua_getfield(state, 1, "anims");
+    if (!lua_istable(state, -1)) {
+        SPDLOG_WARN("ShipLua set_body: 'anims' \xC3\xA9 obrigat\xC3\xB3ria (tabela nome->caminho)");
+        lua_pop(state, 1);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    lua_pushnil(state);
+    while (lua_next(state, -2) != 0) {
+        if (lua_type(state, -2) == LUA_TSTRING && lua_type(state, -1) == LUA_TSTRING) {
+            spec.anims[lua_tostring(state, -2)] = lua_tostring(state, -1);
+        }
+        lua_pop(state, 1);
+    }
+    lua_pop(state, 1); // anims
+
+    if (spec.anims.empty()) {
+        SPDLOG_WARN("ShipLua set_body: 'anims' n\xC3\xA3o tem nenhuma entrada v\xC3\xA1lida");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    lua_getfield(state, 1, "default_anim");
+    const char* defaultAnim = luaL_optstring(state, -1, nullptr);
+    if (defaultAnim != nullptr && spec.anims.find(defaultAnim) != spec.anims.end()) {
+        spec.defaultAnim = defaultAnim;
+    } else if (spec.anims.find("idle") != spec.anims.end()) {
+        spec.defaultAnim = "idle";
+    } else {
+        spec.defaultAnim = spec.anims.begin()->first;
+    }
+    lua_pop(state, 1);
+
+    CustomBodyDeactivate(play, false); // desliga o corpo antigo, mas a spec só troca depois
+    gCustomBodySpec = spec;
+    if (!CustomBodyActivateFromSpec(play)) {
+        gCustomBodySpec = CustomBodySpec{};
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    SPDLOG_INFO("ShipLua set_body: corpo customizado ligado ('{}')", spec.skeletonPath);
     lua_pushboolean(state, 1);
+    return 1;
+}
+
+// ship.oot.player.get_body(): retorna a spec atual como tabela, ou nil se
+// nenhum corpo customizado está ativo. Permite a um mod checar/coexistir com
+// outro que já tenha trocado o corpo.
+int LuaGetPlayerBody(lua_State* state) {
+    if (!gCustomBodyActive) {
+        lua_pushnil(state);
+        return 1;
+    }
+    lua_newtable(state);
+    lua_pushstring(state, gCustomBodySpec.skeletonPath.c_str());
+    lua_setfield(state, -2, "skeleton");
+    lua_pushstring(state, gCustomBodySpec.defaultAnim.c_str());
+    lua_setfield(state, -2, "default_anim");
+    lua_pushstring(state, gCustomBodyCurrentAnim.c_str());
+    lua_setfield(state, -2, "current_anim");
+    lua_newtable(state);
+    for (const auto& [name, path] : gCustomBodySpec.anims) {
+        lua_pushstring(state, path.c_str());
+        lua_setfield(state, -2, name.c_str());
+    }
+    lua_setfield(state, -2, "anims");
     return 1;
 }
 
@@ -1324,8 +1470,10 @@ void InstallOotApi(lua_State* state) {
     lua_setfield(state, -2, "set_bunny_hood");
     lua_pushcfunction(state, LuaSetMask);
     lua_setfield(state, -2, "set_mask");
-    lua_pushcfunction(state, LuaSetGoronBody);
-    lua_setfield(state, -2, "set_goron_body");
+    lua_pushcfunction(state, LuaSetPlayerBody);
+    lua_setfield(state, -2, "set_body");
+    lua_pushcfunction(state, LuaGetPlayerBody);
+    lua_setfield(state, -2, "get_body");
     lua_pushcfunction(state, LuaAttachModel);
     lua_setfield(state, -2, "attach_model");
     lua_pushcfunction(state, LuaSetHeldItemModel);
@@ -1883,13 +2031,28 @@ void Initialize() {
     });
     gPlayDestroyHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayDestroy>([]() {
         ShipLuaPuppet_Reset();
-        GoronBodyResetForSceneChange();
+        CustomBodyResetForSceneChange();
         if (gActorProvider == nullptr) {
             return;
         }
         const auto cleaned = gActorProvider->OnSceneChange();
         if (!cleaned.isOk()) {
             SPDLOG_ERROR("ShipLua failed to clean OoT actors during scene teardown: {}", cleaned.message);
+        }
+    });
+    // Religa o corpo customizado sozinho na cena nova, se ele estava ativo na
+    // cena anterior — resolve a limitação conhecida da v1 (corpo sumia em
+    // toda troca de cena e exigia religar manualmente). OnPlayerUpdate (não
+    // OnSceneInit) de propósito: scene init roda antes dos atores da sala
+    // (Player incluído) serem spawnados — GET_PLAYER ainda seria inválido
+    // ali. OnPlayerUpdate só dispara quando o Player já existe de verdade,
+    // mesmo padrão já usado pelo hook de imunidade a fogo acima.
+    gCustomBodyRestoreHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayerUpdate>([]() {
+        if (!gCustomBodyPendingRestore || gPlayState == nullptr) {
+            return;
+        }
+        if (CustomBodyActivateFromSpec(gPlayState)) {
+            gCustomBodyPendingRestore = false;
         }
     });
     auto contextResult = CreateHostContext();
@@ -1935,6 +2098,10 @@ void Shutdown() {
     if (gPlayDestroyHook != 0) {
         GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnPlayDestroy>(gPlayDestroyHook);
         gPlayDestroyHook = 0;
+    }
+    if (gCustomBodyRestoreHook != 0) {
+        GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnPlayerUpdate>(gCustomBodyRestoreHook);
+        gCustomBodyRestoreHook = 0;
     }
     gActorProvider.reset();
     gCapabilityRegistry.reset();
