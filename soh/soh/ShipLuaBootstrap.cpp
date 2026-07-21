@@ -37,6 +37,10 @@
 
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/enhancementTypes.h"
+#include "soh/ResourceManagerHelpers.h"
+// OPEN_DISPS declara FrameInterpolation_* em escopo de bloco com linkage C++;
+// este header traz as declarações extern "C" corretas.
+#include "soh/frame_interpolation.h"
 #include "soh/cvar_prefixes.h"
 #include <libultraship/bridge.h>
 
@@ -49,6 +53,15 @@ extern "C" {
 #include "z64.h"
 extern PlayState* gPlayState;
 extern u8 gWalkSpeedToggle;
+
+// Emite uma display list arbitrária no buffer opaco. Precisa de linkage C: o
+// macro OPEN_DISPS declara FrameInterpolation_* em escopo de bloco, e dentro
+// de código C++ isso vira um símbolo mangled que não existe.
+static void ShipLuaEmitDisplayList(PlayState* play, const char* path) {
+    OPEN_DISPS(play->state.gfxCtx);
+    gSPDisplayList(POLY_OPA_DISP++, (Gfx*)path);
+    CLOSE_DISPS(play->state.gfxCtx);
+}
 }
 
 namespace ShipLuaHost {
@@ -385,8 +398,8 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
     ShipLua::LuaApiHostContext context;
     context.gameId = "oot";
     context.hostVersion = GetHostVersion();
-    context.capabilities = { "oot.player.jump", "oot.spawn_dog", "oot.player.bunny_hood", "oot.player.mask",
-                             "player.speed" };
+    context.capabilities = { "oot.player.jump",  "oot.spawn_dog",   "oot.player.bunny_hood",   "oot.player.mask",
+                             "player.speed",     "player.fields",   "oot.player.attach_model", "mod.assets" };
     context.hotkeys = gHotkeys;
     context.capabilityRegistry = gCapabilityRegistry;
     context.actors = gActorProvider;
@@ -408,6 +421,20 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
     registered = RegisterHostCapability("player.speed", "Scale the player's movement speed by a validated factor.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability("player.fields", "Read and write named player fields with range validation.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability("oot.player.attach_model",
+                                        "Draw an arbitrary display list on the player by resource path.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered =
+        RegisterHostCapability("mod.assets", "Mount mod-provided archives under the mod/<name>/ namespace.");
     if (!registered.isOk()) {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
@@ -555,6 +582,184 @@ int LuaSetMask(lua_State* state) {
     return 1;
 }
 
+// PASSO 2 — ship.oot.player.attach_model(slot, path).
+// Desenha uma display list ARBITRÁRIA no player, endereçada por caminho de
+// resource — inclusive assets de mod ("mod/<id>/...") e do jogo vizinho
+// ("mm/..."). É o que permite conteúdo novo (uma máscara que não existe em
+// nenhum dos dois jogos) sem precisar de um slot no enum do engine.
+//
+// Hoje o slot suportado é "head": o host força uma máscara-veículo para que o
+// bloco de desenho de máscara execute e substitui a DL pela do mod.
+std::string gAttachedHeadModel;
+HOOK_ID gMaskDrawHook = 0;
+
+int LuaAttachModel(lua_State* state) {
+    const char* slot = luaL_checkstring(state, 1);
+    const char* path = luaL_optstring(state, 2, nullptr);
+    if (std::strcmp(slot, "head") != 0) {
+        SPDLOG_WARN("ShipLua attach_model: slot '{}' n\xC3\xA3o suportado (use 'head')", slot);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    PlayState* play = gPlayState;
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (player == nullptr) {
+        SPDLOG_WARN("ShipLua attach_model: fora de gameplay");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    if (path == nullptr || *path == '\0') {
+        gAttachedHeadModel.clear();
+        player->currentMask = PLAYER_MASK_NONE;
+        gSaveContext.ship.maskMemory = PLAYER_MASK_NONE;
+        SPDLOG_INFO("ShipLua attach_model: modelo removido do slot 'head'");
+        lua_pushboolean(state, 1);
+        return 1;
+    }
+
+    if (!ResourceMgr_FileExists(path)) {
+        SPDLOG_WARN("ShipLua attach_model: asset '{}' n\xC3\xA3o encontrado", path);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    gAttachedHeadModel = path;
+    // Máscara-veículo: o engine só entra no bloco de desenho quando há uma
+    // máscara equipada. A DL dela é substituída pela do mod no hook.
+    CVarSetInteger(CVAR_ENHANCEMENT("PersistentMasks"), 1);
+    player->currentMask = PLAYER_MASK_KEATON;
+    gSaveContext.ship.maskMemory = PLAYER_MASK_KEATON;
+    SPDLOG_INFO("ShipLua attach_model: '{}' anexado ao slot 'head'", path);
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+// PASSO 3 — ship.player.get/set: acesso a campos do player por nome, com
+// validação, em vez de uma função nativa dedicada por ideia.
+enum class FieldKind { Health, HealthCapacity, Magic, Rupees, PosX, PosY, PosZ, RotY, Speed };
+
+struct PlayerField {
+    const char* name;
+    FieldKind kind;
+    double min;
+    double max;
+    bool writable;
+};
+
+constexpr std::array<PlayerField, 9> kPlayerFields = { {
+    { "health", FieldKind::Health, 0, 20 * 16, true },
+    { "health_capacity", FieldKind::HealthCapacity, 16, 20 * 16, true },
+    { "magic", FieldKind::Magic, 0, 96, true },
+    { "rupees", FieldKind::Rupees, 0, 999, true },
+    { "pos_x", FieldKind::PosX, -100000, 100000, true },
+    { "pos_y", FieldKind::PosY, -100000, 100000, true },
+    { "pos_z", FieldKind::PosZ, -100000, 100000, true },
+    { "rot_y", FieldKind::RotY, -32768, 32767, true },
+    { "speed", FieldKind::Speed, -50, 50, true },
+} };
+
+const PlayerField* FindPlayerField(const char* name) {
+    const auto found = std::find_if(kPlayerFields.begin(), kPlayerFields.end(),
+                                    [name](const PlayerField& f) { return std::strcmp(f.name, name) == 0; });
+    return found == kPlayerFields.end() ? nullptr : &*found;
+}
+
+double ReadPlayerField(const PlayerField& field, Player* player) {
+    switch (field.kind) {
+        case FieldKind::Health:
+            return gSaveContext.health;
+        case FieldKind::HealthCapacity:
+            return gSaveContext.healthCapacity;
+        case FieldKind::Magic:
+            return gSaveContext.magic;
+        case FieldKind::Rupees:
+            return gSaveContext.rupees;
+        case FieldKind::PosX:
+            return player->actor.world.pos.x;
+        case FieldKind::PosY:
+            return player->actor.world.pos.y;
+        case FieldKind::PosZ:
+            return player->actor.world.pos.z;
+        case FieldKind::RotY:
+            return player->actor.shape.rot.y;
+        case FieldKind::Speed:
+            return player->linearVelocity;
+    }
+    return 0.0;
+}
+
+void WritePlayerField(const PlayerField& field, Player* player, double value) {
+    switch (field.kind) {
+        case FieldKind::Health:
+            gSaveContext.health = static_cast<int16_t>(value);
+            break;
+        case FieldKind::HealthCapacity:
+            gSaveContext.healthCapacity = static_cast<int16_t>(value);
+            break;
+        case FieldKind::Magic:
+            gSaveContext.magic = static_cast<int8_t>(value);
+            break;
+        case FieldKind::Rupees:
+            gSaveContext.rupees = static_cast<int16_t>(value);
+            break;
+        case FieldKind::PosX:
+            player->actor.world.pos.x = static_cast<float>(value);
+            break;
+        case FieldKind::PosY:
+            player->actor.world.pos.y = static_cast<float>(value);
+            break;
+        case FieldKind::PosZ:
+            player->actor.world.pos.z = static_cast<float>(value);
+            break;
+        case FieldKind::RotY:
+            player->actor.shape.rot.y = static_cast<int16_t>(value);
+            break;
+        case FieldKind::Speed:
+            player->linearVelocity = static_cast<float>(value);
+            break;
+    }
+}
+
+int LuaPlayerGet(lua_State* state) {
+    const char* name = luaL_checkstring(state, 1);
+    const PlayerField* field = FindPlayerField(name);
+    PlayState* play = gPlayState;
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (field == nullptr || player == nullptr) {
+        lua_pushnil(state);
+        return 1;
+    }
+    lua_pushnumber(state, ReadPlayerField(*field, player));
+    return 1;
+}
+
+int LuaPlayerSet(lua_State* state) {
+    const char* name = luaL_checkstring(state, 1);
+    const double value = luaL_checknumber(state, 2);
+    const PlayerField* field = FindPlayerField(name);
+    if (field == nullptr) {
+        SPDLOG_WARN("ShipLua player.set: campo '{}' desconhecido", name);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    if (!field->writable || !std::isfinite(value) || value < field->min || value > field->max) {
+        SPDLOG_WARN("ShipLua player.set: valor inv\xC3\xA1lido para '{}'", name);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    PlayState* play = gPlayState;
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (player == nullptr) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    WritePlayerField(*field, player, value);
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 // ship.oot.player.set_bunny_hood(equipped): veste a Bunny Hood do OoT e liga
 // o comportamento de Majora's Mask (corrida mais rápida e pulo maior), que o
 // próprio host já implementa atrás do enhancement MMBunnyHood. Ao desequipar,
@@ -649,6 +854,8 @@ void InstallOotApi(lua_State* state) {
     lua_setfield(state, -2, "set_bunny_hood");
     lua_pushcfunction(state, LuaSetMask);
     lua_setfield(state, -2, "set_mask");
+    lua_pushcfunction(state, LuaAttachModel);
+    lua_setfield(state, -2, "attach_model");
     lua_setfield(state, ootTable, "player");
     lua_setfield(state, shipTable, "oot");
 
@@ -662,6 +869,10 @@ void InstallOotApi(lua_State* state) {
     }
     lua_pushcfunction(state, LuaSetSpeedMultiplier);
     lua_setfield(state, -2, "set_speed_multiplier");
+    lua_pushcfunction(state, LuaPlayerGet);
+    lua_setfield(state, -2, "get");
+    lua_pushcfunction(state, LuaPlayerSet);
+    lua_setfield(state, -2, "set");
     lua_setfield(state, shipTable, "player");
 
     lua_pop(state, 1);
@@ -679,8 +890,11 @@ constexpr const char* kMmNamespace = "mm/";
 // Só as ~5% de entradas que colidem com caminhos do OOT ficam sem alias.
 class MmCrossWorldArchive final : public Ship::Archive {
   public:
-    MmCrossWorldArchive(const std::string& path, Ship::ArchiveManager* manager)
-        : Ship::Archive(path), mInner(std::make_shared<Ship::O2rArchive>(path)), mManager(manager) {
+    // O prefixo é parametrizável: "mm/" para o archive do jogo vizinho e
+    // "mod/<id>/" para os assets próprios de um mod.
+    MmCrossWorldArchive(const std::string& path, Ship::ArchiveManager* manager, std::string prefix = kMmNamespace)
+        : Ship::Archive(path), mInner(std::make_shared<Ship::O2rArchive>(path)), mManager(manager),
+          mPrefix(std::move(prefix)) {
     }
 
     bool Open() override {
@@ -692,7 +906,7 @@ class MmCrossWorldArchive final : public Ship::Archive {
         std::size_t blocked = 0;
         const auto files = mInner->ListFiles();
         for (const auto& [hash, filePath] : *files) {
-            IndexFile(kMmNamespace + filePath);
+            IndexFile(mPrefix + filePath);
             // Alias no hash original apenas para dados de render: sistemas como
             // o de áudio do SoH ENUMERAM o índice global (audio/*) e quebram ao
             // encontrar entradas do MM em formato próprio. objects/ e textures/
@@ -707,9 +921,9 @@ class MmCrossWorldArchive final : public Ship::Archive {
             }
         }
         mOwnIndex = ListFiles();
-        SPDLOG_INFO("ShipLua exp\xC3\xB4s {} assets do MM sob 'mm/' ({} com alias direto, {} bloqueados por "
+        SPDLOG_INFO("ShipLua exp\xC3\xB4s {} assets sob '{}' ({} com alias direto, {} bloqueados por "
                     "colis\xC3\xA3o de caminho)",
-                    files->size(), aliased, blocked);
+                    files->size(), mPrefix, aliased, blocked);
         return !files->empty();
     }
 
@@ -723,8 +937,8 @@ class MmCrossWorldArchive final : public Ship::Archive {
             return nullptr;
         }
         std::shared_ptr<Ship::File> file;
-        if (filePath.rfind(kMmNamespace, 0) == 0) {
-            file = mInner->LoadFile(filePath.substr(std::char_traits<char>::length(kMmNamespace)));
+        if (filePath.rfind(mPrefix, 0) == 0) {
+            file = mInner->LoadFile(filePath.substr(mPrefix.size()));
         } else {
             file = mInner->LoadFile(filePath);
         }
@@ -801,6 +1015,7 @@ class MmCrossWorldArchive final : public Ship::Archive {
   private:
     std::shared_ptr<Ship::O2rArchive> mInner;
     Ship::ArchiveManager* mManager = nullptr;
+    std::string mPrefix;
     std::shared_ptr<std::unordered_map<uint64_t, std::string>> mOwnIndex;
 };
 
@@ -870,6 +1085,68 @@ void MountCrossWorldArchives() {
         SPDLOG_INFO("ShipLua montou o mm.o2r do MM em modo cross-world: {}", mmArchive.string());
     } else {
         SPDLOG_WARN("ShipLua n\xC3\xA3o conseguiu montar '{}'", mmArchive.string());
+    }
+}
+
+// PASSO 1 — assets próprios de mod.
+// Todo archive (.o2r/.otr) encontrado na pasta de mods vira endereçável sob
+// "mod/<nome>/", sem colidir com os assets do jogo. Aceita tanto um archive
+// solto (mods/rito_mask.o2r) quanto a convenção de pasta
+// (mods/rito-mask/assets/*.o2r). É o que permite a um mod trazer conteúdo
+// NOVO, em vez de apenas remixar o que já existe nos dois jogos.
+void MountModAssetArchives() {
+    Ship::Context* shipContext = Ship::Context::GetRawInstance();
+    if (shipContext == nullptr || shipContext->GetResourceManager() == nullptr) {
+        return;
+    }
+    const auto archiveManager = shipContext->GetResourceManager()->GetArchiveManager();
+    if (archiveManager == nullptr) {
+        return;
+    }
+
+    std::error_code ec;
+    const std::filesystem::path modsRoot =
+        Ship::Context::GetPathRelativeToAppDirectory("mods", Ship::Context::GetRawInstance()->GetShortName());
+    if (!std::filesystem::is_directory(modsRoot, ec)) {
+        return;
+    }
+
+    std::vector<std::filesystem::path> archives;
+    for (const auto& entry : std::filesystem::directory_iterator(modsRoot, ec)) {
+        if (entry.is_regular_file()) {
+            const std::string extension = entry.path().extension().string();
+            if (extension == ".o2r" || extension == ".otr") {
+                archives.push_back(entry.path());
+            }
+        } else if (entry.is_directory()) {
+            const std::filesystem::path assetsDir = entry.path() / "assets";
+            if (!std::filesystem::is_directory(assetsDir, ec)) {
+                continue;
+            }
+            for (const auto& asset : std::filesystem::directory_iterator(assetsDir, ec)) {
+                const std::string extension = asset.path().extension().string();
+                if (asset.is_regular_file() && (extension == ".o2r" || extension == ".otr")) {
+                    archives.push_back(asset.path());
+                }
+            }
+        }
+    }
+
+    std::size_t mounted = 0;
+    for (const std::filesystem::path& archivePath : archives) {
+        const std::string id = archivePath.stem().string();
+        const auto modArchive =
+            std::make_shared<MmCrossWorldArchive>(archivePath.string(), archiveManager.get(), "mod/" + id + "/");
+        modArchive->Load();
+        if (modArchive->IsLoaded() && archiveManager->AddArchive(modArchive) != nullptr) {
+            ++mounted;
+            SPDLOG_INFO("ShipLua montou assets do mod '{}' sob 'mod/{}/': {}", id, id, archivePath.string());
+        } else {
+            SPDLOG_WARN("ShipLua n\xC3\xA3o conseguiu montar os assets de mod '{}'", archivePath.string());
+        }
+    }
+    if (mounted > 0) {
+        SPDLOG_INFO("ShipLua: {} pacote(s) de assets de mod montado(s)", mounted);
     }
 }
 
@@ -956,6 +1233,20 @@ void Initialize() {
         [](int32_t) { TryConsumeWorldHandoff(); });
     gImportTickHook =
         GameInteractor::Instance->RegisterGameHook<GameInteractor::OnGameFrameUpdate>([]() { TickWorldImport(); });
+    // attach_model: substitui a DL da máscara-veículo pela do mod. O hook roda
+    // já dentro do contexto de matriz da cabeça, então basta emitir a DL.
+    gMaskDrawHook = REGISTER_VB_SHOULD(VB_DRAW_PLAYER_MASK, {
+        if (gAttachedHeadModel.empty()) {
+            return;
+        }
+        va_arg(args, uint32_t); // currentMask (não usado: o modelo é do mod)
+        PlayState* play = va_arg(args, PlayState*);
+        if (play == nullptr) {
+            return;
+        }
+        ShipLuaEmitDisplayList(play, gAttachedHeadModel.c_str());
+        *should = false; // não desenha a máscara vanilla por cima
+    });
     gActorDestroyHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnActorDestroy>([](void* actor) {
         ShipLuaPuppet_HandleActorDestroy(actor);
         if (gActorProvider == nullptr) {
@@ -986,6 +1277,7 @@ void Initialize() {
     SPDLOG_INFO("ShipLua inicializando para {} {} (commit {})", context.gameId, context.hostVersion, gGitCommitHash);
     gModHost = std::make_unique<ShipLua::ModHost>(context, CreateLogger());
     MountCrossWorldArchives();
+    MountModAssetArchives();
     LoadModsAndDispatchReady(context);
     SPDLOG_INFO("ShipLua inicializado");
 }
