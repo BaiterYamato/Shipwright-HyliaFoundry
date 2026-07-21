@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -409,7 +410,7 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
                              "oot.player.mask",         "player.speed",       "player.fields",
                              "oot.player.attach_model", "mod.assets",         "oot.player.immunity",
                              "oot.player.weight",       "oot.player.roll",    "hooks.bridge",
-                             "oot.player.goron_body" };
+                             "oot.player.goron_body",   "oot.player.held_item_model" };
     context.hotkeys = gHotkeys;
     context.capabilityRegistry = gCapabilityRegistry;
     context.actors = gActorProvider;
@@ -433,6 +434,12 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
     registered = RegisterHostCapability(
         "oot.player.goron_body",
         "Replace the player's visual body with MM's Goron skeleton, read live from the mm.o2r cross-world archive.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability(
+        "oot.player.held_item_model",
+        "Draw an arbitrary display list anchored to the player's hand bones, updated every frame.");
     if (!registered.isOk()) {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
@@ -901,6 +908,7 @@ HOOK_ID gHookFallDamageHook = 0;
 HOOK_ID gHookItemReceiveHook = 0;
 HOOK_ID gHookHealthChangeHook = 0;
 HOOK_ID gHookBonkHook = 0;
+HOOK_ID gHeldItemDrawHook = 0;
 
 // Dispara um evento "should"/"modify": devolve o EventValue que um callback
 // Lua gravou via ship.hooks.result(), se algum gravou.
@@ -969,6 +977,75 @@ int LuaAttachModel(lua_State* state) {
     player->currentMask = PLAYER_MASK_KEATON;
     gSaveContext.ship.maskMemory = PLAYER_MASK_KEATON;
     SPDLOG_INFO("ShipLua attach_model: '{}' anexado ao slot 'head'", path);
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+// ship.oot.player.set_held_item_model(slot, path): desenha um DL arbitrário
+// ancorado no osso da mão do player — o mecanismo que praticamente todo item
+// customizado com modelo na mão precisa (achado minerando dois forks de
+// sistemas de item independentes: Ball and Chain, Gust Jar, Whip, Dominion
+// Rod, Cane of Somaria, os cajados... 10+ itens no relatório de um deles
+// dependiam exatamente disto). bodyPartsPos já vem resolvido pelo próprio
+// desenho do esqueleto do player no mesmo frame — só ler e desenhar.
+std::string gHeldItemModelLeft;
+std::string gHeldItemModelRight;
+
+extern "C" void DrawHeldItemModels(PlayState* play) {
+    if (gHeldItemModelLeft.empty() && gHeldItemModelRight.empty()) {
+        return;
+    }
+    Player* player = GET_PLAYER(play);
+    if (player == nullptr) {
+        return;
+    }
+    OPEN_DISPS(play->state.gfxCtx);
+    if (!gHeldItemModelLeft.empty()) {
+        Matrix_Translate(player->bodyPartsPos[PLAYER_BODYPART_L_HAND].x,
+                         player->bodyPartsPos[PLAYER_BODYPART_L_HAND].y,
+                         player->bodyPartsPos[PLAYER_BODYPART_L_HAND].z, MTXMODE_NEW);
+        gSPMatrix(POLY_OPA_DISP++, Matrix_NewMtx(play->state.gfxCtx, (char*)__FILE__, __LINE__),
+                 G_MTX_MODELVIEW | G_MTX_LOAD);
+        gSPDisplayList(POLY_OPA_DISP++, (Gfx*)gHeldItemModelLeft.c_str());
+    }
+    if (!gHeldItemModelRight.empty()) {
+        Matrix_Translate(player->bodyPartsPos[PLAYER_BODYPART_R_HAND].x,
+                         player->bodyPartsPos[PLAYER_BODYPART_R_HAND].y,
+                         player->bodyPartsPos[PLAYER_BODYPART_R_HAND].z, MTXMODE_NEW);
+        gSPMatrix(POLY_OPA_DISP++, Matrix_NewMtx(play->state.gfxCtx, (char*)__FILE__, __LINE__),
+                 G_MTX_MODELVIEW | G_MTX_LOAD);
+        gSPDisplayList(POLY_OPA_DISP++, (Gfx*)gHeldItemModelRight.c_str());
+    }
+    CLOSE_DISPS(play->state.gfxCtx);
+}
+
+int LuaSetHeldItemModel(lua_State* state) {
+    const char* slot = luaL_checkstring(state, 1);
+    const char* path = luaL_optstring(state, 2, nullptr);
+    std::string* target = nullptr;
+    if (std::strcmp(slot, "left_hand") == 0) {
+        target = &gHeldItemModelLeft;
+    } else if (std::strcmp(slot, "right_hand") == 0) {
+        target = &gHeldItemModelRight;
+    } else {
+        SPDLOG_WARN("ShipLua set_held_item_model: slot '{}' n\xC3\xA3o suportado (use 'left_hand'/'right_hand')",
+                    slot);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    if (path == nullptr || *path == '\0') {
+        target->clear();
+        lua_pushboolean(state, 1);
+        return 1;
+    }
+    if (!ResourceMgr_FileExists(path)) {
+        SPDLOG_WARN("ShipLua set_held_item_model: asset '{}' n\xC3\xA3o encontrado", path);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    *target = std::string("__OTR__") + path;
+    SPDLOG_INFO("ShipLua set_held_item_model: '{}' anexado ao slot '{}'", path, slot);
     lua_pushboolean(state, 1);
     return 1;
 }
@@ -1059,40 +1136,64 @@ void WritePlayerField(const PlayerField& field, Player* player, double value) {
     }
 }
 
+// Slot genérico para qualquer estado que um item customizado precise (timer,
+// contador, flag) sem exigir um campo novo na struct nativa do Player a cada
+// mod novo — achado como necessidade real cruzando dois forks independentes
+// de sistemas de item customizado (cada um "colou" ~10 campos ad-hoc na
+// struct Player nativa; aqui isso vira uma chave string qualquer). Não é
+// salvo — vive só durante a sessão, mesma ressalva do storage mock.
+std::map<std::string, double> gPlayerScratch;
+
 int LuaPlayerGet(lua_State* state) {
     const char* name = luaL_checkstring(state, 1);
     const PlayerField* field = FindPlayerField(name);
     PlayState* play = gPlayState;
     Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
-    if (field == nullptr || player == nullptr) {
-        lua_pushnil(state);
+    if (field != nullptr) {
+        if (player == nullptr) {
+            lua_pushnil(state);
+            return 1;
+        }
+        lua_pushnumber(state, ReadPlayerField(*field, player));
         return 1;
     }
-    lua_pushnumber(state, ReadPlayerField(*field, player));
+    const auto scratch = gPlayerScratch.find(name);
+    if (scratch != gPlayerScratch.end()) {
+        lua_pushnumber(state, scratch->second);
+    } else {
+        lua_pushnil(state);
+    }
     return 1;
 }
 
 int LuaPlayerSet(lua_State* state) {
     const char* name = luaL_checkstring(state, 1);
     const double value = luaL_checknumber(state, 2);
-    const PlayerField* field = FindPlayerField(name);
-    if (field == nullptr) {
-        SPDLOG_WARN("ShipLua player.set: campo '{}' desconhecido", name);
-        lua_pushboolean(state, 0);
-        return 1;
-    }
-    if (!field->writable || !std::isfinite(value) || value < field->min || value > field->max) {
+    if (!std::isfinite(value)) {
         SPDLOG_WARN("ShipLua player.set: valor inv\xC3\xA1lido para '{}'", name);
         lua_pushboolean(state, 0);
         return 1;
     }
-    PlayState* play = gPlayState;
-    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
-    if (player == nullptr) {
-        lua_pushboolean(state, 0);
+    const PlayerField* field = FindPlayerField(name);
+    if (field != nullptr) {
+        if (!field->writable || value < field->min || value > field->max) {
+            SPDLOG_WARN("ShipLua player.set: valor fora da faixa para '{}'", name);
+            lua_pushboolean(state, 0);
+            return 1;
+        }
+        PlayState* play = gPlayState;
+        Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+        if (player == nullptr) {
+            lua_pushboolean(state, 0);
+            return 1;
+        }
+        WritePlayerField(*field, player, value);
+        lua_pushboolean(state, 1);
         return 1;
     }
-    WritePlayerField(*field, player, value);
+    // Chave desconhecida na tabela curada: cai no slot genérico — qualquer
+    // string serve, nenhum campo nativo precisa existir para isso.
+    gPlayerScratch[name] = value;
     lua_pushboolean(state, 1);
     return 1;
 }
@@ -1198,6 +1299,8 @@ void InstallOotApi(lua_State* state) {
     lua_setfield(state, -2, "set_goron_body");
     lua_pushcfunction(state, LuaAttachModel);
     lua_setfield(state, -2, "attach_model");
+    lua_pushcfunction(state, LuaSetHeldItemModel);
+    lua_setfield(state, -2, "set_held_item_model");
     lua_pushcfunction(state, LuaSetDamageImmunity);
     lua_setfield(state, -2, "set_damage_immunity");
     lua_pushcfunction(state, LuaSetWeight);
@@ -1693,6 +1796,14 @@ void Initialize() {
         });
     gHookBonkHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayerBonk>(
         []() { DispatchHookEvent("hook.oot.player.bonk", ShipLua::EventPayload{}); });
+    // OnPlayDrawEnd roda após o desenho do mundo (Player incluído) e antes do
+    // HUD — bodyPartsPos já está resolvido para o frame atual nesse ponto.
+    gHeldItemDrawHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayDrawEnd>(
+        []() {
+            if (gPlayState != nullptr) {
+                DrawHeldItemModels(gPlayState);
+            }
+        });
 
     gActorDestroyHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnActorDestroy>([](void* actor) {
         ShipLuaPuppet_HandleActorDestroy(actor);
