@@ -3,6 +3,7 @@
 #include "OotHotkeyRegistry.h"
 #include "OotWorldAdapter.h"
 #include "ShipLuaPuppet.h"
+#include "soh/Enhancements/item-tables/ItemTableTypes.h"
 
 #include <filesystem>
 #include <algorithm>
@@ -38,6 +39,7 @@
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/enhancementTypes.h"
 #include "soh/ResourceManagerHelpers.h"
+#include "soh/ShipInit.hpp"
 // OPEN_DISPS declara FrameInterpolation_* em escopo de bloco com linkage C++;
 // este header traz as declarações extern "C" corretas.
 #include "soh/frame_interpolation.h"
@@ -57,6 +59,10 @@ extern u8 gWalkSpeedToggle;
 // Emite uma display list arbitrária no buffer opaco. Precisa de linkage C: o
 // macro OPEN_DISPS declara FrameInterpolation_* em escopo de bloco, e dentro
 // de código C++ isso vira um símbolo mangled que não existe.
+// Declarada em z_player.c; inicia um novo rolamento (usada para encadear).
+// O parâmetro se chama "this" no C original — aqui precisa de outro nome.
+void Player_SetupRoll(Player* player, PlayState* play);
+
 static void ShipLuaEmitDisplayList(PlayState* play, const char* path) {
     OPEN_DISPS(play->state.gfxCtx);
     gSPDisplayList(POLY_OPA_DISP++, (Gfx*)path);
@@ -398,8 +404,10 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
     ShipLua::LuaApiHostContext context;
     context.gameId = "oot";
     context.hostVersion = GetHostVersion();
-    context.capabilities = { "oot.player.jump",  "oot.spawn_dog",   "oot.player.bunny_hood",   "oot.player.mask",
-                             "player.speed",     "player.fields",   "oot.player.attach_model", "mod.assets" };
+    context.capabilities = { "oot.player.jump",         "oot.spawn_dog",      "oot.player.bunny_hood",
+                             "oot.player.mask",         "player.speed",       "player.fields",
+                             "oot.player.attach_model", "mod.assets",         "oot.player.immunity",
+                             "oot.player.weight",       "oot.player.roll",    "hooks.bridge" };
     context.hotkeys = gHotkeys;
     context.capabilityRegistry = gCapabilityRegistry;
     context.actors = gActorProvider;
@@ -435,6 +443,23 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
     }
     registered =
         RegisterHostCapability("mod.assets", "Mount mod-provided archives under the mod/<name>/ namespace.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability("oot.player.immunity", "Grant the player immunity to a damage kind.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability("oot.player.weight", "Switch the player between normal and heavy weight.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability("oot.player.roll", "Enable continuous, steerable chained rolling.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability(
+        "hooks.bridge", "Generic bridge to native VB_*/On* GameInteractor hooks via ship.events.on(\"hook.*\").");
     if (!registered.isOk()) {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
@@ -511,7 +536,98 @@ int LuaSetSpeedMultiplier(lua_State* state) {
         gWalkSpeedToggle = 1;
         SPDLOG_INFO("ShipLua set_speed_multiplier: velocidade x{:.2f}", requested);
     }
+    // Os hooks COND_VB_SHOULD do SpeedModifiers avaliam a condição no momento
+    // do REGISTRO — e só os widgets do menu chamam ShipInit::Init ao mudar o
+    // CVar. Sem esta chamada, mudar o valor programaticamente não liga nada.
+    ShipInit::Init(CVAR_CHEAT("SpeedModifier.Value"));
 
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+// ---------------------------------------------------------------------------
+// Primitivas de habilidade. Genéricas de propósito: servem para a forma Goron,
+// mas também para qualquer outra forma, item ou mod de dificuldade.
+// ---------------------------------------------------------------------------
+
+// ship.oot.player.set_damage_immunity(kind, enabled): hoje só "fire". Apaga o
+// corpo em chamas a cada frame, o que anula o dano contínuo de queimadura.
+bool gFireImmunity = false;
+
+// ship.oot.player.set_weight(kind): "heavy" usa a mecânica das botas de ferro
+// (afunda na água, resiste a vento/empurrão); "normal" devolve as botas
+// anteriores. É a tradução honesta de "peso de Goron" para os sistemas do OoT.
+bool gHeavyWeight = false;
+int8_t gPreviousBoots = 0;
+
+// ship.oot.player.set_roll_mode(mode): "chain" encadeia rolamentos
+// indefinidamente e permite dirigir durante o rolamento — a aproximação do
+// rolamento contínuo do Goron usando a instrumentação que o engine já tem.
+bool gChainRoll = false;
+constexpr s16 kRollSteerStep = 0x400;   // giro por frame durante o rolamento
+constexpr s32 kRollStickDeadzone = 10;  // abaixo disso, o rolamento acaba
+
+int LuaSetDamageImmunity(lua_State* state) {
+    const char* kind = luaL_checkstring(state, 1);
+    const bool enabled = lua_toboolean(state, 2) != 0;
+    if (std::strcmp(kind, "fire") != 0) {
+        SPDLOG_WARN("ShipLua set_damage_immunity: tipo '{}' n\xC3\xA3o suportado (use 'fire')", kind);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    gFireImmunity = enabled;
+    SPDLOG_INFO("ShipLua set_damage_immunity: fogo {}", enabled ? "imune" : "normal");
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaSetWeight(lua_State* state) {
+    const char* kind = luaL_optstring(state, 1, "normal");
+    PlayState* play = gPlayState;
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (player == nullptr) {
+        SPDLOG_WARN("ShipLua set_weight: fora de gameplay");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    if (std::strcmp(kind, "heavy") == 0) {
+        if (!gHeavyWeight) {
+            gPreviousBoots = player->currentBoots;
+            gHeavyWeight = true;
+        }
+        player->currentBoots = PLAYER_BOOTS_IRON;
+        Player_SetBootData(play, player);
+        SPDLOG_INFO("ShipLua set_weight: peso pesado (mec\xC3\xA2nica das botas de ferro)");
+    } else if (std::strcmp(kind, "normal") == 0) {
+        if (gHeavyWeight) {
+            player->currentBoots = gPreviousBoots;
+            Player_SetBootData(play, player);
+            gHeavyWeight = false;
+        }
+        SPDLOG_INFO("ShipLua set_weight: peso normal");
+    } else {
+        SPDLOG_WARN("ShipLua set_weight: valor '{}' desconhecido (use 'heavy' ou 'normal')", kind);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaSetRollMode(lua_State* state) {
+    const char* mode = luaL_optstring(state, 1, "vanilla");
+    if (std::strcmp(mode, "chain") == 0) {
+        gChainRoll = true;
+    } else if (std::strcmp(mode, "vanilla") == 0) {
+        gChainRoll = false;
+    } else {
+        SPDLOG_WARN("ShipLua set_roll_mode: modo '{}' desconhecido (use 'chain' ou 'vanilla')", mode);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    SPDLOG_INFO("ShipLua set_roll_mode: {}", mode);
     lua_pushboolean(state, 1);
     return 1;
 }
@@ -592,6 +708,47 @@ int LuaSetMask(lua_State* state) {
 // bloco de desenho de máscara execute e substitui a DL pela do mod.
 std::string gAttachedHeadModel;
 HOOK_ID gMaskDrawHook = 0;
+HOOK_ID gFireImmunityHook = 0;
+HOOK_ID gRollChainHook = 0;
+HOOK_ID gRollSteerHook = 0;
+
+// ---------------------------------------------------------------------------
+// Ponte de hooks — v1 curada. Os ~476 pontos VB_*/On* do GameInteractor já
+// existiam; nenhum mod alcançava nenhum deles. Em vez de escrever uma função
+// nativa por habilidade (o padrão de toda a noite), cada hook curado aqui só
+// republica seus argumentos como ship.events.on("hook.oot....", fn) — a
+// escolha de comportamento fica inteira no Lua. Ver ship.hooks.result() na
+// lib compartilhada para o caminho de volta (gate/modify).
+HOOK_ID gHookRunSpeedHook = 0;
+HOOK_ID gHookFallDamageHook = 0;
+HOOK_ID gHookItemReceiveHook = 0;
+HOOK_ID gHookHealthChangeHook = 0;
+HOOK_ID gHookBonkHook = 0;
+
+// Dispara um evento "should"/"modify": devolve o EventValue que um callback
+// Lua gravou via ship.hooks.result(), se algum gravou.
+std::optional<ShipLua::EventValue> DispatchHookTransform(const char* name, ShipLua::EventPayload payload) {
+    if (gModHost == nullptr) {
+        return std::nullopt;
+    }
+    const auto outcome = gModHost->DispatchEvent(name, payload);
+    if (!outcome.isOk()) {
+        return std::nullopt;
+    }
+    const auto found = payload.find("__hook_result");
+    if (found == payload.end()) {
+        return std::nullopt;
+    }
+    return found->second;
+}
+
+// Dispara um evento puro de notificação — nenhum retorno é lido.
+void DispatchHookEvent(const char* name, ShipLua::EventPayload payload) {
+    if (gModHost == nullptr) {
+        return;
+    }
+    gModHost->DispatchEvent(name, payload);
+}
 
 int LuaAttachModel(lua_State* state) {
     const char* slot = luaL_checkstring(state, 1);
@@ -807,6 +964,9 @@ int LuaSetBunnyHood(lua_State* state) {
         }
         SPDLOG_INFO("ShipLua set_bunny_hood: Bunny Hood removida");
     }
+    // Mesmo motivo do set_speed_multiplier: sem re-registrar, o hook de
+    // velocidade da Bunny Hood não é instalado e a máscara fica só visual.
+    ShipInit::Init(CVAR_ENHANCEMENT("MMBunnyHood"));
 
     lua_pushboolean(state, 1);
     return 1;
@@ -859,6 +1019,12 @@ void InstallOotApi(lua_State* state) {
     lua_setfield(state, -2, "set_mask");
     lua_pushcfunction(state, LuaAttachModel);
     lua_setfield(state, -2, "attach_model");
+    lua_pushcfunction(state, LuaSetDamageImmunity);
+    lua_setfield(state, -2, "set_damage_immunity");
+    lua_pushcfunction(state, LuaSetWeight);
+    lua_setfield(state, -2, "set_weight");
+    lua_pushcfunction(state, LuaSetRollMode);
+    lua_setfield(state, -2, "set_roll_mode");
     lua_setfield(state, ootTable, "player");
     lua_setfield(state, shipTable, "oot");
 
@@ -1238,6 +1404,62 @@ void Initialize() {
         GameInteractor::Instance->RegisterGameHook<GameInteractor::OnGameFrameUpdate>([]() { TickWorldImport(); });
     // attach_model: substitui a DL da máscara-veículo pela do mod. O hook roda
     // já dentro do contexto de matriz da cabeça, então basta emitir a DL.
+    // Imunidade a fogo: apaga o corpo em chamas antes que o dano contínuo seja
+    // aplicado. Rodar por frame é o suficiente — Player_UpdateBodyBurn só age
+    // enquanto bodyIsBurning estiver ligado.
+    gFireImmunityHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayerUpdate>([]() {
+        if (!gFireImmunity || gPlayState == nullptr) {
+            return;
+        }
+        Player* player = GET_PLAYER(gPlayState);
+        if (player != nullptr && player->bodyIsBurning) {
+            player->bodyIsBurning = false;
+            for (int i = 0; i < PLAYER_BODYPART_MAX; ++i) {
+                player->bodyFlameTimers[i] = 0;
+            }
+        }
+    });
+    // Rolamento contínuo e dirigível, modelado no Player_Action_96 do MM:
+    // - o rolamento se re-arma sozinho enquanto houver direção no analógico
+    //   (no MM não se aperta nada para continuar rolando);
+    // - a direção acompanha o analógico de verdade;
+    // - bater na parede continua caindo no "bonk" do próprio OoT, que roda
+    //   antes deste ponto — é o "até bater em algo".
+    // Estes hooks NÃO são um simples true/false: o CHAIN precisa chamar
+    // Player_SetupRoll e o STEER precisa girar o player ele mesmo.
+    gRollChainHook = REGISTER_VB_SHOULD(VB_PLAYER_ROLL_CHAIN, {
+        Player* player = va_arg(args, Player*);
+        PlayState* play = va_arg(args, PlayState*);
+        Input* controlInput = va_arg(args, Input*);
+        const s32 floorType = va_arg(args, s32);
+        if (!gChainRoll || player == nullptr || play == nullptr || controlInput == nullptr) {
+            return;
+        }
+        // floorType 7 é a superfície onde o vanilla proíbe encadear.
+        if ((player->skelAnime.curFrame < 15.0f) || (floorType == 7)) {
+            return;
+        }
+        // Sem direção no analógico o rolamento termina naturalmente.
+        const s32 stickX = controlInput->rel.stick_x;
+        const s32 stickY = controlInput->rel.stick_y;
+        if (((stickX * stickX) + (stickY * stickY)) < (kRollStickDeadzone * kRollStickDeadzone)) {
+            return;
+        }
+        Player_SetupRoll(player, play);
+        *should = true;
+    });
+    gRollSteerHook = REGISTER_VB_SHOULD(VB_PLAYER_ROLL_STEER, {
+        Player* player = va_arg(args, Player*);
+        [[maybe_unused]] PlayState* play = va_arg(args, PlayState*);
+        const s16 yawTarget = static_cast<s16>(va_arg(args, int));
+        if (!gChainRoll || player == nullptr) {
+            return;
+        }
+        // Passo maior que o do "improved roll" do SoH: o Goron do MM vira
+        // rápido enquanto rola.
+        Math_ScaledStepToS(&player->actor.shape.rot.y, yawTarget, kRollSteerStep);
+        *should = false;
+    });
     gMaskDrawHook = REGISTER_VB_SHOULD(VB_DRAW_PLAYER_MASK, {
         if (gAttachedHeadModel.empty()) {
             return;
@@ -1250,6 +1472,49 @@ void Initialize() {
         ShipLuaEmitDisplayList(play, gAttachedHeadModel.c_str());
         *should = false; // não desenha a máscara vanilla por cima
     });
+
+    // hook.oot.player.speed.run — VB_PLAYER_MODIFY_RUN_SPEED(Player*, f32* speedTarget).
+    // O retorno booleano do hook é ignorado pelo próprio engine no call site
+    // (chamada solta, sem if): só o *speedTarget mutado importa.
+    gHookRunSpeedHook = REGISTER_VB_SHOULD(VB_PLAYER_MODIFY_RUN_SPEED, {
+        va_arg(args, Player*);
+        f32* speedTarget = va_arg(args, f32*);
+        if (speedTarget == nullptr) {
+            return;
+        }
+        const auto result =
+            DispatchHookTransform("hook.oot.player.speed.run", ShipLua::EventPayload{
+                                                                    {"speed", static_cast<double>(*speedTarget)},
+                                                                });
+        if (result.has_value() && std::holds_alternative<double>(result->value)) {
+            *speedTarget = static_cast<f32>(std::get<double>(result->value));
+        }
+    });
+    // hook.oot.player.fall_damage — VB_RECIEVE_FALL_DAMAGE(Actor*); default true
+    // (dano aplicado). Lua devolvendo false via ship.hooks.result cancela o dano.
+    gHookFallDamageHook = REGISTER_VB_SHOULD(VB_RECIEVE_FALL_DAMAGE, {
+        va_arg(args, Actor*);
+        const auto result = DispatchHookTransform("hook.oot.player.fall_damage", ShipLua::EventPayload{});
+        if (result.has_value() && std::holds_alternative<bool>(result->value)) {
+            *should = std::get<bool>(result->value);
+        }
+    });
+    gHookItemReceiveHook =
+        GameInteractor::Instance->RegisterGameHook<GameInteractor::OnItemReceive>([](GetItemEntry itemEntry) {
+            DispatchHookEvent("hook.oot.item.receive",
+                              ShipLua::EventPayload{
+                                  {"item_id", static_cast<std::int64_t>(itemEntry.itemId)},
+                                  {"get_item_id", static_cast<std::int64_t>(itemEntry.getItemId)},
+                              });
+        });
+    gHookHealthChangeHook =
+        GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayerHealthChange>([](int16_t amount) {
+            DispatchHookEvent("hook.oot.player.health_change",
+                              ShipLua::EventPayload{{"amount", static_cast<std::int64_t>(amount)}});
+        });
+    gHookBonkHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayerBonk>(
+        []() { DispatchHookEvent("hook.oot.player.bonk", ShipLua::EventPayload{}); });
+
     gActorDestroyHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnActorDestroy>([](void* actor) {
         ShipLuaPuppet_HandleActorDestroy(actor);
         if (gActorProvider == nullptr) {
