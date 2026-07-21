@@ -625,7 +625,10 @@ int LuaAttachModel(lua_State* state) {
         return 1;
     }
 
-    gAttachedHeadModel = path;
+    // O interpretador gráfico só trata um ponteiro como caminho de recurso
+    // quando ele começa com "__OTR__". Sem o prefixo, ele executa os bytes da
+    // string como comandos de display list — e o jogo morre em opcodes ASCII.
+    gAttachedHeadModel = std::string("__OTR__") + path;
     // Máscara-veículo: o engine só entra no bloco de desenho quando há uma
     // máscara equipada. A DL dela é substituída pela do mod no hook.
     CVarSetInteger(CVAR_ENHANCEMENT("PersistentMasks"), 1);
