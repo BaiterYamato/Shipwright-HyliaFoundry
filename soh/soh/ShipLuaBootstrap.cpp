@@ -48,6 +48,7 @@ extern "C" {
 #include "variables.h"
 #include "z64.h"
 extern PlayState* gPlayState;
+extern u8 gWalkSpeedToggle;
 }
 
 namespace ShipLuaHost {
@@ -384,7 +385,8 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
     ShipLua::LuaApiHostContext context;
     context.gameId = "oot";
     context.hostVersion = GetHostVersion();
-    context.capabilities = { "oot.player.jump", "oot.spawn_dog", "oot.player.bunny_hood" };
+    context.capabilities = { "oot.player.jump", "oot.spawn_dog", "oot.player.bunny_hood", "oot.player.mask",
+                             "player.speed" };
     context.hotkeys = gHotkeys;
     context.capabilityRegistry = gCapabilityRegistry;
     context.actors = gActorProvider;
@@ -398,6 +400,14 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
     }
     registered = RegisterHostCapability("oot.player.bunny_hood",
                                         "Equip the OoT Bunny Hood with Majora's Mask speed and jump behaviour.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability("oot.player.mask", "Equip any OoT mask by logical name.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability("player.speed", "Scale the player's movement speed by a validated factor.");
     if (!registered.isOk()) {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
@@ -430,6 +440,117 @@ int LuaPlayerJump(lua_State* state) {
         return 1;
     }
     player->actor.velocity.y = 6.34375f;
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+// ship.player.set_speed_multiplier(factor): primitiva comum aos dois jogos.
+// Dirige o SpeedModifier que o host já implementa, mas em modo incondicional
+// (o padrão exige segurar um botão). Passar 1.0 restaura o estado anterior.
+bool gSpeedForced = false;
+float gSpeedPreviousValue = 1.0f;
+int gSpeedPreviousToggleMode = 0;
+u8 gSpeedPreviousToggleState = 0;
+
+int LuaSetSpeedMultiplier(lua_State* state) {
+    const double requested = luaL_checknumber(state, 1);
+    if (!std::isfinite(requested) || requested < 0.1 || requested > 5.0) {
+        SPDLOG_WARN("ShipLua set_speed_multiplier: fator fora da faixa 0.1–5.0");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    const bool restore = std::fabs(requested - 1.0) < 0.0001;
+    if (!gSpeedForced && !restore) {
+        gSpeedPreviousValue = CVarGetFloat(CVAR_CHEAT("SpeedModifier.Value"), 1.0f);
+        gSpeedPreviousToggleMode = CVarGetInteger(CVAR_CHEAT("SpeedModifier.SpeedToggle"), 0);
+        gSpeedPreviousToggleState = gWalkSpeedToggle;
+        gSpeedForced = true;
+    }
+
+    if (restore) {
+        if (gSpeedForced) {
+            CVarSetFloat(CVAR_CHEAT("SpeedModifier.Value"), gSpeedPreviousValue);
+            CVarSetInteger(CVAR_CHEAT("SpeedModifier.SpeedToggle"), gSpeedPreviousToggleMode);
+            gWalkSpeedToggle = gSpeedPreviousToggleState;
+            gSpeedForced = false;
+        }
+        SPDLOG_INFO("ShipLua set_speed_multiplier: velocidade restaurada");
+    } else {
+        CVarSetFloat(CVAR_CHEAT("SpeedModifier.Value"), static_cast<float>(requested));
+        // Modo toggle ligado + toggle ativo = multiplicador sempre valendo,
+        // sem depender de o jogador segurar o botão modificador.
+        CVarSetInteger(CVAR_CHEAT("SpeedModifier.SpeedToggle"), 1);
+        gWalkSpeedToggle = 1;
+        SPDLOG_INFO("ShipLua set_speed_multiplier: velocidade x{:.2f}", requested);
+    }
+
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+// ship.oot.player.set_mask(name): veste qualquer máscara do OoT pelo nome
+// lógico, mantendo-a equipada sem ocupar um botão C. "none" remove.
+struct MaskEntry {
+    const char* name;
+    std::uint8_t mask;
+};
+
+constexpr std::array<MaskEntry, 8> kOotMasks = { {
+    { "keaton", PLAYER_MASK_KEATON },
+    { "skull", PLAYER_MASK_SKULL },
+    { "spooky", PLAYER_MASK_SPOOKY },
+    { "bunny_hood", PLAYER_MASK_BUNNY },
+    { "goron", PLAYER_MASK_GORON },
+    { "zora", PLAYER_MASK_ZORA },
+    { "gerudo", PLAYER_MASK_GERUDO },
+    { "truth", PLAYER_MASK_TRUTH },
+} };
+
+bool gMaskForced = false;
+int gMaskPreviousPersistent = 0;
+
+int LuaSetMask(lua_State* state) {
+    const char* requested = luaL_optstring(state, 1, "none");
+    PlayState* play = gPlayState;
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (player == nullptr || (player->stateFlags1 & PLAYER_STATE1_DEAD) != 0) {
+        SPDLOG_WARN("ShipLua set_mask: fora de gameplay");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    if (std::strcmp(requested, "none") == 0) {
+        player->currentMask = PLAYER_MASK_NONE;
+        gSaveContext.ship.maskMemory = PLAYER_MASK_NONE;
+        if (gMaskForced) {
+            CVarSetInteger(CVAR_ENHANCEMENT("PersistentMasks"), gMaskPreviousPersistent);
+            gMaskForced = false;
+        }
+        SPDLOG_INFO("ShipLua set_mask: máscara removida");
+        lua_pushboolean(state, 1);
+        return 1;
+    }
+
+    const auto found = std::find_if(kOotMasks.begin(), kOotMasks.end(), [requested](const MaskEntry& entry) {
+        return std::strcmp(entry.name, requested) == 0;
+    });
+    if (found == kOotMasks.end()) {
+        SPDLOG_WARN("ShipLua set_mask: máscara desconhecida '{}'", requested);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    if (!gMaskForced) {
+        gMaskPreviousPersistent = CVarGetInteger(CVAR_ENHANCEMENT("PersistentMasks"), 0);
+        gMaskForced = true;
+    }
+    // Sem PersistentMasks o jogo zera currentMask no frame seguinte quando a
+    // máscara não está num botão C.
+    CVarSetInteger(CVAR_ENHANCEMENT("PersistentMasks"), 1);
+    player->currentMask = found->mask;
+    gSaveContext.ship.maskMemory = found->mask;
+    SPDLOG_INFO("ShipLua set_mask: máscara '{}' equipada", requested);
     lua_pushboolean(state, 1);
     return 1;
 }
@@ -526,8 +647,23 @@ void InstallOotApi(lua_State* state) {
     lua_setfield(state, -2, "jump");
     lua_pushcfunction(state, LuaSetBunnyHood);
     lua_setfield(state, -2, "set_bunny_hood");
+    lua_pushcfunction(state, LuaSetMask);
+    lua_setfield(state, -2, "set_mask");
     lua_setfield(state, ootTable, "player");
     lua_setfield(state, shipTable, "oot");
+
+    // Primitiva comum aos dois jogos: ship.player.set_speed_multiplier.
+    // Precisa ficar ANTES do pop final — depois dele o índice shipTable já
+    // não é válido.
+    lua_getfield(state, shipTable, "player");
+    if (!lua_istable(state, -1)) {
+        lua_pop(state, 1);
+        lua_newtable(state);
+    }
+    lua_pushcfunction(state, LuaSetSpeedMultiplier);
+    lua_setfield(state, -2, "set_speed_multiplier");
+    lua_setfield(state, shipTable, "player");
+
     lua_pop(state, 1);
 }
 
