@@ -909,6 +909,8 @@ HOOK_ID gHookItemReceiveHook = 0;
 HOOK_ID gHookHealthChangeHook = 0;
 HOOK_ID gHookBonkHook = 0;
 HOOK_ID gHeldItemDrawHook = 0;
+HOOK_ID gHookFirstPersonHook = 0;
+HOOK_ID gHookArrowTypeSelectHook = 0;
 
 // Dispara um evento "should"/"modify": devolve o EventValue que um callback
 // Lua gravou via ship.hooks.result(), se algum gravou.
@@ -1796,6 +1798,43 @@ void Initialize() {
         });
     gHookBonkHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayerBonk>(
         []() { DispatchHookEvent("hook.oot.player.bonk", ShipLua::EventPayload{}); });
+    // hook.oot.player.first_person_control — OnPlayerFirstPersonControl(Player*)
+    // já existia (usado por Mouse.cpp), roda todo frame com mira em primeira
+    // pessoa ativa. Achado minerando forks de item customizado: praticamente
+    // todo item com overlay/comportamento de mira (Ball and Chain, Whip,
+    // Gust Jar...) precisa saber "estou mirando agora" por frame.
+    gHookFirstPersonHook =
+        GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayerFirstPersonControl>([](Player* player) {
+            if (player == nullptr) {
+                return;
+            }
+            DispatchHookEvent("hook.oot.player.first_person_control",
+                              ShipLua::EventPayload{
+                                  {"held_item_action", static_cast<std::int64_t>(player->heldItemAction)},
+                              });
+        });
+    // hook.oot.player.arrow_type_select — VB_PLAYER_ARROW_MAGIC_CONSUMPTION
+    // (Player*, s32 magicArrowType, s32* arrowType), já mutava arrowType por
+    // referência antes de nós (é o próprio mecanismo vanilla de escolher
+    // flecha de fogo/gelo/luz). Reaproveitado como ponto de escolha de
+    // variante de projétil para mods, sem novo call site nativo.
+    gHookArrowTypeSelectHook = REGISTER_VB_SHOULD(VB_PLAYER_ARROW_MAGIC_CONSUMPTION, {
+        va_arg(args, Player*);
+        int32_t magicArrowType = va_arg(args, int32_t);
+        int32_t* arrowType = va_arg(args, int32_t*);
+        if (arrowType == nullptr) {
+            return;
+        }
+        const auto result = DispatchHookTransform(
+            "hook.oot.player.arrow_type_select",
+            ShipLua::EventPayload{
+                {"magic_arrow_type", static_cast<std::int64_t>(magicArrowType)},
+                {"arrow_type", static_cast<std::int64_t>(*arrowType)},
+            });
+        if (result.has_value() && std::holds_alternative<std::int64_t>(result->value)) {
+            *arrowType = static_cast<int32_t>(std::get<std::int64_t>(result->value));
+        }
+    });
     // OnPlayDrawEnd roda após o desenho do mundo (Player incluído) e antes do
     // HUD — bodyPartsPos já está resolvido para o frame atual nesse ponto.
     gHeldItemDrawHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayDrawEnd>(
