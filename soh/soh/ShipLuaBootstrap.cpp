@@ -4,6 +4,7 @@
 #include "OotWorldAdapter.h"
 #include "ShipLuaPuppet.h"
 #include "soh/Enhancements/item-tables/ItemTableTypes.h"
+#include "soh/Enhancements/item-tables/ItemTableManager.h"
 
 #include <filesystem>
 #include <algorithm>
@@ -36,6 +37,7 @@
 #include <shiplua/host/ModHost.h>
 #include <shiplua/runtime/LuaRuntime.h>
 #include <shiplua/storage/AtomicFile.h>
+#include <shiplua/storage/KeyValueStorage.h>
 #include <shiplua/world/WorldHandoff.h>
 
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
@@ -501,6 +503,49 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
             return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
         }
     }
+
+    // ship.storage: store persistente por mod, gravado no diretório do app (um
+    // arquivo para todos os mods, namespaced internamente por mod). Antes disto
+    // o host real nunca conectava um KeyValueStorage — ship.storage.set caía em
+    // Unsupported e nada sobrevivia à sessão. Um arquivo corrompido não trava o
+    // host (começa vazio e é sobrescrito na próxima gravação).
+    {
+        auto storage = std::make_shared<ShipLua::KeyValueStorage>();
+        const std::filesystem::path storagePath = Ship::Context::GetPathRelativeToAppDirectory(
+            "shiplua-storage.bin", Ship::Context::GetRawInstance()->GetShortName());
+        const auto loaded = storage->EnablePersistence(storagePath);
+        if (!loaded.isOk()) {
+            SPDLOG_WARN("ShipLua: storage persistente corrompido ({}), recomeçando vazio: {}",
+                        storagePath.string(), loaded.message);
+        }
+        context.storage = storage;
+        context.capabilities.push_back("core.storage");
+        registered = RegisterHostCapability(
+            "core.storage", "Per-mod key-value storage persisted to disk across sessions.");
+        if (!registered.isOk()) {
+            return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+        }
+    }
+
+    // ship.storage.shared: store COMPARTILHADO entre os dois jogos, num arquivo
+    // no diretório de sessão do launcher. Só existe sob o launcher (BridgeConfig);
+    // standalone não tem para onde compartilhar, então fica ausente e degrada.
+    if (const auto& bridge = GetBridgeConfig(); bridge.has_value()) {
+        auto shared = std::make_shared<ShipLua::KeyValueStorage>();
+        const std::filesystem::path sharedPath = bridge->sessionDirectory / "shared-storage.bin";
+        const auto loaded = shared->EnablePersistence(sharedPath);
+        if (!loaded.isOk()) {
+            SPDLOG_WARN("ShipLua: storage compartilhado corrompido ({}), recomeçando vazio: {}",
+                        sharedPath.string(), loaded.message);
+        }
+        context.sharedStorage = shared;
+        context.capabilities.push_back("core.storage.shared");
+        registered = RegisterHostCapability(
+            "core.storage.shared", "Cross-game key-value storage shared between OoT and MM under the launcher.");
+        if (!registered.isOk()) {
+            return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+        }
+    }
     return ShipLua::Result<ShipLua::LuaApiHostContext>::ok(std::move(context));
 }
 
@@ -751,6 +796,36 @@ CustomBodySpec gCustomBodySpec;
 // Crowd Control, portanto não altera nem é alterada por esse efeito externo.
 extern "C" u8 ShipLua_ShouldBlockLedgeGrabs(void) {
     return gCustomBodyActive && gCustomBodySpec.blockLedgeGrab;
+}
+
+// hook.oot.item.give (transform). Chamado do funil GiveItemEntryFromActor
+// (z_actor.c) logo antes do item ser entregue ao Player. O Lua recebe o item
+// atual e pode devolver, via ship.hooks.result, um NOVO get_item_id — o host
+// reconstrói o GetItemEntry pela tabela vanilla (MOD_NONE) e substitui in
+// place. É o ponto que um randomizer em Lua precisa: "esta check dá o quê?".
+// Ponto frio (só ao pegar item), mesma disciplina do bridge de ledge-grab.
+extern "C" void ShipLua_TransformGivenItem(GetItemEntry* entry) {
+    if (entry == nullptr || gModHost == nullptr) {
+        return;
+    }
+    const auto result = DispatchHookTransform(
+        "hook.oot.item.give",
+        ShipLua::EventPayload{
+            {"item_id", static_cast<std::int64_t>(entry->itemId)},
+            {"get_item_id", static_cast<std::int64_t>(entry->getItemId)},
+        });
+    if (!result.has_value() || !std::holds_alternative<std::int64_t>(result->value)) {
+        return;
+    }
+    const std::int64_t replacement = std::get<std::int64_t>(result->value);
+    if (replacement == entry->getItemId || replacement <= 0 || replacement > 0xFFFF) {
+        return;
+    }
+    GetItemEntry replaced =
+        ItemTableManager::Instance->RetrieveItemEntry(MOD_NONE, static_cast<uint16_t>(replacement));
+    if (replaced.itemId != ITEM_NONE) {
+        *entry = replaced;
+    }
 }
 std::optional<std::string> gCustomBodyOverrideAnim;
 bool gCustomBodyOverrideOnce = false;
@@ -2577,6 +2652,7 @@ HOOK_ID gHeldItemDrawHook = 0;
 HOOK_ID gMaskTransitionUpdateHook = 0;
 HOOK_ID gHookFirstPersonHook = 0;
 HOOK_ID gHookArrowTypeSelectHook = 0;
+HOOK_ID gHookEnemyDefeatHook = 0;
 
 // Dispara um evento "should"/"modify": devolve o EventValue que um callback
 // Lua gravou via ship.hooks.result(), se algum gravou.
@@ -3576,6 +3652,25 @@ void Initialize() {
             *arrowType = static_cast<int32_t>(std::get<std::int64_t>(result->value));
         }
     });
+    // hook.oot.enemy.defeat — OnEnemyDefeat(Actor*), disparado por dezenas de
+    // inimigos ao morrer (não é todo Actor_Kill; só derrota real). Fonte de XP
+    // para um mod de RPG: o Lua consulta a tabela de recompensa dele pelo
+    // actor_id e persiste o total via ship.storage.
+    gHookEnemyDefeatHook =
+        GameInteractor::Instance->RegisterGameHook<GameInteractor::OnEnemyDefeat>([](void* actorPtr) {
+            Actor* actor = static_cast<Actor*>(actorPtr);
+            if (actor == nullptr) {
+                return;
+            }
+            DispatchHookEvent("hook.oot.enemy.defeat",
+                              ShipLua::EventPayload{
+                                  {"actor_id", static_cast<std::int64_t>(actor->id)},
+                                  {"category", static_cast<std::int64_t>(actor->category)},
+                                  {"pos_x", static_cast<double>(actor->world.pos.x)},
+                                  {"pos_y", static_cast<double>(actor->world.pos.y)},
+                                  {"pos_z", static_cast<double>(actor->world.pos.z)},
+                              });
+        });
     // OnPlayDrawEnd roda após o desenho do mundo (Player incluído) e antes do
     // HUD — bodyPartsPos já está resolvido para o frame atual nesse ponto.
     gHeldItemDrawHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayDrawEnd>(

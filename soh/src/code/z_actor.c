@@ -22,6 +22,11 @@
 #include <stdlib.h>
 #include <assert.h>
 
+// ShipLua: permite a um mod trocar o item de uma check antes de ser entregue
+// (randomizer). Definido em ShipLuaBootstrap.cpp; no-op quando nenhum mod
+// assina hook.oot.item.give.
+extern void ShipLua_TransformGivenItem(GetItemEntry* entry);
+
 #if defined(_MSC_VER) || defined(__GNUC__)
 #include "textures/place_title_cards/g_pn_49.h"
 #include "textures/place_title_cards/g_pn_01.h"
@@ -2086,6 +2091,9 @@ s32 GiveItemEntryFromActor(Actor* actor, PlayState* play, GetItemEntry getItemEn
 
                 if ((getItemEntry.getItemId != GI_NONE) || (player->getItemDirection < absYawDiff)) {
                     iceTrapScale = 0.0f;
+                    // ShipLua item.give: deixa um mod trocar o item desta check
+                    // (randomizer). Opera na cópia local antes de armazená-la.
+                    ShipLua_TransformGivenItem(&getItemEntry);
                     player->getItemEntry = getItemEntry;
                     player->getItemId = getItemEntry.getItemId;
                     player->interactRangeActor = actor;
