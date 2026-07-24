@@ -38,6 +38,7 @@
 #include <shiplua/runtime/LuaRuntime.h>
 #include <shiplua/storage/AtomicFile.h>
 #include <shiplua/storage/KeyValueStorage.h>
+#include <shiplua/timer/FrameTimerScheduler.h>
 #include <shiplua/world/WorldHandoff.h>
 
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
@@ -84,6 +85,11 @@ std::unique_ptr<ShipLua::ModHost> gModHost;
 std::shared_ptr<OotActorProvider> gActorProvider;
 std::shared_ptr<ShipLua::CapabilityRegistry> gCapabilityRegistry;
 std::shared_ptr<OotHotkeyRegistry> gHotkeys;
+// Timers por frame (ship.timer.after/every). Precisa de Tick() todo frame —
+// ver o hook OnGameFrameUpdate no Initialize. Sem isto, core.timers fica
+// indisponível e mods que dependem de sequenciamento (por exemplo a animação
+// de colocar máscara antes de trocar o corpo) degradam para ação instantânea.
+std::shared_ptr<ShipLua::FrameTimerScheduler> gTimers;
 std::shared_ptr<OotWorldAdapter> gWorldAdapter;
 HOOK_ID gLoadGameHook = 0;
 HOOK_ID gImportTickHook = 0;
@@ -420,7 +426,13 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
     context.hotkeys = gHotkeys;
     context.capabilityRegistry = gCapabilityRegistry;
     context.actors = gActorProvider;
+    context.timers = gTimers;
+    context.capabilities.push_back("core.timers");
     auto registered = RegisterHostCapability("oot.player.jump", "Apply a validated jump impulse to OoT Link.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability("core.timers", "Per-frame timers owned by each mod (ship.timer).");
     if (!registered.isOk()) {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
@@ -3458,6 +3470,7 @@ void Initialize() {
 
     gHotkeys = std::make_shared<OotHotkeyRegistry>();
     gCapabilityRegistry = std::make_shared<ShipLua::CapabilityRegistry>();
+    gTimers = std::make_shared<ShipLua::FrameTimerScheduler>();
     gActorProvider = CreateActorProvider();
     const auto actorCapabilities = gActorProvider->RegisterCapabilities(*gCapabilityRegistry);
     if (!actorCapabilities.isOk()) {
@@ -3479,7 +3492,20 @@ void Initialize() {
     gLoadGameHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnLoadGame>(
         [](int32_t) { TryConsumeWorldHandoff(); });
     gImportTickHook =
-        GameInteractor::Instance->RegisterGameHook<GameInteractor::OnGameFrameUpdate>([]() { TickWorldImport(); });
+        GameInteractor::Instance->RegisterGameHook<GameInteractor::OnGameFrameUpdate>([]() {
+            TickWorldImport();
+            // Avança os timers de mod uma vez por frame. Sem isto, ship.timer
+            // nunca dispara e qualquer mod que sequencie ações (animação e
+            // depois efeito) trava no primeiro passo.
+            if (gTimers != nullptr) {
+                const auto ticked = gTimers->Tick();
+                if (ticked.isOk()) {
+                    for (const auto& failure : ticked.value->failures) {
+                        SPDLOG_WARN("ShipLua [{}] timer falhou: {}", failure.modId, failure.message);
+                    }
+                }
+            }
+        });
     // attach_model: substitui a DL da máscara-veículo pela do mod. O hook roda
     // já dentro do contexto de matriz da cabeça, então basta emitir a DL.
     // Imunidade a fogo: apaga o corpo em chamas antes que o dano contínuo seja
@@ -3782,6 +3808,7 @@ void Shutdown() {
     gCapabilityRegistry.reset();
     gWorldAdapter.reset();
     gHotkeys.reset();
+    gTimers.reset();
     SPDLOG_INFO("ShipLua finalizado");
 }
 
