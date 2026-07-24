@@ -14,6 +14,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -61,9 +62,11 @@ extern u8 gWalkSpeedToggle;
 // Emite uma display list arbitrária no buffer opaco. Precisa de linkage C: o
 // macro OPEN_DISPS declara FrameInterpolation_* em escopo de bloco, e dentro
 // de código C++ isso vira um símbolo mangled que não existe.
-// Declarada em z_player.c; inicia um novo rolamento (usada para encadear).
+// Declaradas em z_player.c; iniciam e identificam o rolamento nativo do OoT.
 // O parâmetro se chama "this" no C original — aqui precisa de outro nome.
 void Player_SetupRoll(Player* player, PlayState* play);
+void Player_Action_Roll(Player* player, PlayState* play);
+void Player_Action_80845EF8(Player* player, PlayState* play);
 
 static void ShipLuaEmitDisplayList(PlayState* play, const char* path) {
     OPEN_DISPS(play->state.gfxCtx);
@@ -688,33 +691,214 @@ int LuaSetRollMode(lua_State* state) {
 // no arquivo.
 std::optional<ShipLua::EventValue> DispatchHookTransform(const char* name, ShipLua::EventPayload payload);
 
+// ATENÇÃO ao mexer aqui: LinkAnimation_Change guarda o ponteiro ORIGINAL que
+// recebe (z_skelanime.c:1292, `skelAnime->animation = ogAnim`) e o re-resolve
+// a cada frame dentro de LinkAnimation_Update. O mesmo vale para o skeleton.
+// Ou seja: as strings de caminho passadas ao engine precisam sobreviver
+// enquanto o corpo estiver ativo — passar uma std::string temporária dá
+// use-after-free no frame SEGUINTE (crash real em AnimationContext_SetLoadFrame,
+// não teórico). Por isso os caminhos já prefixados vivem aqui, na spec global,
+// e nunca em locais. std::map é node-based: o endereço de um value é estável
+// enquanto o elemento não for removido/reatribuído.
 struct CustomBodySpec {
-    std::string skeletonPath;
-    std::map<std::string, std::string> anims; // nome lógico (do mod) -> path
+    std::string skeletonPath;                 // como o mod informou (para get_body)
+    std::map<std::string, std::string> anims; // nome lógico (do mod) -> path do mod
+    // Segmentos N64 que a display list do esqueleto lê diretamente (por exemplo,
+    // 0x08 para os olhos dos modelos de Player). O host só aceita 1..15.
+    std::map<int, std::string> segments;
+    // Chaves em `anims` que devem executar em loop reverso. O asset continua
+    // único; isso representa fielmente ações como descida de escada, onde MM
+    // usa o mesmo header de subida com playSpeed negativo.
+    std::set<std::string> reverseAnims;
+    // Modelos alternativos associados a estados nativos do Player. Hoje "roll"
+    // é usado quando Player_Action_Roll está ativo; a chave continua explícita
+    // para não amarrar o contrato à forma Goron.
+    std::map<std::string, std::string> models;
+    // Postura opcional que pode usar outro skeleton e outro formato de animação
+    // (por exemplo, a defesa enrolada do Goron de MM). Diferente de `anims`,
+    // estes assets não precisam usar LinkAnimationHeader nem o mesmo número
+    // de membros do corpo principal.
+    std::string shieldSkeletonPath;
+    std::string shieldAnimationPath;
     std::string defaultAnim;
+    f32 groundOffset = 0.0f;
+    f32 rollOffset = 0.0f;
+    // Opt-in de semântica de forma: em água funda, o corpo enrola, afunda e
+    // usa o respawn/void-out nativo. O padrão é manter a natação normal do OoT.
+    bool waterVoid = false;
+    // Goron não agarra bordas no Player de MM. É opt-in para não mudar a ação
+    // humana de outros corpos externos.
+    bool blockLedgeGrab = false;
+    // Espelhos com "__OTR__" já aplicado — é DESTES que os ponteiros passados
+    // ao engine saem, e é por isso que eles precisam ser membros persistentes.
+    std::string skeletonPathPrefixed;
+    std::map<std::string, std::string> animsPrefixed;
+    std::map<int, std::string> segmentsPrefixed;
+    std::map<std::string, std::string> modelsPrefixed;
+    std::string shieldSkeletonPathPrefixed;
+    std::string shieldAnimationPathPrefixed;
 };
 
 bool gCustomBodyActive = false;
 Actor* gCustomBodyActor = nullptr;
 SkelAnime gCustomBodySkelAnime{};
+SkelAnime gCustomBodyShieldSkelAnime{};
 std::string gCustomBodyCurrentAnim;
 CustomBodySpec gCustomBodySpec;
+
+// Chamado pelo gate nativo de Player_ActionHandler_12. A função tem linkage C
+// porque z_player.c é compilado como C; não reaproveita o toggle global de
+// Crowd Control, portanto não altera nem é alterada por esse efeito externo.
+extern "C" u8 ShipLua_ShouldBlockLedgeGrabs(void) {
+    return gCustomBodyActive && gCustomBodySpec.blockLedgeGrab;
+}
+std::optional<std::string> gCustomBodyOverrideAnim;
+bool gCustomBodyOverrideOnce = false;
+int gCustomBodyRollCharge = 0;
+bool gCustomBodyRollSpikesActive = false;
+int gCustomBodyRollMagicDrainTimer = 0;
+int gCustomBodyRollWallBounceTimer = 0;
+enum class CustomBodyRollPhase : uint8_t { None, Enter, Rolling, Exit };
+CustomBodyRollPhase gCustomBodyRollPhase = CustomBodyRollPhase::None;
+enum class CustomBodyWaterVoidPhase : uint8_t { None, Curl, Ball, Triggered };
+CustomBodyWaterVoidPhase gCustomBodyWaterVoidPhase = CustomBodyWaterVoidPhase::None;
+bool gCustomBodyWaterVoidOwnsInputDisable = false;
+int gCustomBodyWaterVoidTimer = 0;
+enum class CustomBodyGroundPoundPhase : uint8_t { None, Rising, Falling, Impact };
+CustomBodyGroundPoundPhase gCustomBodyGroundPoundPhase = CustomBodyGroundPoundPhase::None;
+int gCustomBodyGroundPoundTimer = 0;
+// Verdadeiro somente no intervalo de dano de um soco especial. Exposto pelo
+// getter para que a spec Lua possa observar o estado sem ter de inferi-lo da
+// animação e de frames internos do engine.
+bool gCustomBodyPunchHitActive = false;
+// Igual a av2.actionVar2 do Player de MM: B durante punch A/B não reinicia a
+// animação atual; apenas agenda o próximo golpe quando ela terminar.
+bool gCustomBodyPunchQueued = false;
+// Estado original do cylinder do Player antes da bola Goron assumir o ataque.
+// O collider pertence ao Player e é reutilizado pelo engine; por isso não pode
+// ficar com raio/dano de bola depois de qualquer saída de roll ou troca de cena.
+bool gCustomBodyRollColliderArmed = false;
+s16 gCustomBodyRollColliderRadius = 0;
+s16 gCustomBodyRollColliderHeight = 0;
+s16 gCustomBodyRollColliderYShift = 0;
+bool gCustomBodyShieldActive = false;
+// A troca de um corpo externo acontece depois de gPlayerAnim_cl_setmask. Sem
+// uma transicao propria, o Player pode andar durante a animacao e a troca de
+// skeleton fica exposta em um frame. OoTMM e o PR #1 congelam o Player e
+// escondem esse instante sob um flash branco; mantemos a mesma semantica sem
+// sequestrar camera ou iniciar uma cutscene do OoT.
+enum class MaskTransitionPhase : uint8_t { None, Conceal, Reveal };
+MaskTransitionPhase gMaskTransitionPhase = MaskTransitionPhase::None;
+int gMaskTransitionFramesRemaining = 0;
+int gMaskTransitionRevealTimeout = 0;
+s16 gMaskTransitionFlashAlpha = 0;
+bool gMaskTransitionOwnsInputDisable = false;
 // true entre OnPlayDestroy e o próximo OnSceneInit quando o corpo estava
 // ativo na cena anterior — sinaliza para religar automaticamente na cena
 // nova, usando a spec já guardada em gCustomBodySpec (nunca limpa por troca
 // de cena, só pelo toggle manual).
 bool gCustomBodyPendingRestore = false;
 
-void CustomBodyFreeSkelBuffers() {
-    if (gCustomBodySkelAnime.jointTable != nullptr) {
-        ZELDA_ARENA_FREE_DEBUG(gCustomBodySkelAnime.jointTable);
-        gCustomBodySkelAnime.jointTable = nullptr;
+void CustomBodyFreeSkelBuffers(SkelAnime& skelAnime) {
+    if (skelAnime.jointTable != nullptr) {
+        ZELDA_ARENA_FREE_DEBUG(skelAnime.jointTable);
+        skelAnime.jointTable = nullptr;
     }
-    if (gCustomBodySkelAnime.morphTable != nullptr) {
-        ZELDA_ARENA_FREE_DEBUG(gCustomBodySkelAnime.morphTable);
-        gCustomBodySkelAnime.morphTable = nullptr;
+    if (skelAnime.morphTable != nullptr) {
+        ZELDA_ARENA_FREE_DEBUG(skelAnime.morphTable);
+        skelAnime.morphTable = nullptr;
+    }
+    // Sem uma postura opcional na próxima spec, o update não pode conservar
+    // o ponteiro do skeleton anterior junto com as tabelas já liberadas.
+    skelAnime.skeleton = nullptr;
+    skelAnime.skeletonHeader = nullptr;
+    skelAnime.dListCount = 0;
+}
+
+void CustomBodyFreeSkelBuffers() {
+    CustomBodyFreeSkelBuffers(gCustomBodySkelAnime);
+    CustomBodyFreeSkelBuffers(gCustomBodyShieldSkelAnime);
+}
+
+void CustomBodyWaterVoidReset(Player* player) {
+    if (player != nullptr && gCustomBodyWaterVoidOwnsInputDisable) {
+        player->stateFlags1 &= ~PLAYER_STATE1_INPUT_DISABLED;
+    }
+    gCustomBodyWaterVoidPhase = CustomBodyWaterVoidPhase::None;
+    gCustomBodyWaterVoidOwnsInputDisable = false;
+    gCustomBodyWaterVoidTimer = 0;
+}
+
+void MaskTransitionReset(Player* player) {
+    if (player != nullptr && gMaskTransitionOwnsInputDisable) {
+        player->stateFlags1 &= ~PLAYER_STATE1_INPUT_DISABLED;
+    }
+    gMaskTransitionPhase = MaskTransitionPhase::None;
+    gMaskTransitionFramesRemaining = 0;
+    gMaskTransitionRevealTimeout = 0;
+    gMaskTransitionFlashAlpha = 0;
+    gMaskTransitionOwnsInputDisable = false;
+}
+
+void MaskTransitionStart(Player* player, int animationFrames) {
+    MaskTransitionReset(player);
+    gMaskTransitionPhase = MaskTransitionPhase::Conceal;
+    gMaskTransitionFramesRemaining = std::max(animationFrames, 1);
+    gMaskTransitionOwnsInputDisable = true;
+    player->stateFlags1 |= PLAYER_STATE1_INPUT_DISABLED;
+    player->linearVelocity = 0.0f;
+    player->actor.velocity.y = 0.0f;
+}
+
+void MaskTransitionBeginReveal(Player* player) {
+    if (gMaskTransitionPhase != MaskTransitionPhase::Conceal) {
+        return;
+    }
+    // A timer Lua troca o corpo no fim da animacao. Fixar alpha no pico neste
+    // ponto garante que nenhum frame mostre Link e Goron simultaneamente.
+    gMaskTransitionPhase = MaskTransitionPhase::Reveal;
+    gMaskTransitionFramesRemaining = 0;
+    gMaskTransitionRevealTimeout = 0;
+    gMaskTransitionFlashAlpha = 255;
+    player->stateFlags1 |= PLAYER_STATE1_INPUT_DISABLED;
+}
+
+void MaskTransitionUpdate(Player* player) {
+    if (gMaskTransitionPhase == MaskTransitionPhase::None) {
+        return;
+    }
+
+    player->stateFlags1 |= PLAYER_STATE1_INPUT_DISABLED;
+    player->linearVelocity = 0.0f;
+    player->actor.velocity.y = 0.0f;
+
+    if (gMaskTransitionPhase == MaskTransitionPhase::Conceal) {
+        constexpr int kFlashBuildFrames = 6;
+        if (gMaskTransitionFramesRemaining > 0) {
+            --gMaskTransitionFramesRemaining;
+        }
+        if (gMaskTransitionFramesRemaining <= kFlashBuildFrames) {
+            const int builtFrames = kFlashBuildFrames - gMaskTransitionFramesRemaining + 1;
+            gMaskTransitionFlashAlpha = static_cast<s16>(std::clamp(builtFrames * 255 / kFlashBuildFrames, 0, 255));
+        }
+        if (gMaskTransitionFramesRemaining == 0) {
+            // Uma falha no callback Lua nao pode deixar o jogador sem input.
+            // O body normalmente e ativado no mesmo frame; esta margem so e
+            // usada como escape seguro se o mod for descarregado no meio.
+            if (++gMaskTransitionRevealTimeout >= 15) {
+                MaskTransitionReset(player);
+            }
+        }
+        return;
+    }
+
+    gMaskTransitionFlashAlpha = std::max<s16>(0, gMaskTransitionFlashAlpha - 20);
+    if (gMaskTransitionFlashAlpha == 0) {
+        MaskTransitionReset(player);
     }
 }
+
+void CustomBodyClearRollHitbox(Player* player, PlayState* play);
 
 // Desliga o corpo e destrói o ator hospedeiro se ainda existir. clearSpec
 // distingue o toggle manual (limpa tudo, inclusive a spec guardada) da
@@ -723,7 +907,9 @@ void CustomBodyDeactivate(PlayState* play, bool clearSpec) {
     if (gCustomBodyActive) {
         Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
         if (player != nullptr) {
+            CustomBodyClearRollHitbox(player, play);
             player->stateFlags2 &= ~PLAYER_STATE2_DISABLE_DRAW;
+            CustomBodyWaterVoidReset(player);
         }
         if (gCustomBodyActor != nullptr && play != nullptr) {
             Actor_Kill(gCustomBodyActor);
@@ -733,6 +919,20 @@ void CustomBodyDeactivate(PlayState* play, bool clearSpec) {
     gCustomBodyActor = nullptr;
     CustomBodyFreeSkelBuffers();
     gCustomBodyCurrentAnim.clear();
+    gCustomBodyOverrideAnim.reset();
+    gCustomBodyOverrideOnce = false;
+    gCustomBodyRollCharge = 0;
+    gCustomBodyRollSpikesActive = false;
+    gCustomBodyRollMagicDrainTimer = 0;
+    gCustomBodyRollWallBounceTimer = 0;
+    gCustomBodyRollPhase = CustomBodyRollPhase::None;
+    CustomBodyWaterVoidReset(nullptr);
+    gCustomBodyGroundPoundPhase = CustomBodyGroundPoundPhase::None;
+    gCustomBodyGroundPoundTimer = 0;
+    gCustomBodyPunchHitActive = false;
+    gCustomBodyPunchQueued = false;
+    gCustomBodyRollColliderArmed = false;
+    gCustomBodyShieldActive = false;
     if (clearSpec) {
         gCustomBodySpec = CustomBodySpec{};
         gCustomBodyPendingRestore = false;
@@ -746,17 +946,522 @@ void CustomBodyDeactivate(PlayState* play, bool clearSpec) {
 // ponteiros; o ator hospedeiro já foi destruído pela própria troca de cena.
 // Marca pending-restore para OnSceneInit religar sozinho na cena nova.
 void CustomBodyResetForSceneChange() {
+    // O Player antigo já está em teardown; só descartamos o estado do flash.
+    // A nova cena cria um Player limpo, portanto não há flag de input a limpar.
+    MaskTransitionReset(nullptr);
     gCustomBodyPendingRestore = gCustomBodyActive;
     gCustomBodyActive = false;
     gCustomBodyActor = nullptr;
     gCustomBodySkelAnime.jointTable = nullptr;
     gCustomBodySkelAnime.morphTable = nullptr;
+    gCustomBodyShieldSkelAnime.jointTable = nullptr;
+    gCustomBodyShieldSkelAnime.morphTable = nullptr;
+    gCustomBodyShieldSkelAnime.skeleton = nullptr;
+    gCustomBodyShieldSkelAnime.skeletonHeader = nullptr;
+    gCustomBodyShieldSkelAnime.dListCount = 0;
     gCustomBodyCurrentAnim.clear();
+    gCustomBodyOverrideAnim.reset();
+    gCustomBodyOverrideOnce = false;
+    gCustomBodyRollCharge = 0;
+    gCustomBodyRollSpikesActive = false;
+    gCustomBodyRollMagicDrainTimer = 0;
+    gCustomBodyRollWallBounceTimer = 0;
+    gCustomBodyRollPhase = CustomBodyRollPhase::None;
+    CustomBodyWaterVoidReset(nullptr);
+    gCustomBodyGroundPoundPhase = CustomBodyGroundPoundPhase::None;
+    gCustomBodyGroundPoundTimer = 0;
+    gCustomBodyPunchHitActive = false;
+    gCustomBodyPunchQueued = false;
+    gCustomBodyRollColliderArmed = false;
+    gCustomBodyShieldActive = false;
+}
+
+const char* CustomBodyRollPhaseName() {
+    switch (gCustomBodyRollPhase) {
+        case CustomBodyRollPhase::Enter:
+            return "enter";
+        case CustomBodyRollPhase::Rolling:
+            return "rolling";
+        case CustomBodyRollPhase::Exit:
+            return "exit";
+        default:
+            return "none";
+    }
+}
+
+const char* CustomBodyGroundPoundPhaseName() {
+    switch (gCustomBodyGroundPoundPhase) {
+        case CustomBodyGroundPoundPhase::Rising:
+            return "ground_pound_rise";
+        case CustomBodyGroundPoundPhase::Falling:
+            return "ground_pound_fall";
+        case CustomBodyGroundPoundPhase::Impact:
+            return "ground_pound_impact";
+        default:
+            return nullptr;
+    }
+}
+
+const char* CustomBodyCurrentRollPhaseName() {
+    const char* groundPound = CustomBodyGroundPoundPhaseName();
+    return groundPound != nullptr ? groundPound : CustomBodyRollPhaseName();
+}
+
+const char* CustomBodyWaterVoidPhaseName() {
+    switch (gCustomBodyWaterVoidPhase) {
+        case CustomBodyWaterVoidPhase::Curl:
+            return "curl";
+        case CustomBodyWaterVoidPhase::Ball:
+            return "ball";
+        case CustomBodyWaterVoidPhase::Triggered:
+            return "triggered";
+        default:
+            return "none";
+    }
+}
+
+// Player_Action_96 de MM reflete a bola em paredes quando ela já alcançou
+// velocidade de ataque. O roll vanilla de OoT tem escala menor (e pode acabar
+// antes do callback de ator), portanto o hook OnPlayerBonk chama este helper
+// no mesmo frame. AT_HIT é preservado para dyna/objetos quebráveis receberem
+// seu dano antes de qualquer reflexão.
+void CustomBodyHandleRollWallBounce(Player* player, PlayState* play) {
+    constexpr f32 kMinimumBounceSpeed = 6.0f;
+    constexpr int kBounceCooldownFrames = 4;
+    if (!gCustomBodyActive || !gChainRoll || player == nullptr || play == nullptr ||
+        gCustomBodyRollPhase != CustomBodyRollPhase::Rolling || gCustomBodyRollWallBounceTimer > 0 ||
+        fabsf(player->linearVelocity) < kMinimumBounceSpeed || (player->actor.bgCheckFlags & BGCHECKFLAG_WALL) == 0 ||
+        (gCustomBodyRollColliderArmed && (player->cylinder.base.atFlags & AT_HIT) != 0)) {
+        return;
+    }
+
+    // Mesma reflexão usada pelo enhancement BounceOffWalls do host e
+    // equivalente à rotação por wallYaw do Player_Action_96.
+    player->yaw = ((player->actor.wallYaw - player->yaw) + player->actor.wallYaw) - 0x8000;
+    player->actor.shape.rot.y = player->yaw;
+    player->actor.world.rot.y = player->yaw;
+    player->linearVelocity = std::max(kMinimumBounceSpeed, fabsf(player->linearVelocity) * 0.85f);
+    gCustomBodyRollWallBounceTimer = kBounceCooldownFrames;
+    Player_PlaySfx(&player->actor, NA_SE_PL_BODY_HIT);
+    Player_SetupRoll(player, play);
+}
+
+bool CustomBodyStartAnimation(PlayState* play, const std::string& name, f32 speed, bool once, bool reverse = false) {
+    const auto path = gCustomBodySpec.animsPrefixed.find(name);
+    if (play == nullptr || path == gCustomBodySpec.animsPrefixed.end()) {
+        return false;
+    }
+    auto* loaded = ResourceMgr_LoadAnimByName(path->second.c_str());
+    if (loaded == nullptr) {
+        return false;
+    }
+    const f32 lastFrame = Animation_GetLastFrame(reinterpret_cast<LinkAnimationHeader*>(loaded));
+    const f32 startFrame = reverse ? lastFrame : 0.0f;
+    const f32 endFrame = reverse ? 0.0f : lastFrame;
+    LinkAnimation_Change(play, &gCustomBodySkelAnime,
+                          reinterpret_cast<LinkAnimationHeader*>(const_cast<char*>(path->second.c_str())),
+                          reverse ? -speed : speed, startFrame, endFrame, once ? ANIMMODE_ONCE : ANIMMODE_LOOP, 0.0f);
+    if (name == "punch_a" || name == "punch_b" || name == "punch_c") {
+        // O primeiro frame apenas captura a origem: nao pode herdar prevTransl
+        // de idle, caminhada ou de outro golpe.
+        gCustomBodySkelAnime.movementFlags |= ANIM_FLAG_NOMOVE;
+    }
+    gCustomBodyCurrentAnim = name;
+    gCustomBodyOverrideAnim = name;
+    gCustomBodyOverrideOnce = once;
+    return true;
+}
+
+// O Player de MM não permite que Goron nade. O fork de referência faz a
+// sequência pg_maru_change -> bola afundando -> Play_TriggerVoidOut quando a
+// profundidade passa de 20. Mantemos essa regra como opt-in da spec para que
+// qualquer outro corpo externo continue usando a água normal do OoT.
+void CustomBodyUpdateWaterVoid(Player* player, PlayState* play) {
+    if (!gCustomBodySpec.waterVoid || player == nullptr || play == nullptr ||
+        gCustomBodyWaterVoidPhase == CustomBodyWaterVoidPhase::Triggered) {
+        return;
+    }
+    if (gCustomBodyWaterVoidPhase == CustomBodyWaterVoidPhase::None) {
+        if (player->actor.yDistToWater <= 20.0f || (player->stateFlags1 & PLAYER_STATE1_GETTING_ITEM) != 0 ||
+            player->getItemId != GI_NONE) {
+            return;
+        }
+        gCustomBodyWaterVoidPhase = CustomBodyWaterVoidPhase::Curl;
+        gCustomBodyWaterVoidOwnsInputDisable = true;
+        gCustomBodyWaterVoidTimer = 0;
+        player->stateFlags1 |= PLAYER_STATE1_INPUT_DISABLED;
+        player->linearVelocity = 0.0f;
+        player->actor.velocity.y = -2.0f;
+        player->actor.gravity = -0.5f;
+        CustomBodyClearRollHitbox(player, play);
+        CustomBodyStartAnimation(play, "roll_enter", 0.67f, true);
+        Player_PlaySfx(&player->actor, NA_SE_EV_DIVE_INTO_WATER);
+        Player_PlaySfx(&player->actor, NA_SE_PL_BODY_HIT);
+        return;
+    }
+
+    player->stateFlags1 |= PLAYER_STATE1_INPUT_DISABLED;
+    player->linearVelocity = 0.0f;
+    if (gCustomBodyWaterVoidPhase == CustomBodyWaterVoidPhase::Curl) {
+        player->actor.velocity.y = -2.0f;
+        player->actor.gravity = -0.5f;
+        const auto curl = gCustomBodySpec.animsPrefixed.find("roll_enter");
+        auto* loaded = curl == gCustomBodySpec.animsPrefixed.end() ? nullptr : ResourceMgr_LoadAnimByName(curl->second.c_str());
+        if (loaded == nullptr || gCustomBodySkelAnime.curFrame >=
+                                  Animation_GetLastFrame(reinterpret_cast<LinkAnimationHeader*>(loaded)) - 0.5f) {
+            gCustomBodyWaterVoidPhase = CustomBodyWaterVoidPhase::Ball;
+            gCustomBodyOverrideAnim.reset();
+            gCustomBodyOverrideOnce = false;
+            player->actor.gravity = -2.0f;
+        }
+        return;
+    }
+
+    // A bola não gira: ela só afunda por aproximadamente 15 frames antes da
+    // transição. Isso replica a separação de fases do Player de MM.
+    player->actor.velocity.y = -2.0f;
+    player->actor.gravity = -2.0f;
+    if (++gCustomBodyWaterVoidTimer >= 15) {
+        gCustomBodyWaterVoidPhase = CustomBodyWaterVoidPhase::Triggered;
+        Player_PlaySfx(&player->actor, NA_SE_OC_ABYSS);
+        Play_TriggerVoidOut(play);
+    }
+}
+
+// Perfil compacto e fechado para os socos de Goron. A forma usa os quads de
+// ataque que o Player do OoT já possui; assim não há collider alocado por Lua
+// nem parâmetros de dano arbitrários vindos de mod. Os nomes são convenções da
+// spec, e só ganham colisão quando a animação correspondente foi declarada.
+struct CustomBodyPunchInfo {
+    const char* animation;
+    f32 hitStart;
+    f32 hitEnd;
+    f32 nearDist;
+    f32 farDist;
+    f32 sideOffset;
+    f32 halfWidth;
+    f32 yBottom;
+    f32 yTop;
+};
+
+constexpr std::array<CustomBodyPunchInfo, 3> kCustomBodyGoronPunches = {{
+    // MM sMeleeAttackAnimInfo: punch A {6, 8}, punch B {12, 18}, punch C {8, 14}.
+    { "punch_a", 6.0f, 8.0f, 20.0f, 55.0f, -15.0f, 15.0f, 20.0f, 55.0f },
+    { "punch_b", 12.0f, 18.0f, 20.0f, 55.0f, 15.0f, 15.0f, 20.0f, 55.0f },
+    { "punch_c", 8.0f, 14.0f, -10.0f, 30.0f, 0.0f, 30.0f, 5.0f, 30.0f },
+}};
+
+const CustomBodyPunchInfo* CustomBodyGetPunchInfo() {
+    for (const auto& punch : kCustomBodyGoronPunches) {
+        if (gCustomBodyCurrentAnim == punch.animation &&
+            gCustomBodySpec.animsPrefixed.find(punch.animation) != gCustomBodySpec.animsPrefixed.end()) {
+            return &punch;
+        }
+    }
+    return nullptr;
+}
+
+const char* CustomBodyPunchRecoveryAnimation(const char* punchName, bool moving) {
+    if (std::strcmp(punchName, "punch_a") == 0) {
+        return moving ? "punch_a_end_run" : "punch_a_end";
+    }
+    if (std::strcmp(punchName, "punch_b") == 0) {
+        return moving ? "punch_b_end_run" : "punch_b_end";
+    }
+    if (std::strcmp(punchName, "punch_c") == 0) {
+        return moving ? "punch_c_end_run" : "punch_c_end";
+    }
+    return nullptr;
+}
+
+bool CustomBodyStartPunchRecovery(PlayState* play, const char* punchName, const Player* player) {
+    const char* preferred = CustomBodyPunchRecoveryAnimation(punchName, fabsf(player->linearVelocity) >= 0.5f);
+    if (preferred != nullptr && CustomBodyStartAnimation(play, preferred, 1.0f, true)) {
+        return true;
+    }
+    // Um mod pode fornecer somente a recuperação parada; ela é melhor que
+    // cortar o punch diretamente para idle quando o Player ainda se move.
+    if (preferred != nullptr && std::strstr(preferred, "_run") != nullptr) {
+        std::string fallback(preferred);
+        fallback.erase(fallback.size() - 4);
+        return CustomBodyStartAnimation(play, fallback, 1.0f, true);
+    }
+    return false;
+}
+
+const char* CustomBodyNextPunchAnimation(const char* punchName) {
+    if (std::strcmp(punchName, "punch_a") == 0) {
+        return "punch_b";
+    }
+    if (std::strcmp(punchName, "punch_b") == 0) {
+        return "punch_c";
+    }
+    return nullptr;
+}
+
+bool CustomBodyStartQueuedPunch(PlayState* play, const char* punchName) {
+    if (!gCustomBodyPunchQueued) {
+        return false;
+    }
+    gCustomBodyPunchQueued = false;
+    const char* nextPunch = CustomBodyNextPunchAnimation(punchName);
+    return nextPunch != nullptr && CustomBodyStartAnimation(play, nextPunch, 1.0f, true);
+}
+
+// Os punches de Goron em MM usam a translacao da junta raiz como movimento
+// real. LinkAnimation_Update deixa essa translacao em jointTable[0]; o helper
+// nativo abaixo extrai o delta, restaura a junta para baseTransl (para a malha
+// nao se afastar do ator) e conserva prevTransl para o proximo frame. Aplicar
+// somente no perfil fechado dos tres punches impede que uma animacao arbitraria
+// declarada por Lua vire uma forma de mover o Player.
+void CustomBodyApplyPunchRootMotion(Actor* hostActor, Player* player) {
+    if (CustomBodyGetPunchInfo() == nullptr) {
+        return;
+    }
+
+    Vec3f delta{};
+    SkelAnime_UpdateTranslation(&gCustomBodySkelAnime, &delta, player->actor.shape.rot.y);
+    player->actor.world.pos.x += delta.x * player->actor.scale.x;
+    player->actor.world.pos.z += delta.z * player->actor.scale.z;
+    // O ator hospedeiro atualiza depois do Player. Sincroniza-o tambem neste
+    // frame para que o corpo e a colisao nao aparentem ficar defasados.
+    hostActor->world.pos = player->actor.world.pos;
+}
+
+void CustomBodySetPunchQuadVertices(Player* player, const CustomBodyPunchInfo& punch) {
+    const f32 sinYaw = Math_SinS(player->yaw);
+    const f32 cosYaw = Math_CosS(player->yaw);
+    const f32 rightX = cosYaw;
+    const f32 rightZ = -sinYaw;
+    const Vec3f& pos = player->actor.world.pos;
+
+    const f32 farX = pos.x + sinYaw * punch.farDist + rightX * punch.sideOffset;
+    const f32 farZ = pos.z + cosYaw * punch.farDist + rightZ * punch.sideOffset;
+    const f32 nearX = pos.x + sinYaw * punch.nearDist + rightX * punch.sideOffset;
+    const f32 nearZ = pos.z + cosYaw * punch.nearDist + rightZ * punch.sideOffset;
+    Vec3f a = { farX - rightX * punch.halfWidth, pos.y + punch.yTop, farZ - rightZ * punch.halfWidth };
+    Vec3f b = { farX + rightX * punch.halfWidth, pos.y + punch.yTop, farZ + rightZ * punch.halfWidth };
+    Vec3f c = { nearX + rightX * punch.halfWidth, pos.y + punch.yBottom, nearZ + rightZ * punch.halfWidth };
+    Vec3f d = { nearX - rightX * punch.halfWidth, pos.y + punch.yBottom, nearZ - rightZ * punch.halfWidth };
+    Collider_SetQuadVertices(&player->meleeWeaponQuads[0], &a, &b, &c, &d);
+}
+
+// Player_Update já produziu os quads da espada antes do ator hospedeiro
+// atualizar (ACTORCAT_PLAYER vem antes de ACTORCAT_ITEMACTION). Enquanto a
+// animação Goron é a dona visual do golpe, elimina ambos para a espada
+// invisível não acertar junto do punho.
+void CustomBodyUpdatePunchHitbox(Player* player, PlayState* play) {
+    gCustomBodyPunchHitActive = false;
+    const CustomBodyPunchInfo* punch = CustomBodyGetPunchInfo();
+    if (punch == nullptr) {
+        return;
+    }
+
+    ColliderQuad* primary = &player->meleeWeaponQuads[0];
+    ColliderQuad* secondary = &player->meleeWeaponQuads[1];
+    Collider_ResetQuadAT(play, &primary->base);
+    Collider_ResetQuadAT(play, &secondary->base);
+    primary->info.toucher.dmgFlags = 0;
+    secondary->info.toucher.dmgFlags = 0;
+
+    const f32 frame = gCustomBodySkelAnime.curFrame;
+    if (frame < punch->hitStart || frame > punch->hitEnd) {
+        return;
+    }
+
+    CustomBodySetPunchQuadVertices(player, *punch);
+    primary->base.atFlags = AT_ON | AT_TYPE_PLAYER;
+    // Equivalente OoT de DMG_GORON_PUNCH: impacto pesado, não um corte da
+    // espada oculta. O valor 2 segue a força transformada do MM e é fechado
+    // no host para não virar uma API de dano irrestrito para Lua.
+    primary->info.toucher.dmgFlags = DMG_HAMMER_SWING;
+    primary->info.toucher.damage = 2;
+    primary->info.toucherFlags = TOUCH_ON | TOUCH_NEAREST;
+    CollisionCheck_SetAT(play, &play->colChkCtx, &primary->base);
+    gCustomBodyPunchHitActive = true;
+}
+
+void CustomBodyClearRollHitbox(Player* player, PlayState* play) {
+    if (!gCustomBodyRollColliderArmed) {
+        return;
+    }
+    Collider_ResetCylinderAT(play, &player->cylinder.base);
+    player->cylinder.base.atFlags = AT_NONE;
+    player->cylinder.info.toucherFlags = TOUCH_NONE;
+    player->cylinder.info.toucher.dmgFlags = 0;
+    player->cylinder.info.toucher.damage = 0;
+    player->cylinder.dim.radius = gCustomBodyRollColliderRadius;
+    player->cylinder.dim.height = gCustomBodyRollColliderHeight;
+    player->cylinder.dim.yShift = gCustomBodyRollColliderYShift;
+    Collider_UpdateCylinder(&player->actor, &player->cylinder);
+    gCustomBodyRollColliderArmed = false;
+}
+
+// MM Player_Action_96 arma o cylinder do próprio Player para a bola (raio 25,
+// dano 1). O equivalente OoT seguro do impacto é DMG_HAMMER_SWING. Só usamos
+// este caminho depois da transição curl e acima da velocidade mínima, para que
+// a animação de entrada/saída nunca cause dano invisível.
+void CustomBodyUpdateRollHitbox(Player* player, PlayState* play, bool rolling) {
+    const bool groundPoundImpact = gCustomBodyGroundPoundPhase == CustomBodyGroundPoundPhase::Impact;
+    const bool attackActive = groundPoundImpact || (rolling && fabsf(player->linearVelocity) > 2.0f);
+    if (!attackActive) {
+        CustomBodyClearRollHitbox(player, play);
+        return;
+    }
+
+    if (!gCustomBodyRollColliderArmed) {
+        gCustomBodyRollColliderArmed = true;
+        gCustomBodyRollColliderRadius = player->cylinder.dim.radius;
+        gCustomBodyRollColliderHeight = player->cylinder.dim.height;
+        gCustomBodyRollColliderYShift = player->cylinder.dim.yShift;
+    }
+    Collider_ResetCylinderAT(play, &player->cylinder.base);
+    player->cylinder.base.atFlags = AT_ON | AT_TYPE_PLAYER;
+    player->cylinder.info.elemType = ELEMTYPE_UNK2;
+    player->cylinder.info.toucherFlags = TOUCH_ON | TOUCH_NEAREST | TOUCH_SFX_NORMAL;
+    player->cylinder.info.toucher.dmgFlags = DMG_HAMMER_SWING;
+    player->cylinder.info.toucher.damage = groundPoundImpact ? 4 : 1;
+    // 25 é o raio canônico de Player_SetCylinderForAttack durante a esfera
+    // normal e durante os espinhos. O impacto usa 60, como DMG_GORON_POUND.
+    player->cylinder.dim.radius = groundPoundImpact ? 60 : 25;
+    player->cylinder.dim.height = 34;
+    player->cylinder.dim.yShift = 0;
+    Collider_UpdateCylinder(&player->actor, &player->cylinder);
+    CollisionCheck_SetAT(play, &play->colChkCtx, &player->cylinder.base);
+}
+
+// O MM não tem um "asset de ground pound": é uma fase física dentro de
+// Player_Action_96. O host conserva Player_Action_Roll para o pipeline de
+// movimento do OoT e injeta somente o arco vertical/impacto no frame posterior
+// ao update vanilla. Assim não substituímos Player_Update nem o bg check.
+void CustomBodyUpdateGroundPound(Player* player, PlayState* play, bool rolling) {
+    if (gCustomBodyGroundPoundPhase == CustomBodyGroundPoundPhase::None) {
+        if (rolling && !gCustomBodyRollSpikesActive && CHECK_BTN_ALL(play->state.input[0].press.button, BTN_B)) {
+            gCustomBodyGroundPoundPhase = CustomBodyGroundPoundPhase::Rising;
+            gCustomBodyGroundPoundTimer = 0;
+            gCustomBodyRollCharge = 0;
+            Player_SetupRoll(player, play);
+            player->linearVelocity = 0.0f;
+            player->actor.velocity.y = 14.0f;
+            player->actor.gravity = -1.2f;
+        }
+        return;
+    }
+
+    // O roll vanilla termina sua animação enquanto o Goron ainda está no ar;
+    // rearmá-lo impede que Idle assuma antes de a bola tocar o solo. O skeleton
+    // humano continua oculto e a renderização externa permanece a bola.
+    if (player->actionFunc != Player_Action_Roll) {
+        Player_SetupRoll(player, play);
+    }
+    player->linearVelocity = 0.0f;
+
+    if (gCustomBodyGroundPoundPhase == CustomBodyGroundPoundPhase::Rising) {
+        if (player->actor.velocity.y <= 0.0f) {
+            gCustomBodyGroundPoundPhase = CustomBodyGroundPoundPhase::Falling;
+        }
+    } else if (gCustomBodyGroundPoundPhase == CustomBodyGroundPoundPhase::Falling) {
+        if (player->actor.bgCheckFlags & BGCHECKFLAG_GROUND_TOUCH) {
+            gCustomBodyGroundPoundPhase = CustomBodyGroundPoundPhase::Impact;
+            gCustomBodyGroundPoundTimer = 6;
+            player->actor.velocity.y = 0.0f;
+            Actor_RequestQuake(play, 3, 12);
+            Rumble_Request(0.0f, 180, 12, 100);
+        }
+    } else {
+        player->actor.velocity.y = 0.0f;
+        if (--gCustomBodyGroundPoundTimer <= 0) {
+            gCustomBodyGroundPoundPhase = CustomBodyGroundPoundPhase::None;
+        }
+    }
+}
+
+// MM ativa os espinhos com custo inicial 2 e, enquanto estão ativos, drena 1
+// unidade a cada 10 frames. O save de OoT expõe o mesmo medidor; alterar o
+// valor somente em MAGIC_STATE_IDLE evita disputar uma poção/flecha mágica ou
+// outra transição de HUD em curso.
+void CustomBodyUpdateRollSpikes(PlayState* play, bool rolling) {
+    if (!rolling || gCustomBodyGroundPoundPhase != CustomBodyGroundPoundPhase::None) {
+        gCustomBodyRollSpikesActive = false;
+        gCustomBodyRollMagicDrainTimer = 0;
+        if (!rolling) {
+            gCustomBodyRollCharge = std::max(gCustomBodyRollCharge - 2, 0);
+        }
+        return;
+    }
+    const bool holdingA = CHECK_BTN_ALL(play->state.input[0].cur.button, BTN_A);
+    if (gCustomBodyRollSpikesActive) {
+        if (!holdingA || gSaveContext.magic <= 0) {
+            gCustomBodyRollSpikesActive = false;
+            gCustomBodyRollMagicDrainTimer = 0;
+            gCustomBodyRollCharge = 4;
+            return;
+        }
+        if (gSaveContext.magicState == MAGIC_STATE_IDLE && --gCustomBodyRollMagicDrainTimer <= 0) {
+            gSaveContext.magic = std::max(0, static_cast<int>(gSaveContext.magic) - 1);
+            gCustomBodyRollMagicDrainTimer = 10;
+            if (gSaveContext.magic == 0) {
+                gCustomBodyRollSpikesActive = false;
+                gCustomBodyRollCharge = 4;
+            }
+        }
+        return;
+    }
+    if (holdingA) {
+        gCustomBodyRollCharge = std::min(gCustomBodyRollCharge + 1, 60);
+    } else {
+        gCustomBodyRollCharge = std::max(gCustomBodyRollCharge - 2, 0);
+    }
+    if (gCustomBodyRollCharge >= 60) {
+        if (gSaveContext.magicState == MAGIC_STATE_IDLE && gSaveContext.magic >= 2) {
+            gSaveContext.magic -= 2;
+            gCustomBodyRollSpikesActive = true;
+            gCustomBodyRollMagicDrainTimer = 10;
+        } else {
+            // Mantém a pré-carga visível, mas nunca ativa o estado de espinho
+            // sem o custo de magia que o MM exige.
+            gCustomBodyRollCharge = 59;
+        }
+    }
 }
 
 // Núcleo comum entre o toggle manual e a auto-restauração pós-troca-de-cena:
 // aloca o skelAnime a partir de gCustomBodySpec e spawna o ator hospedeiro.
 // Não mexe em gCustomBodySpec — quem chama já garantiu que está preenchida.
+// A custom body hides Link's shield limb, so the native Player draw path never
+// refreshes shieldQuad. Reuse that quad here to preserve native block and
+// projectile reflection behavior without creating a second broad collider.
+void CustomBodyUpdateShieldCollider(Player* player, PlayState* play) {
+    const s16 yaw = player->actor.shape.rot.y;
+    SkinMatrix_SetTranslateRotateYXZScale(&player->shieldMf, 1.0f, 1.0f, 1.0f, 0, yaw + 0x8000, 0, 0.0f, 0.0f,
+                                          0.0f);
+
+    const f32 sinYaw = Math_SinS(yaw);
+    const f32 cosYaw = Math_CosS(yaw);
+    const f32 rightX = cosYaw;
+    const f32 rightZ = -sinYaw;
+    constexpr f32 frontDistance = 12.0f;
+    constexpr f32 halfWidth = 25.0f;
+    constexpr f32 bottomY = -10.0f;
+    constexpr f32 topY = 75.0f;
+    const Vec3f& position = player->actor.world.pos;
+    const f32 centerX = position.x + sinYaw * frontDistance;
+    const f32 centerZ = position.z + cosYaw * frontDistance;
+
+    Vec3f a = { centerX - rightX * halfWidth, position.y + topY, centerZ - rightZ * halfWidth };
+    Vec3f b = { centerX + rightX * halfWidth, position.y + topY, centerZ + rightZ * halfWidth };
+    Vec3f c = { centerX + rightX * halfWidth, position.y + bottomY, centerZ + rightZ * halfWidth };
+    Vec3f d = { centerX - rightX * halfWidth, position.y + bottomY, centerZ - rightZ * halfWidth };
+
+    // The Deku shield is wood; every other selection, including none, is metal.
+    player->shieldQuad.base.colType = player->currentShield == PLAYER_SHIELD_DEKU ? COLTYPE_WOOD : COLTYPE_METAL;
+    Collider_ResetQuadAC(play, &player->shieldQuad.base);
+    Collider_ResetQuadAT(play, &player->shieldQuad.base);
+    Collider_SetQuadVertices(&player->shieldQuad, &a, &b, &c, &d);
+    CollisionCheck_SetAC(play, &play->colChkCtx, &player->shieldQuad.base);
+    CollisionCheck_SetAT(play, &play->colChkCtx, &player->shieldQuad.base);
+}
+
 bool CustomBodyActivateFromSpec(PlayState* play);
 
 extern "C" void CustomBodyActorUpdate(Actor* actor, PlayState* play) {
@@ -776,48 +1481,421 @@ extern "C" void CustomBodyActorUpdate(Actor* actor, PlayState* play) {
     player->stateFlags2 |= PLAYER_STATE2_DISABLE_DRAW;
     actor->world.pos = player->actor.world.pos;
     actor->shape.rot = player->actor.shape.rot;
+    if (gCustomBodyRollWallBounceTimer > 0) {
+        --gCustomBodyRollWallBounceTimer;
+    }
+    const bool nativeRolling = player->actionFunc == Player_Action_Roll &&
+                               gCustomBodySpec.modelsPrefixed.find("roll") != gCustomBodySpec.modelsPrefixed.end();
+    CustomBodyUpdateWaterVoid(player, play);
+    const bool waterVoidActive = gCustomBodyWaterVoidPhase != CustomBodyWaterVoidPhase::None;
+    if (!waterVoidActive && nativeRolling && gCustomBodyRollPhase == CustomBodyRollPhase::None) {
+        if (CustomBodyStartAnimation(play, "roll_enter", 0.67f, true)) {
+            gCustomBodyRollPhase = CustomBodyRollPhase::Enter;
+        } else {
+            gCustomBodyRollPhase = CustomBodyRollPhase::Rolling;
+        }
+    }
+    if (!waterVoidActive && !nativeRolling && gCustomBodyRollPhase == CustomBodyRollPhase::Rolling &&
+        gCustomBodyGroundPoundPhase == CustomBodyGroundPoundPhase::None) {
+        if (CustomBodyStartAnimation(play, "roll_exit", 0.67f, true, true)) {
+            gCustomBodyRollPhase = CustomBodyRollPhase::Exit;
+        } else {
+            gCustomBodyRollPhase = CustomBodyRollPhase::None;
+        }
+    }
+    bool rolling = (!waterVoidActive && nativeRolling && gCustomBodyRollPhase == CustomBodyRollPhase::Rolling) ||
+                   gCustomBodyGroundPoundPhase != CustomBodyGroundPoundPhase::None ||
+                   gCustomBodyWaterVoidPhase == CustomBodyWaterVoidPhase::Ball;
+    if (!waterVoidActive) {
+        CustomBodyUpdateGroundPound(player, play, rolling);
+    }
+    rolling = (!waterVoidActive && nativeRolling && gCustomBodyRollPhase == CustomBodyRollPhase::Rolling) ||
+              gCustomBodyGroundPoundPhase != CustomBodyGroundPoundPhase::None ||
+              gCustomBodyWaterVoidPhase == CustomBodyWaterVoidPhase::Ball;
+    CustomBodyUpdateRollSpikes(play, rolling && !waterVoidActive);
+    // R still uses the native Player input path. A custom shield posture must
+    // explicitly restore the Player shield quad because Link's hand draw is
+    // hidden while the external body is active.
+    const bool shieldWasActive = gCustomBodyShieldActive;
+    gCustomBodyShieldActive = !rolling && gCustomBodyGroundPoundPhase == CustomBodyGroundPoundPhase::None &&
+                               gCustomBodyShieldSkelAnime.skeleton != nullptr &&
+                               CHECK_BTN_ALL(play->state.input[0].cur.button, BTN_R);
+    if (gCustomBodyShieldActive) {
+        player->stateFlags1 |= PLAYER_STATE1_SHIELDING;
+        CustomBodyUpdateShieldCollider(player, play);
+        SkelAnime_Update(&gCustomBodyShieldSkelAnime);
+    } else if (shieldWasActive) {
+        player->stateFlags1 &= ~PLAYER_STATE1_SHIELDING;
+    }
+    // O draw nativo do MM posiciona o centro da esfera 12 unidades acima do
+    // chão e a amplia 15%. Actor_Draw aplica yOffset * scale, portanto o
+    // offset abaixo preserva exatamente esses 12 com a escala 0.0115.
+    Actor_SetScale(actor, rolling ? 0.0115f : 0.01f);
+    // O ator Player do OoT tem sua origem de colisão abaixo do ponto onde o
+    // root do skeleton Goron de MM pousa. Sem compensação, o corpo ereto fica
+    // visivelmente ~30 unidades acima do solo, embora a física do Player já
+    // esteja em contato com ele. Actor_Draw multiplica yOffset pela escala,
+    // portanto -3000.0f em 0.01 baixa o visual exatamente 30 unidades. O
+    // modelo enrolado é uma DL separada e preserva o offset positivo do draw
+    // nativo de MM (centro da esfera 12 unidades acima do chão).
+    const f32 worldOffset = rolling ? gCustomBodySpec.rollOffset : gCustomBodySpec.groundOffset;
+    actor->shape.yOffset = worldOffset / actor->scale.y;
+    // Actor_Draw já aplica shape.rot antes de chamar este draw. Durante o
+    // rolamento usamos esse transform para fazer a display list enrolada girar,
+    // sem depender das macros de matriz que só existem no caminho C do engine.
+    if (rolling && gCustomBodyWaterVoidPhase != CustomBodyWaterVoidPhase::Ball) {
+        actor->shape.rot.x = player->actor.shape.rot.x + static_cast<s16>(play->gameplayFrames * -0x1200);
+    } else if (gCustomBodyWaterVoidPhase == CustomBodyWaterVoidPhase::Ball) {
+        actor->shape.rot.x = 0;
+    }
 
     std::string wanted;
     const f32 speed = fabsf(player->linearVelocity);
-    const auto result = DispatchHookTransform(
-        "hook.oot.player.body_anim_select",
-        ShipLua::EventPayload{
-            {"speed", static_cast<double>(speed)},
-            {"on_ground", (player->actor.bgCheckFlags & 1) != 0},
-        });
-    if (result.has_value() && std::holds_alternative<std::string>(result->value)) {
-        const std::string& requested = std::get<std::string>(result->value);
-        if (gCustomBodySpec.anims.find(requested) != gCustomBodySpec.anims.end()) {
-            wanted = requested;
+    const bool climbing = (player->stateFlags1 & PLAYER_STATE1_CLIMBING_LADDER) != 0;
+    const s16 climbInput = play->state.input[0].rel.stick_y;
+    const char* climbDirection = !climbing ? "none" : climbInput > 0 ? "up" : climbInput < 0 ? "down" : "idle";
+    // Porta com macaneta: este actionFunc e instalado somente depois de A ter
+    // confirmado a abertura. Portas de correr/falsas continuam inteiramente no
+    // caminho nativo, pois nao usam a animacao de empurrar/puxar do Goron.
+    const bool handleDoorOpening = player->actionFunc == Player_Action_80845EF8 && player->doorActor != nullptr &&
+                                   player->doorType == PLAYER_DOORTYPE_HANDLE;
+    // O fluxo de baú marca GETTING_ITEM antes de disparar a animacao da caixa.
+    // O actor-alvo diferencia esse caso de qualquer outro get-item/cutscene.
+    const bool chestOpening = (player->stateFlags1 & PLAYER_STATE1_GETTING_ITEM) != 0 &&
+                              player->interactRangeActor != nullptr && player->interactRangeActor->id == ACTOR_EN_BOX;
+    if (gCustomBodyOverrideAnim.has_value()) {
+        wanted = *gCustomBodyOverrideAnim;
+    } else {
+        const auto result = DispatchHookTransform(
+            "hook.oot.player.body_anim_select",
+            ShipLua::EventPayload{
+                {"speed", static_cast<double>(speed)},
+                {"on_ground", (player->actor.bgCheckFlags & 1) != 0},
+                {"rolling", rolling},
+                {"roll_charge", static_cast<std::int64_t>(gCustomBodyRollCharge)},
+                {"roll_phase", std::string(CustomBodyCurrentRollPhaseName())},
+                {"falling", (player->actor.bgCheckFlags & BGCHECKFLAG_GROUND) == 0 && player->actor.velocity.y < 0.0f},
+                {"landing", (player->actor.bgCheckFlags & BGCHECKFLAG_GROUND_TOUCH) != 0},
+                {"climbing", climbing},
+                {"climb_direction", std::string(climbDirection)},
+                // O Player alterna av2.actionVar2 ao trocar o pé da escada.
+                // O bit baixo se mantém estável inclusive nos valores negativos
+                // de entrada (-2/-4), sem expor ponteiros ou ação interna ao Lua.
+                {"climb_step", static_cast<std::int64_t>(player->av2.actionVar2 & 1)},
+                {"climb_starting", climbing && player->av2.actionVar2 < 0},
+                {"door_opening", handleDoorOpening},
+                {"door_direction", std::string(!handleDoorOpening ? "none"
+                                                                     : player->doorDirection < 0 ? "left" : "right")},
+                {"chest_opening", chestOpening},
+                {"instrument", (player->stateFlags1 & PLAYER_STATE1_IN_ITEM_CS) != 0 &&
+                                   (player->heldItemAction == PLAYER_IA_OCARINA_FAIRY ||
+                                    player->heldItemAction == PLAYER_IA_OCARINA_OF_TIME)},
+                // MM escolhe gakkiplayA/L/D/U/R por ocarinaButtonIndex. OoT
+                // não preserva esse índice no contexto de mensagem, mas o
+                // frame de pressão já é a mesma fonte de cada nota. A string
+                // só descreve a nota atual; Lua ainda valida a animação na spec.
+                {"instrument_note", std::string(CHECK_BTN_ALL(play->state.input[0].press.button, BTN_A) ? "a"
+                                                   : CHECK_BTN_ALL(play->state.input[0].press.button, BTN_CLEFT) ? "l"
+                                                   : CHECK_BTN_ALL(play->state.input[0].press.button, BTN_CDOWN) ? "d"
+                                                   : CHECK_BTN_ALL(play->state.input[0].press.button, BTN_CUP) ? "u"
+                                                   : CHECK_BTN_ALL(play->state.input[0].press.button, BTN_CRIGHT) ? "r"
+                                                                                                            : "none")},
+                // O host não inventa uma forma Goron no Player do OoT: ele
+                // apenas expõe o começo/fim do ataque nativo para que uma
+                // spec de corpo possa disparar sua animação one-shot própria.
+                // O id é diagnóstico/telemetria; não deve ser escrito por Lua.
+                {"attacking", player->meleeWeaponState != 0},
+                {"attack_animation", static_cast<std::int64_t>(player->meleeWeaponAnimation)},
+            });
+        if (result.has_value() && std::holds_alternative<std::string>(result->value)) {
+            const std::string& requested = std::get<std::string>(result->value);
+            if (gCustomBodySpec.anims.find(requested) != gCustomBodySpec.anims.end()) {
+                wanted = requested;
+            }
         }
     }
-    if (wanted.empty()) {
+    if (wanted.empty() && !gCustomBodyOverrideAnim.has_value()) {
         // Fallback sem callback (ou resultado inválido): só funciona se o
         // mod usou as chaves convencionais — senão fica parado no default.
-        const char* byThreshold = (speed > 4.0f) ? "run" : (speed >= 0.5f ? "walk" : "idle");
-        wanted = gCustomBodySpec.anims.find(byThreshold) != gCustomBodySpec.anims.end() ? byThreshold
-                                                                                        : gCustomBodySpec.defaultAnim;
+        if ((player->actor.bgCheckFlags & BGCHECKFLAG_GROUND) == 0 &&
+            gCustomBodySpec.anims.find("jump") != gCustomBodySpec.anims.end()) {
+            wanted = "jump";
+        } else {
+            const char* byThreshold = (speed > 4.0f) ? "run" : (speed >= 0.5f ? "walk" : "idle");
+            wanted = gCustomBodySpec.anims.find(byThreshold) != gCustomBodySpec.anims.end() ? byThreshold
+                                                                                            : gCustomBodySpec.defaultAnim;
+        }
     }
 
     if (wanted != gCustomBodyCurrentAnim) {
-        const auto animPath = gCustomBodySpec.anims.find(wanted);
-        if (animPath != gCustomBodySpec.anims.end()) {
+        // O ponteiro vem do membro persistente da spec, NÃO de uma temporária:
+        // o engine guarda este endereço e o usa nos frames seguintes.
+        const auto animPath = gCustomBodySpec.animsPrefixed.find(wanted);
+        if (animPath != gCustomBodySpec.animsPrefixed.end()) {
+            const bool reverse = gCustomBodySpec.reverseAnims.find(wanted) != gCustomBodySpec.reverseAnims.end();
+            auto* loaded = reverse ? ResourceMgr_LoadAnimByName(animPath->second.c_str()) : nullptr;
+            if (reverse && loaded == nullptr) {
+                SPDLOG_WARN("ShipLua body animation: nao carreguei animacao reversa '{}'", wanted);
+                return;
+            }
             gCustomBodyCurrentAnim = wanted;
-            const std::string prefixed = std::string("__OTR__") + animPath->second;
-            LinkAnimation_Change(play, &gCustomBodySkelAnime, (LinkAnimationHeader*)prefixed.c_str(), 1.0f, 0.0f,
-                                 0.0f, ANIMMODE_LOOP, 0.0f);
+            const f32 lastFrame = reverse ? Animation_GetLastFrame(reinterpret_cast<LinkAnimationHeader*>(loaded)) : 0.0f;
+            LinkAnimation_Change(play, &gCustomBodySkelAnime, (LinkAnimationHeader*)animPath->second.c_str(),
+                                 reverse ? -1.0f : 1.0f, reverse ? lastFrame : 0.0f, 0.0f, ANIMMODE_LOOP, 0.0f);
+            if (wanted == "punch_a" || wanted == "punch_b" || wanted == "punch_c") {
+                gCustomBodySkelAnime.movementFlags |= ANIM_FLAG_NOMOVE;
+            }
         }
     }
-    LinkAnimation_Update(play, &gCustomBodySkelAnime);
+    const bool animationFinished = LinkAnimation_Update(play, &gCustomBodySkelAnime) != 0;
+    // O Player de MM armazena B em actionVar2 enquanto punch A/B ainda roda.
+    // Ignoramos o frame 0, que é o mesmo B que iniciou A, para não transformar
+    // um único toque em combo automático.
+    if ((gCustomBodyCurrentAnim == "punch_a" || gCustomBodyCurrentAnim == "punch_b") &&
+        gCustomBodySkelAnime.curFrame >= 1.0f && CHECK_BTN_ALL(play->state.input[0].press.button, BTN_B)) {
+        gCustomBodyPunchQueued = true;
+    }
+    CustomBodyApplyPunchRootMotion(actor, player);
+    CustomBodyUpdatePunchHitbox(player, play);
+    CustomBodyUpdateRollHitbox(player, play, rolling);
+    if (animationFinished && gCustomBodyOverrideOnce) {
+        const std::string completedAnimation = gCustomBodyCurrentAnim;
+        if (CustomBodyGetPunchInfo() != nullptr && CustomBodyStartQueuedPunch(play, completedAnimation.c_str())) {
+            return;
+        }
+        if (CustomBodyGetPunchInfo() != nullptr &&
+            CustomBodyStartPunchRecovery(play, completedAnimation.c_str(), player)) {
+            return;
+        }
+        if (gCustomBodyRollPhase == CustomBodyRollPhase::Enter) {
+            gCustomBodyRollPhase = nativeRolling ? CustomBodyRollPhase::Rolling : CustomBodyRollPhase::None;
+        } else if (gCustomBodyRollPhase == CustomBodyRollPhase::Exit) {
+            gCustomBodyRollPhase = CustomBodyRollPhase::None;
+        }
+        gCustomBodyOverrideAnim.reset();
+        gCustomBodyOverrideOnce = false;
+    }
+}
+
+// A bola, a malha de espinhos e as duas camadas de energia são display lists
+// distintas no MM. As energias usam o segmento 0x08 para TwoTexScroll, por
+// isso precisam de um passe Xlu separado e nunca podem ser tratadas como uma
+// textura comum do skeleton.
+extern "C" void CustomBodyDrawRoll(PlayState* play, const char* path, const char* spikesPath,
+                                   const char* energy1Path, const char* energy2Path, int charge) {
+    Gfx* dList = reinterpret_cast<Gfx*>(const_cast<char*>(path));
+    OPEN_DISPS(play->state.gfxCtx);
+    Gfx_SetupDL_25Xlu(play->state.gfxCtx);
+    Gfx* twoTexScroll = Gfx_TwoTexScroll(play->state.gfxCtx, 0, 0, 0, 0x40, 0x40, 1,
+                                          play->gameplayFrames * 2, play->gameplayFrames * 2, 0x40, 0x40);
+    gSPSegment(POLY_OPA_DISP++, 0x08, reinterpret_cast<uintptr_t>(twoTexScroll));
+    gDPSetEnvColor(POLY_OPA_DISP++, 255, 255, 255, 255);
+    gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_MODELVIEW | G_MTX_LOAD);
+    if (ResourceMgr_OTRSigCheck(reinterpret_cast<char*>(dList)) == 1) {
+        gsSPPushCD(POLY_OPA_DISP++, dList);
+    }
+    gSPDisplayList(POLY_OPA_DISP++, dList);
+    if (spikesPath != nullptr) {
+        Gfx* spikes = reinterpret_cast<Gfx*>(const_cast<char*>(spikesPath));
+        if (ResourceMgr_OTRSigCheck(reinterpret_cast<char*>(spikes)) == 1) {
+            gsSPPushCD(POLY_OPA_DISP++, spikes);
+        }
+        gSPDisplayList(POLY_OPA_DISP++, spikes);
+    }
+
+    // `grt_01_model` e `grt_02_model`: começam a aparecer no nível 5 de
+    // carga, como no Player_Draw de MM. Após os espinhos, a energia fica
+    // compacta e opaca em vez de continuar crescendo indefinidamente.
+    if (charge >= 5 && energy1Path != nullptr && energy2Path != nullptr) {
+        const bool spikesActive = gCustomBodyRollSpikesActive;
+        const f32 energyScale = spikesActive ? 0.65f : std::min((charge - 4) * 0.02f, 1.0f);
+        const u8 alpha = spikesActive ? 255 : static_cast<u8>(std::min(200.0f, energyScale * 200.0f));
+        Gfx* energy1 = reinterpret_cast<Gfx*>(const_cast<char*>(energy1Path));
+        Gfx* energy2 = reinterpret_cast<Gfx*>(const_cast<char*>(energy2Path));
+        Gfx_SetupDL_25Xlu(play->state.gfxCtx);
+        gSPSegment(POLY_XLU_DISP++, 0x08, reinterpret_cast<uintptr_t>(twoTexScroll));
+        Matrix_Push();
+        Matrix_Scale(1.0f, energyScale, energyScale, MTXMODE_APPLY);
+        gSPMatrix(POLY_XLU_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_MODELVIEW | G_MTX_LOAD);
+        gDPSetEnvColor(POLY_XLU_DISP++, 155, 0, 0, alpha);
+        if (ResourceMgr_OTRSigCheck(reinterpret_cast<char*>(energy1)) == 1) {
+            gsSPPushCD(POLY_XLU_DISP++, energy1);
+        }
+        gSPDisplayList(POLY_XLU_DISP++, energy1);
+        gDPSetEnvColor(POLY_XLU_DISP++, (play->gameplayFrames & 1) == 0 ? 100 : 200, 0, 0, 255);
+        if (ResourceMgr_OTRSigCheck(reinterpret_cast<char*>(energy2)) == 1) {
+            gsSPPushCD(POLY_XLU_DISP++, energy2);
+        }
+        gSPDisplayList(POLY_XLU_DISP++, energy2);
+        Matrix_Pop();
+    }
+    CLOSE_DISPS(play->state.gfxCtx);
+}
+
+bool CustomBodyIsGakkiAnimation() {
+    return gCustomBodyCurrentAnim == "gakki_start" || gCustomBodyCurrentAnim == "gakki_wait" ||
+           gCustomBodyCurrentAnim == "gakki_play" || gCustomBodyCurrentAnim == "gakki_play_a" ||
+           gCustomBodyCurrentAnim == "gakki_play_l" || gCustomBodyCurrentAnim == "gakki_play_d" ||
+           gCustomBodyCurrentAnim == "gakki_play_u" || gCustomBodyCurrentAnim == "gakki_play_r";
+}
+
+// Mesma tabela D_801C0428 usada pelo Player Goron nativo de MM. Manter os
+// tres eixos separados preserva o pequeno "pop" assimetrico da abertura e
+// tambem faz a saida reverse_once recolher os tambores no ritmo correto.
+Vec3f CustomBodyGakkiScale() {
+    if (gCustomBodyCurrentAnim != "gakki_start") {
+        return { 1.0f, 1.0f, 1.0f };
+    }
+
+    struct GakkiScaleKey {
+        f32 frame;
+        Vec3f scale;
+    };
+    static const std::array<GakkiScaleKey, 7> kScaleKeys = {
+        GakkiScaleKey{ 0.0f, { 0.0f, 0.0f, 0.0f } }, GakkiScaleKey{ 6.0f, { 0.0f, 0.0f, 0.0f } },
+        GakkiScaleKey{ 7.0f, { 0.6f, 0.6f, 0.5f } }, GakkiScaleKey{ 8.0f, { 1.2f, 1.3f, 1.0f } },
+        GakkiScaleKey{ 9.0f, { 1.0f, 1.2f, 0.8f } }, GakkiScaleKey{ 11.0f, { 1.0f, 1.0f, 1.0f } },
+        GakkiScaleKey{ 13.0f, { 1.0f, 1.0f, 1.0f } },
+    };
+
+    const f32 frame = gCustomBodySkelAnime.curFrame;
+    for (size_t i = 1; i < kScaleKeys.size(); ++i) {
+        const auto& next = kScaleKeys[i];
+        if (frame <= next.frame) {
+            const auto& previous = kScaleKeys[i - 1];
+            const f32 t = std::clamp((frame - previous.frame) / (next.frame - previous.frame), 0.0f, 1.0f);
+            return {
+                previous.scale.x + (next.scale.x - previous.scale.x) * t,
+                previous.scale.y + (next.scale.y - previous.scale.y) * t,
+                previous.scale.z + (next.scale.z - previous.scale.z) * t,
+            };
+        }
+    }
+    return kScaleKeys.back().scale;
+}
+
+// O efeito de soco é uma DL translúcida própria de MM. A mesma tabela de
+// impacto já usada pelo collider decide quando desenhá-la; A usa mão esquerda,
+// B mão direita e C a cintura, como o Player_PostLimbDrawGameplay original.
+extern "C" void CustomBodyDrawPunchEffect(PlayState* play, s32 limbIndex) {
+    if (!gCustomBodyPunchHitActive) {
+        return;
+    }
+    const bool atTargetLimb = (gCustomBodyCurrentAnim == "punch_a" && limbIndex == PLAYER_LIMB_L_HAND) ||
+                              (gCustomBodyCurrentAnim == "punch_b" && limbIndex == PLAYER_LIMB_R_HAND) ||
+                              (gCustomBodyCurrentAnim == "punch_c" && limbIndex == PLAYER_LIMB_WAIST);
+    const auto effect = gCustomBodySpec.modelsPrefixed.find("punch_effect");
+    if (!atTargetLimb || effect == gCustomBodySpec.modelsPrefixed.end()) {
+        return;
+    }
+
+    Gfx* dList = reinterpret_cast<Gfx*>(const_cast<char*>(effect->second.c_str()));
+    OPEN_DISPS(play->state.gfxCtx);
+    Gfx_SetupDL_25Xlu(play->state.gfxCtx);
+    gDPSetEnvColor(POLY_XLU_DISP++, 255, 0, 0, 180);
+    gSPMatrix(POLY_XLU_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_MODELVIEW | G_MTX_LOAD);
+    if (ResourceMgr_OTRSigCheck(reinterpret_cast<char*>(dList)) == 1) {
+        gsSPPushCD(POLY_XLU_DISP++, dList);
+    }
+    gSPDisplayList(POLY_XLU_DISP++, dList);
+    CLOSE_DISPS(play->state.gfxCtx);
+}
+
+// O Player de MM anexa o conjunto de tambores no torso do Goron durante as
+// animacoes gakki. O custom body usa o mesmo ponto de esqueleto (limb 0x15)
+// e paths declarados pela spec; outros corpos nao ativam este callback.
+extern "C" void CustomBodyPostLimbDraw(PlayState* play, s32 limbIndex, Gfx** dList, Vec3s* rot, void* arg) {
+    constexpr s32 kGoronTorsoLimb = 0x15;
+    CustomBodyDrawPunchEffect(play, limbIndex);
+    if (limbIndex != kGoronTorsoLimb || !CustomBodyIsGakkiAnimation()) {
+        return;
+    }
+
+    static constexpr std::array<const char*, 6> kGakkiModels = {
+        "gakki_container", "gakki_piece_1", "gakki_piece_2", "gakki_piece_3", "gakki_piece_4", "gakki_piece_5",
+    };
+    const Vec3f scale = CustomBodyGakkiScale();
+    if (scale.x <= 0.0f && scale.y <= 0.0f && scale.z <= 0.0f) {
+        return;
+    }
+
+    OPEN_DISPS(play->state.gfxCtx);
+    for (const char* name : kGakkiModels) {
+        const auto model = gCustomBodySpec.modelsPrefixed.find(name);
+        if (model == gCustomBodySpec.modelsPrefixed.end()) {
+            continue;
+        }
+        Gfx* dList = reinterpret_cast<Gfx*>(const_cast<char*>(model->second.c_str()));
+        Matrix_Push();
+        Matrix_Scale(scale.x, scale.y, scale.z, MTXMODE_APPLY);
+        gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_MODELVIEW | G_MTX_LOAD);
+        if (ResourceMgr_OTRSigCheck(reinterpret_cast<char*>(dList)) == 1) {
+            gsSPPushCD(POLY_OPA_DISP++, dList);
+        }
+        gSPDisplayList(POLY_OPA_DISP++, dList);
+        Matrix_Pop();
+    }
+    CLOSE_DISPS(play->state.gfxCtx);
 }
 
 extern "C" void CustomBodyActorDraw(Actor* actor, PlayState* play) {
     if (!gCustomBodyActive) {
         return;
     }
+    // A display list enrolada do Goron é geometria direta, não um skeleton.
+    // Ela precisa do seu próprio pipeline Xlu, cor ambiente e ModelView.
+    Player* player = GET_PLAYER(play);
+    const auto rollModel = gCustomBodySpec.modelsPrefixed.find("roll");
+    const bool waterBall = gCustomBodyWaterVoidPhase == CustomBodyWaterVoidPhase::Ball;
+    const bool nativeRollOrGroundPound =
+        gCustomBodyRollPhase == CustomBodyRollPhase::Rolling &&
+        (player != nullptr && (player->actionFunc == Player_Action_Roll ||
+                               gCustomBodyGroundPoundPhase != CustomBodyGroundPoundPhase::None));
+    if (player != nullptr && (nativeRollOrGroundPound || waterBall) &&
+        rollModel != gCustomBodySpec.modelsPrefixed.end()) {
+        const auto spikes = gCustomBodySpec.modelsPrefixed.find("roll_spikes");
+        const auto energy1 = gCustomBodySpec.modelsPrefixed.find("roll_energy_1");
+        const auto energy2 = gCustomBodySpec.modelsPrefixed.find("roll_energy_2");
+        const char* spikesPath = (!waterBall && gCustomBodyRollSpikesActive && spikes != gCustomBodySpec.modelsPrefixed.end())
+                                     ? spikes->second.c_str()
+                                     : nullptr;
+        const char* energy1Path = !waterBall && energy1 != gCustomBodySpec.modelsPrefixed.end()
+                                      ? energy1->second.c_str()
+                                      : nullptr;
+        const char* energy2Path = !waterBall && energy2 != gCustomBodySpec.modelsPrefixed.end()
+                                      ? energy2->second.c_str()
+                                      : nullptr;
+        CustomBodyDrawRoll(play, rollModel->second.c_str(), spikesPath, energy1Path, energy2Path,
+                           waterBall ? 0 : gCustomBodyRollCharge);
+        return;
+    }
+
     OPEN_DISPS(play->state.gfxCtx);
-    SkelAnime_DrawFlexOpa(play, gCustomBodySkelAnime.skeleton, gCustomBodySkelAnime.jointTable,
-                          gCustomBodySkelAnime.dListCount, nullptr, nullptr, actor);
+    // Setup de render opaco padrão (SETUPDL_25: combiner/render mode/geometry
+    // mode). SEM isto, SkelAnime_DrawFlexOpa emite a geometria com o estado de
+    // pipeline herdado do ator desenhado logo antes — resultado em jogo:
+    // corpo totalmente INVISÍVEL (não é bind pose, não é tamanho errado — não
+    // desenha nada). Todo ator vanilla que desenha esqueleto chama isto após
+    // OPEN_DISPS (ver z_en_go2.c:2032 e func_80093C80 usado pelo puppet). Foi
+    // a divergência exata deste draw em relação aos exemplos que funcionam.
+    Gfx_SetupDL_25Opa(play->state.gfxCtx);
+
+    // Configure os segmentos antes de decidir entre skeleton e modelo de
+    // estado: uma display list alternativa também pode referenciar texturas
+    // segmentadas do objeto de Player.
+    for (const auto& [segment, path] : gCustomBodySpec.segmentsPrefixed) {
+        char* data = ResourceMgr_GetResourceDataByNameHandlingMQ(path.c_str());
+        if (data != nullptr) {
+            gSPSegment(POLY_OPA_DISP++, segment, reinterpret_cast<uintptr_t>(data));
+        }
+    }
+    if (gCustomBodyShieldActive && gCustomBodyShieldSkelAnime.skeleton != nullptr) {
+        SkelAnime_DrawFlexOpa(play, gCustomBodyShieldSkelAnime.skeleton, gCustomBodyShieldSkelAnime.jointTable,
+                              gCustomBodyShieldSkelAnime.dListCount, nullptr, nullptr, actor);
+    } else {
+        SkelAnime_DrawFlexOpa(play, gCustomBodySkelAnime.skeleton, gCustomBodySkelAnime.jointTable,
+                              gCustomBodySkelAnime.dListCount, nullptr, CustomBodyPostLimbDraw, actor);
+    }
     CLOSE_DISPS(play->state.gfxCtx);
 }
 
@@ -826,16 +1904,51 @@ bool CustomBodyActivateFromSpec(PlayState* play) {
     if (player == nullptr) {
         return false;
     }
-    const std::string skelPrefixed = std::string("__OTR__") + gCustomBodySpec.skeletonPath;
-    const auto defaultAnimPath = gCustomBodySpec.anims.find(gCustomBodySpec.defaultAnim);
-    if (!ResourceMgr_FileExists(skelPrefixed.c_str()) || defaultAnimPath == gCustomBodySpec.anims.end()) {
+    // Todos os ponteiros abaixo saem de membros persistentes da spec global —
+    // ver o comentário em CustomBodySpec: o engine guarda estes endereços.
+    const auto defaultAnimPath = gCustomBodySpec.animsPrefixed.find(gCustomBodySpec.defaultAnim);
+    if (gCustomBodySpec.skeletonPathPrefixed.empty() || defaultAnimPath == gCustomBodySpec.animsPrefixed.end()) {
+        SPDLOG_WARN("ShipLua set_body: spec incompleta");
+        return false;
+    }
+    if (!ResourceMgr_FileExists(gCustomBodySpec.skeletonPathPrefixed.c_str()) ||
+        !ResourceMgr_FileExists(defaultAnimPath->second.c_str())) {
         SPDLOG_WARN("ShipLua set_body: assets indispon\xC3\xADveis para a spec atual");
         return false;
     }
-    const std::string animPrefixed = std::string("__OTR__") + defaultAnimPath->second;
-    if (!ResourceMgr_FileExists(animPrefixed.c_str())) {
-        SPDLOG_WARN("ShipLua set_body: assets indispon\xC3\xADveis para a spec atual");
+    // Uma spec de corpo e atomica: nao basta o idle existir. Precarregamos e
+    // validamos todos os headers declarados para evitar que uma habilidade
+    // (por exemplo roll, tambor ou porta) revele uma animacao ausente somente
+    // depois de a transformacao ja ter ocultado o Player vanilla.
+    for (const auto& [name, path] : gCustomBodySpec.animsPrefixed) {
+        if (!ResourceMgr_FileExists(path.c_str()) || ResourceMgr_LoadAnimByName(path.c_str()) == nullptr) {
+            SPDLOG_WARN("ShipLua set_body: animacao '{}' indisponivel ('{}')", name, path);
+            return false;
+        }
+    }
+    const bool hasShieldSkeleton = !gCustomBodySpec.shieldSkeletonPathPrefixed.empty();
+    const bool hasShieldAnimation = !gCustomBodySpec.shieldAnimationPathPrefixed.empty();
+    if (hasShieldSkeleton != hasShieldAnimation) {
+        SPDLOG_WARN("ShipLua set_body: 'shield' precisa declarar skeleton e animation juntos");
         return false;
+    }
+    if (hasShieldSkeleton &&
+        (!ResourceMgr_FileExists(gCustomBodySpec.shieldSkeletonPathPrefixed.c_str()) ||
+         !ResourceMgr_FileExists(gCustomBodySpec.shieldAnimationPathPrefixed.c_str()))) {
+        SPDLOG_WARN("ShipLua set_body: assets de 'shield' indispon\xC3\xADveis");
+        return false;
+    }
+    for (const auto& [segment, path] : gCustomBodySpec.segmentsPrefixed) {
+        if (!ResourceMgr_FileExists(path.c_str())) {
+            SPDLOG_WARN("ShipLua set_body: segmento 0x{:02X} indispon\xC3\xADvel ('{}')", segment, path);
+            return false;
+        }
+    }
+    for (const auto& [state, path] : gCustomBodySpec.modelsPrefixed) {
+        if (!ResourceMgr_FileExists(path.c_str())) {
+            SPDLOG_WARN("ShipLua set_body: modelo do estado '{}' indispon\xC3\xADvel ('{}')", state, path);
+            return false;
+        }
     }
 
     CustomBodyFreeSkelBuffers();
@@ -843,9 +1956,30 @@ bool CustomBodyActivateFromSpec(PlayState* play) {
     // buffers do chamador quando não-NULL, mas aqui passamos NULL para os
     // dois: aloca do tamanho real do header do skeleton fornecido pelo mod,
     // não de PLAYER_LIMB_MAX.
-    SkelAnime_InitLink(play, &gCustomBodySkelAnime, (FlexSkeletonHeader*)skelPrefixed.c_str(),
-                       (LinkAnimationHeader*)animPrefixed.c_str(), 9, nullptr, nullptr, 0);
+    SkelAnime_InitLink(play, &gCustomBodySkelAnime,
+                       (FlexSkeletonHeader*)gCustomBodySpec.skeletonPathPrefixed.c_str(),
+                       (LinkAnimationHeader*)defaultAnimPath->second.c_str(), 9, nullptr, nullptr, 0);
     gCustomBodyCurrentAnim = gCustomBodySpec.defaultAnim;
+
+    if (hasShieldSkeleton) {
+        // O escudo/curl do Goron é uma animação normal de quatro membros,
+        // não LinkAnimation. Carregamos o header antes do InitFlex porque
+        // Animation_PlayLoop opera sobre os dados, e não sobre o caminho OTR.
+        auto* shieldAnimation = ResourceMgr_LoadAnimByName(gCustomBodySpec.shieldAnimationPathPrefixed.c_str());
+        if (shieldAnimation == nullptr) {
+            SPDLOG_WARN("ShipLua set_body: n\xC3\xA3o carreguei a anima\xC3\xA7\xC3\xA3o de 'shield'");
+            CustomBodyFreeSkelBuffers();
+            return false;
+        }
+        SkelAnime_InitFlex(play, &gCustomBodyShieldSkelAnime,
+                           (FlexSkeletonHeader*)gCustomBodySpec.shieldSkeletonPathPrefixed.c_str(),
+                           reinterpret_cast<AnimationHeader*>(shieldAnimation), nullptr, nullptr, 0);
+        if (gCustomBodyShieldSkelAnime.jointTable == nullptr || gCustomBodyShieldSkelAnime.morphTable == nullptr) {
+            SPDLOG_WARN("ShipLua set_body: sem mem\xC3\xB3ria para a postura de 'shield'");
+            CustomBodyFreeSkelBuffers();
+            return false;
+        }
+    }
 
     Actor* actor = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_ITEM00, player->actor.world.pos.x,
                                player->actor.world.pos.y, player->actor.world.pos.z, 0, 0, 0, 0);
@@ -856,19 +1990,34 @@ bool CustomBodyActivateFromSpec(PlayState* play) {
     }
     actor->update = CustomBodyActorUpdate;
     actor->draw = CustomBodyActorDraw;
+    // O ator hospedeiro é um En_Item00: o Init dele (params 0 = rupia verde)
+    // já aplicou Actor_SetScale(0.015). Reafirma a escala do Player real
+    // (z_player.c:12254, scale = 0.01) — o esqueleto do Goron é da família
+    // Player e é desenhado nessa mesma escala de mundo. Sem isto, o corpo
+    // sairia em tamanho de rupia.
+    Actor_SetScale(actor, 0.01f);
     gCustomBodyActor = actor;
     gCustomBodyActive = true;
     player->stateFlags2 |= PLAYER_STATE2_DISABLE_DRAW;
+    MaskTransitionBeginReveal(player);
     return true;
 }
 
 // ship.oot.player.set_body(spec): spec = { skeleton = "caminho/sem/prefixo",
-// anims = { nome = "caminho", ... }, default_anim = "nome" (opcional, usa
-// "idle" ou a 1a chave se omitido) }. spec = nil desliga e esquece a forma.
+// anims = { nome = "caminho", ... }, reverse_anims = { nome = true, ... },
+// segments = { [8] = "textura", ... },
+// models = { roll = "display/list", ... }, shield = { skeleton = "...",
+// animation = "..." } (opcional), default_anim = "nome" (opcional, usa
+// "idle" ou a 1a chave se omitido), water_void = true (opcional) }. spec =
+// nil desliga e esquece a forma.
 int LuaSetPlayerBody(lua_State* state) {
     PlayState* play = gPlayState;
     if (lua_isnil(state, 1)) {
+        Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
         CustomBodyDeactivate(play, true);
+        // A saida mask_off chega aqui no pico do flash; o desenho nativo de
+        // Link volta antes do fade, portanto a troca tambem fica invisivel.
+        MaskTransitionBeginReveal(player);
         SPDLOG_INFO("ShipLua set_body: corpo customizado desligado");
         lua_pushboolean(state, 1);
         return 1;
@@ -915,6 +2064,171 @@ int LuaSetPlayerBody(lua_State* state) {
         return 1;
     }
 
+    lua_getfield(state, 1, "reverse_anims");
+    if (!lua_isnil(state, -1) && !lua_istable(state, -1)) {
+        SPDLOG_WARN("ShipLua set_body: 'reverse_anims' precisa ser tabela nome->boolean");
+        lua_pop(state, 1);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    if (lua_istable(state, -1)) {
+        lua_pushnil(state);
+        while (lua_next(state, -2) != 0) {
+            const bool valid = lua_type(state, -2) == LUA_TSTRING && lua_isboolean(state, -1);
+            const char* name = valid ? lua_tostring(state, -2) : nullptr;
+            const bool enabled = valid && lua_toboolean(state, -1) != 0;
+            if (!valid || (enabled && spec.anims.find(name) == spec.anims.end())) {
+                SPDLOG_WARN("ShipLua set_body: 'reverse_anims' aceita apenas chaves de 'anims' com valor boolean");
+                lua_pop(state, 2);
+                lua_pushboolean(state, 0);
+                return 1;
+            }
+            if (enabled) {
+                spec.reverseAnims.insert(name);
+            }
+            lua_pop(state, 1);
+        }
+    }
+    lua_pop(state, 1); // reverse_anims
+
+    lua_getfield(state, 1, "segments");
+    if (!lua_isnil(state, -1) && !lua_istable(state, -1)) {
+        SPDLOG_WARN("ShipLua set_body: 'segments' precisa ser tabela índice->caminho");
+        lua_pop(state, 1);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    if (lua_istable(state, -1)) {
+        lua_pushnil(state);
+        while (lua_next(state, -2) != 0) {
+            const bool valid = lua_isinteger(state, -2) && lua_type(state, -1) == LUA_TSTRING;
+            const int segment = valid ? static_cast<int>(lua_tointeger(state, -2)) : 0;
+            if (!valid || segment < 1 || segment > 15) {
+                SPDLOG_WARN("ShipLua set_body: 'segments' aceita apenas índices 1..15 e caminhos string");
+                lua_pop(state, 2);
+                lua_pushboolean(state, 0);
+                return 1;
+            }
+            spec.segments[segment] = lua_tostring(state, -1);
+            lua_pop(state, 1);
+        }
+    }
+    lua_pop(state, 1); // segments
+
+    lua_getfield(state, 1, "models");
+    if (!lua_isnil(state, -1) && !lua_istable(state, -1)) {
+        SPDLOG_WARN("ShipLua set_body: 'models' precisa ser tabela estado->caminho");
+        lua_pop(state, 1);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    if (lua_istable(state, -1)) {
+        lua_pushnil(state);
+        while (lua_next(state, -2) != 0) {
+            if (lua_type(state, -2) != LUA_TSTRING || lua_type(state, -1) != LUA_TSTRING) {
+                SPDLOG_WARN("ShipLua set_body: 'models' aceita apenas estado string -> caminho string");
+                lua_pop(state, 2);
+                lua_pushboolean(state, 0);
+                return 1;
+            }
+            spec.models[lua_tostring(state, -2)] = lua_tostring(state, -1);
+            lua_pop(state, 1);
+        }
+    }
+    lua_pop(state, 1); // models
+
+    lua_getfield(state, 1, "shield");
+    if (!lua_isnil(state, -1) && !lua_istable(state, -1)) {
+        SPDLOG_WARN("ShipLua set_body: 'shield' precisa ser tabela { skeleton, animation }");
+        lua_pop(state, 1);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    if (lua_istable(state, -1)) {
+        lua_getfield(state, -1, "skeleton");
+        const char* shieldSkeleton = luaL_optstring(state, -1, nullptr);
+        if (shieldSkeleton == nullptr || *shieldSkeleton == '\0') {
+            SPDLOG_WARN("ShipLua set_body: 'shield.skeleton' \xC3\xA9 obrigat\xC3\xB3rio");
+            lua_pop(state, 2);
+            lua_pushboolean(state, 0);
+            return 1;
+        }
+        spec.shieldSkeletonPath = shieldSkeleton;
+        lua_pop(state, 1);
+
+        lua_getfield(state, -1, "animation");
+        const char* shieldAnimation = luaL_optstring(state, -1, nullptr);
+        if (shieldAnimation == nullptr || *shieldAnimation == '\0') {
+            SPDLOG_WARN("ShipLua set_body: 'shield.animation' \xC3\xA9 obrigat\xC3\xB3rio");
+            lua_pop(state, 2);
+            lua_pushboolean(state, 0);
+            return 1;
+        }
+        spec.shieldAnimationPath = shieldAnimation;
+        lua_pop(state, 1);
+    }
+    lua_pop(state, 1); // shield
+
+    lua_getfield(state, 1, "ground_offset");
+    if (!lua_isnil(state, -1)) {
+        if (!lua_isnumber(state, -1)) {
+            SPDLOG_WARN("ShipLua set_body: 'ground_offset' precisa ser n\xC3\xBAmero");
+            lua_pop(state, 1);
+            lua_pushboolean(state, 0);
+            return 1;
+        }
+        spec.groundOffset = static_cast<f32>(lua_tonumber(state, -1));
+        if (!std::isfinite(spec.groundOffset) || fabsf(spec.groundOffset) > 10000.0f) {
+            SPDLOG_WARN("ShipLua set_body: 'ground_offset' fora da faixa segura");
+            lua_pop(state, 1);
+            lua_pushboolean(state, 0);
+            return 1;
+        }
+    }
+    lua_pop(state, 1);
+
+    lua_getfield(state, 1, "roll_offset");
+    if (!lua_isnil(state, -1)) {
+        if (!lua_isnumber(state, -1)) {
+            SPDLOG_WARN("ShipLua set_body: 'roll_offset' precisa ser n\xC3\xBAmero");
+            lua_pop(state, 1);
+            lua_pushboolean(state, 0);
+            return 1;
+        }
+        spec.rollOffset = static_cast<f32>(lua_tonumber(state, -1));
+        if (!std::isfinite(spec.rollOffset) || fabsf(spec.rollOffset) > 10000.0f) {
+            SPDLOG_WARN("ShipLua set_body: 'roll_offset' fora da faixa segura");
+            lua_pop(state, 1);
+            lua_pushboolean(state, 0);
+            return 1;
+        }
+    }
+    lua_pop(state, 1);
+
+    lua_getfield(state, 1, "water_void");
+    if (!lua_isnil(state, -1)) {
+        if (!lua_isboolean(state, -1)) {
+            SPDLOG_WARN("ShipLua set_body: 'water_void' precisa ser booleano");
+            lua_pop(state, 1);
+            lua_pushboolean(state, 0);
+            return 1;
+        }
+        spec.waterVoid = lua_toboolean(state, -1) != 0;
+    }
+    lua_pop(state, 1);
+
+    lua_getfield(state, 1, "block_ledge_grab");
+    if (!lua_isnil(state, -1)) {
+        if (!lua_isboolean(state, -1)) {
+            SPDLOG_WARN("ShipLua set_body: 'block_ledge_grab' precisa ser booleano");
+            lua_pop(state, 1);
+            lua_pushboolean(state, 0);
+            return 1;
+        }
+        spec.blockLedgeGrab = lua_toboolean(state, -1) != 0;
+    }
+    lua_pop(state, 1);
+
     lua_getfield(state, 1, "default_anim");
     const char* defaultAnim = luaL_optstring(state, -1, nullptr);
     if (defaultAnim != nullptr && spec.anims.find(defaultAnim) != spec.anims.end()) {
@@ -925,6 +2239,23 @@ int LuaSetPlayerBody(lua_State* state) {
         spec.defaultAnim = spec.anims.begin()->first;
     }
     lua_pop(state, 1);
+
+    // Monta os espelhos com "__OTR__" UMA vez, aqui: são estes que fornecem os
+    // ponteiros ao engine, e precisam viver enquanto o corpo estiver ativo.
+    spec.skeletonPathPrefixed = std::string("__OTR__") + spec.skeletonPath;
+    for (const auto& [animName, animPath] : spec.anims) {
+        spec.animsPrefixed[animName] = std::string("__OTR__") + animPath;
+    }
+    for (const auto& [segment, path] : spec.segments) {
+        spec.segmentsPrefixed[segment] = std::string("__OTR__") + path;
+    }
+    for (const auto& [stateName, path] : spec.models) {
+        spec.modelsPrefixed[stateName] = std::string("__OTR__") + path;
+    }
+    if (!spec.shieldSkeletonPath.empty()) {
+        spec.shieldSkeletonPathPrefixed = std::string("__OTR__") + spec.shieldSkeletonPath;
+        spec.shieldAnimationPathPrefixed = std::string("__OTR__") + spec.shieldAnimationPath;
+    }
 
     CustomBodyDeactivate(play, false); // desliga o corpo antigo, mas a spec só troca depois
     gCustomBodySpec = spec;
@@ -954,11 +2285,157 @@ int LuaGetPlayerBody(lua_State* state) {
     lua_pushstring(state, gCustomBodyCurrentAnim.c_str());
     lua_setfield(state, -2, "current_anim");
     lua_newtable(state);
+    for (const auto& [segment, path] : gCustomBodySpec.segments) {
+        lua_pushstring(state, path.c_str());
+        lua_rawseti(state, -2, segment);
+    }
+    lua_setfield(state, -2, "segments");
+    lua_newtable(state);
+    for (const auto& [name, path] : gCustomBodySpec.models) {
+        lua_pushstring(state, path.c_str());
+        lua_setfield(state, -2, name.c_str());
+    }
+    lua_setfield(state, -2, "models");
+    lua_newtable(state);
+    for (const auto& name : gCustomBodySpec.reverseAnims) {
+        lua_pushboolean(state, 1);
+        lua_setfield(state, -2, name.c_str());
+    }
+    lua_setfield(state, -2, "reverse_anims");
+    lua_pushnumber(state, gCustomBodySpec.groundOffset);
+    lua_setfield(state, -2, "ground_offset");
+    lua_pushnumber(state, gCustomBodySpec.rollOffset);
+    lua_setfield(state, -2, "roll_offset");
+    lua_pushboolean(state, gCustomBodySpec.waterVoid);
+    lua_setfield(state, -2, "water_void");
+    lua_pushboolean(state, gCustomBodySpec.blockLedgeGrab);
+    lua_setfield(state, -2, "block_ledge_grab");
+    lua_pushboolean(state, gCustomBodyWaterVoidPhase != CustomBodyWaterVoidPhase::None);
+    lua_setfield(state, -2, "water_void_active");
+    lua_pushstring(state, CustomBodyWaterVoidPhaseName());
+    lua_setfield(state, -2, "water_void_phase");
+    lua_pushinteger(state, gCustomBodyWaterVoidTimer);
+    lua_setfield(state, -2, "water_void_frames");
+    lua_pushinteger(state, gCustomBodyRollCharge);
+    lua_setfield(state, -2, "roll_charge");
+    lua_pushstring(state, CustomBodyCurrentRollPhaseName());
+    lua_setfield(state, -2, "roll_phase");
+    lua_pushboolean(state, gCustomBodyPunchHitActive);
+    lua_setfield(state, -2, "punch_hit_active");
+    lua_pushboolean(state, gCustomBodyPunchQueued);
+    lua_setfield(state, -2, "punch_combo_queued");
+    lua_pushboolean(state, gCustomBodyRollColliderArmed);
+    lua_setfield(state, -2, "roll_attack_active");
+    lua_pushboolean(state, gCustomBodyRollPhase == CustomBodyRollPhase::Rolling && gCustomBodyRollCharge >= 5);
+    lua_setfield(state, -2, "roll_energy_active");
+    lua_pushboolean(state, gCustomBodyRollSpikesActive);
+    lua_setfield(state, -2, "roll_spikes_active");
+    lua_pushboolean(state, gCustomBodyRollWallBounceTimer > 0);
+    lua_setfield(state, -2, "roll_bounce_active");
+    lua_pushinteger(state, gCustomBodyRollWallBounceTimer);
+    lua_setfield(state, -2, "roll_bounce_frames");
+    lua_pushboolean(state, gCustomBodyGroundPoundPhase != CustomBodyGroundPoundPhase::None);
+    lua_setfield(state, -2, "ground_pound_active");
+    lua_pushboolean(state, gCustomBodyShieldActive);
+    lua_setfield(state, -2, "shield_active");
+    if (!gCustomBodySpec.shieldSkeletonPath.empty()) {
+        lua_newtable(state);
+        lua_pushstring(state, gCustomBodySpec.shieldSkeletonPath.c_str());
+        lua_setfield(state, -2, "skeleton");
+        lua_pushstring(state, gCustomBodySpec.shieldAnimationPath.c_str());
+        lua_setfield(state, -2, "animation");
+        lua_setfield(state, -2, "shield");
+    }
+    lua_newtable(state);
     for (const auto& [name, path] : gCustomBodySpec.anims) {
         lua_pushstring(state, path.c_str());
         lua_setfield(state, -2, name.c_str());
     }
     lua_setfield(state, -2, "anims");
+    return 1;
+}
+
+// Toca uma animação nomeada declarada na spec atual. Em modo "once", a
+// seleção automática volta a assumir no frame seguinte ao término.
+int LuaPlayPlayerBodyAnimation(lua_State* state) {
+    PlayState* play = gPlayState;
+    if (!gCustomBodyActive || play == nullptr) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    const char* name = luaL_checkstring(state, 1);
+    const auto path = gCustomBodySpec.animsPrefixed.find(name);
+    if (path == gCustomBodySpec.animsPrefixed.end()) {
+        SPDLOG_WARN("ShipLua play_body_animation: anima\xC3\xA7\xC3\xA3o desconhecida '{}'", name);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    const char* mode = luaL_optstring(state, 2, "once");
+    const bool once = strcmp(mode, "once") == 0;
+    const bool loop = strcmp(mode, "loop") == 0;
+    const bool reverseOnce = strcmp(mode, "reverse_once") == 0;
+    if (!once && !loop && !reverseOnce) {
+        SPDLOG_WARN("ShipLua play_body_animation: modo precisa ser 'once', 'loop' ou 'reverse_once'");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    const double requestedSpeed = luaL_optnumber(state, 3, 1.0);
+    if (!std::isfinite(requestedSpeed) || requestedSpeed <= 0.0 || requestedSpeed > 4.0) {
+        SPDLOG_WARN("ShipLua play_body_animation: velocidade fora da faixa segura");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    auto* loaded = ResourceMgr_LoadAnimByName(path->second.c_str());
+    if (loaded == nullptr) {
+        SPDLOG_WARN("ShipLua play_body_animation: n\xC3\xA3o carreguei '{}'", name);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    const f32 lastFrame = Animation_GetLastFrame(reinterpret_cast<LinkAnimationHeader*>(loaded));
+    LinkAnimation_Change(play, &gCustomBodySkelAnime,
+                          reinterpret_cast<LinkAnimationHeader*>(const_cast<char*>(path->second.c_str())),
+                          reverseOnce ? -static_cast<f32>(requestedSpeed) : static_cast<f32>(requestedSpeed),
+                          reverseOnce ? lastFrame : 0.0f, reverseOnce ? 0.0f : lastFrame,
+                          loop ? ANIMMODE_LOOP : ANIMMODE_ONCE, 0.0f);
+    if (once && std::strcmp(name, "mask_off") == 0) {
+        Player* player = GET_PLAYER(play);
+        if (player != nullptr) {
+            MaskTransitionStart(player, static_cast<int>(ceilf(lastFrame)) + 1);
+        }
+    }
+    if (std::strcmp(name, "punch_a") == 0 || std::strcmp(name, "punch_b") == 0 || std::strcmp(name, "punch_c") == 0) {
+        gCustomBodySkelAnime.movementFlags |= ANIM_FLAG_NOMOVE;
+    }
+    gCustomBodyCurrentAnim = name;
+    gCustomBodyOverrideAnim = name;
+    gCustomBodyOverrideOnce = once || reverseOnce;
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+// Troca, em tempo de execução, um segmento que a display list lê (por exemplo
+// 0x08 dos olhos do Goron). O caminho fica armazenado na spec persistente.
+int LuaSetPlayerBodySegment(lua_State* state) {
+    if (!gCustomBodyActive) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    const int segment = static_cast<int>(luaL_checkinteger(state, 1));
+    const char* path = luaL_checkstring(state, 2);
+    if (segment < 1 || segment > 15 || *path == '\0') {
+        SPDLOG_WARN("ShipLua set_body_segment: segmento precisa estar entre 1 e 15");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    const std::string prefixed = std::string("__OTR__") + path;
+    if (!ResourceMgr_FileExists(prefixed.c_str())) {
+        SPDLOG_WARN("ShipLua set_body_segment: resource indispon\xC3\xADvel '{}'", path);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    gCustomBodySpec.segments[segment] = path;
+    gCustomBodySpec.segmentsPrefixed[segment] = prefixed;
+    lua_pushboolean(state, 1);
     return 1;
 }
 
@@ -994,6 +2471,13 @@ int LuaSetMask(lua_State* state) {
     }
 
     if (std::strcmp(requested, "none") == 0) {
+        // Durante a entrada, remover a máscara é um cancelamento explícito.
+        // Durante a saída, set_body(nil) já promoveu Conceal -> Reveal e o
+        // mod limpa a máscara no mesmo callback; preservar o fade evita que
+        // Link apareça antes do último frame branco.
+        if (gMaskTransitionPhase == MaskTransitionPhase::Conceal) {
+            MaskTransitionReset(player);
+        }
         player->currentMask = PLAYER_MASK_NONE;
         gSaveContext.ship.maskMemory = PLAYER_MASK_NONE;
         if (gMaskForced) {
@@ -1028,6 +2512,40 @@ int LuaSetMask(lua_State* state) {
     return 1;
 }
 
+// A entrada de uma transformação de MM começa no Player humano com
+// gPlayerAnim_cl_setmask. Ao contrário do corte completo de MM, esta
+// primitive não toma câmera, cutscene ou física: ela só toca a animação
+// segura, em repouso, e devolve a duração para o mod sincronizar a troca de
+// corpo. O caminho é estático porque LinkAnimation_Change o consulta em
+// frames posteriores.
+constexpr char kMaskOnAnimationPath[] = "__OTR__mm/objects/gameplay_keep/gPlayerAnim_cl_setmask";
+
+int LuaPlayMaskOnAnimation(lua_State* state) {
+    PlayState* play = gPlayState;
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (player == nullptr || gCustomBodyActive ||
+        (player->stateFlags1 & (PLAYER_STATE1_DEAD | PLAYER_STATE1_IN_CUTSCENE | PLAYER_STATE1_INPUT_DISABLED)) ||
+        (player->actor.bgCheckFlags & BGCHECKFLAG_GROUND) == 0 || fabsf(player->linearVelocity) >= 0.5f) {
+        SPDLOG_WARN("ShipLua play_mask_on_animation: exige Player parado no ch\xC3\xA3o e sem corpo externo");
+        lua_pushinteger(state, 0);
+        return 1;
+    }
+    auto* loaded = ResourceMgr_LoadAnimByName(kMaskOnAnimationPath);
+    if (loaded == nullptr) {
+        SPDLOG_WARN("ShipLua play_mask_on_animation: anima\xC3\xA7\xC3\xA3o MM indispon\xC3\xADvel");
+        lua_pushinteger(state, 0);
+        return 1;
+    }
+    const f32 lastFrame = Animation_GetLastFrame(reinterpret_cast<LinkAnimationHeader*>(loaded));
+    LinkAnimation_Change(play, &player->skelAnime,
+                         reinterpret_cast<LinkAnimationHeader*>(const_cast<char*>(kMaskOnAnimationPath)), 1.0f, 0.0f,
+                         lastFrame, ANIMMODE_ONCE, 0.0f);
+    const int transitionFrames = static_cast<int>(ceilf(lastFrame)) + 1;
+    MaskTransitionStart(player, transitionFrames);
+    lua_pushinteger(state, static_cast<lua_Integer>(transitionFrames));
+    return 1;
+}
+
 // PASSO 2 — ship.oot.player.attach_model(slot, path).
 // Desenha uma display list ARBITRÁRIA no player, endereçada por caminho de
 // resource — inclusive assets de mod ("mod/<id>/...") e do jogo vizinho
@@ -1039,6 +2557,7 @@ int LuaSetMask(lua_State* state) {
 std::string gAttachedHeadModel;
 HOOK_ID gMaskDrawHook = 0;
 HOOK_ID gFireImmunityHook = 0;
+HOOK_ID gRollStartHook = 0;
 HOOK_ID gRollChainHook = 0;
 HOOK_ID gRollSteerHook = 0;
 
@@ -1055,6 +2574,7 @@ HOOK_ID gHookItemReceiveHook = 0;
 HOOK_ID gHookHealthChangeHook = 0;
 HOOK_ID gHookBonkHook = 0;
 HOOK_ID gHeldItemDrawHook = 0;
+HOOK_ID gMaskTransitionUpdateHook = 0;
 HOOK_ID gHookFirstPersonHook = 0;
 HOOK_ID gHookArrowTypeSelectHook = 0;
 
@@ -1164,6 +2684,23 @@ extern "C" void DrawHeldItemModels(PlayState* play) {
                  G_MTX_MODELVIEW | G_MTX_LOAD);
         gSPDisplayList(POLY_OPA_DISP++, (Gfx*)gHeldItemModelRight.c_str());
     }
+    CLOSE_DISPS(play->state.gfxCtx);
+}
+
+// Mesmo passe Xlu de tela inteira usado pela maquina de transformacao de
+// OoTMM. Roda antes do HUD, para que os botoes/hearts nunca sejam apagados.
+extern "C" void DrawMaskTransitionFlash(PlayState* play) {
+    if (play == nullptr || gMaskTransitionFlashAlpha <= 0) {
+        return;
+    }
+    OPEN_DISPS(play->state.gfxCtx);
+    Gfx_SetupDL_44Xlu(play->state.gfxCtx);
+    gDPPipeSync(POLY_XLU_DISP++);
+    gDPSetCombineLERP(POLY_XLU_DISP++, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0, PRIMITIVE, 0, 0, 0,
+                      PRIMITIVE);
+    gDPSetPrimColor(POLY_XLU_DISP++, 0, 0, 220, 220, 220, static_cast<u8>(gMaskTransitionFlashAlpha));
+    gDPFillRectangle(POLY_XLU_DISP++, 0, 0, SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1);
+    gDPPipeSync(POLY_XLU_DISP++);
     CLOSE_DISPS(play->state.gfxCtx);
 }
 
@@ -1470,10 +3007,16 @@ void InstallOotApi(lua_State* state) {
     lua_setfield(state, -2, "set_bunny_hood");
     lua_pushcfunction(state, LuaSetMask);
     lua_setfield(state, -2, "set_mask");
+    lua_pushcfunction(state, LuaPlayMaskOnAnimation);
+    lua_setfield(state, -2, "play_mask_on_animation");
     lua_pushcfunction(state, LuaSetPlayerBody);
     lua_setfield(state, -2, "set_body");
     lua_pushcfunction(state, LuaGetPlayerBody);
     lua_setfield(state, -2, "get_body");
+    lua_pushcfunction(state, LuaPlayPlayerBodyAnimation);
+    lua_setfield(state, -2, "play_body_animation");
+    lua_pushcfunction(state, LuaSetPlayerBodySegment);
+    lua_setfield(state, -2, "set_body_segment");
     lua_pushcfunction(state, LuaAttachModel);
     lua_setfield(state, -2, "attach_model");
     lua_pushcfunction(state, LuaSetHeldItemModel);
@@ -1879,13 +3422,32 @@ void Initialize() {
         }
     });
     // Rolamento contínuo e dirigível, modelado no Player_Action_96 do MM:
+    // - A enquanto corre inicia explicitamente o primeiro rolamento;
     // - o rolamento se re-arma sozinho enquanto houver direção no analógico
     //   (no MM não se aperta nada para continuar rolando);
     // - a direção acompanha o analógico de verdade;
     // - bater na parede continua caindo no "bonk" do próprio OoT, que roda
     //   antes deste ponto — é o "até bater em algo".
-    // Estes hooks NÃO são um simples true/false: o CHAIN precisa chamar
-    // Player_SetupRoll e o STEER precisa girar o player ele mesmo.
+    // O primeiro hook usa a ação vanilla Player_Action_Roll; os demais fazem
+    // o chain chamar Player_SetupRoll e o steer girar o player ele mesmo.
+    gRollStartHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayerUpdate>([]() {
+        if (!gChainRoll || gPlayState == nullptr) {
+            return;
+        }
+        Player* player = GET_PLAYER(gPlayState);
+        Input* input = &gPlayState->state.input[0];
+        if (player == nullptr || input == nullptr || player->actionFunc == Player_Action_Roll) {
+            return;
+        }
+        // Mantém a semântica do OoT: A só vira rolamento enquanto o jogador
+        // está se deslocando no chão. Assim interações paradas continuam sendo
+        // tratadas pelo jogo em vez de serem sequestradas pelo mod.
+        if (!(input->press.button & BTN_A) || !(player->actor.bgCheckFlags & BGCHECKFLAG_GROUND) ||
+            fabsf(player->linearVelocity) < 0.5f || (player->stateFlags1 & (PLAYER_STATE1_DEAD | PLAYER_STATE1_IN_CUTSCENE))) {
+            return;
+        }
+        Player_SetupRoll(player, gPlayState);
+    });
     gRollChainHook = REGISTER_VB_SHOULD(VB_PLAYER_ROLL_CHAIN, {
         Player* player = va_arg(args, Player*);
         PlayState* play = va_arg(args, PlayState*);
@@ -1971,8 +3533,12 @@ void Initialize() {
             DispatchHookEvent("hook.oot.player.health_change",
                               ShipLua::EventPayload{{"amount", static_cast<std::int64_t>(amount)}});
         });
-    gHookBonkHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayerBonk>(
-        []() { DispatchHookEvent("hook.oot.player.bonk", ShipLua::EventPayload{}); });
+    gHookBonkHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayerBonk>([]() {
+        if (gPlayState != nullptr) {
+            CustomBodyHandleRollWallBounce(GET_PLAYER(gPlayState), gPlayState);
+        }
+        DispatchHookEvent("hook.oot.player.bonk", ShipLua::EventPayload{});
+    });
     // hook.oot.player.first_person_control — OnPlayerFirstPersonControl(Player*)
     // já existia (usado por Mouse.cpp), roda todo frame com mira em primeira
     // pessoa ativa. Achado minerando forks de item customizado: praticamente
@@ -2016,6 +3582,7 @@ void Initialize() {
         []() {
             if (gPlayState != nullptr) {
                 DrawHeldItemModels(gPlayState);
+                DrawMaskTransitionFlash(gPlayState);
             }
         });
 
@@ -2053,6 +3620,15 @@ void Initialize() {
         }
         if (CustomBodyActivateFromSpec(gPlayState)) {
             gCustomBodyPendingRestore = false;
+        }
+    });
+    gMaskTransitionUpdateHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayerUpdate>([]() {
+        if (gPlayState == nullptr || gMaskTransitionPhase == MaskTransitionPhase::None) {
+            return;
+        }
+        Player* player = GET_PLAYER(gPlayState);
+        if (player != nullptr) {
+            MaskTransitionUpdate(player);
         }
     });
     auto contextResult = CreateHostContext();
@@ -2102,6 +3678,10 @@ void Shutdown() {
     if (gCustomBodyRestoreHook != 0) {
         GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnPlayerUpdate>(gCustomBodyRestoreHook);
         gCustomBodyRestoreHook = 0;
+    }
+    if (gMaskTransitionUpdateHook != 0) {
+        GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnPlayerUpdate>(gMaskTransitionUpdateHook);
+        gMaskTransitionUpdateHook = 0;
     }
     gActorProvider.reset();
     gCapabilityRegistry.reset();

@@ -36,6 +36,10 @@
 #include <stdlib.h>
 #include <assert.h>
 
+// Custom external bodies may opt into MM Goron's no-ledge-grab rule. Kept
+// separate from GameInteractor's global Crowd Control state.
+extern u8 ShipLua_ShouldBlockLedgeGrabs(void);
+
 // Some player animations are played at this reduced speed, for reasons yet unclear.
 // This is called "adjusted" for now.
 #define PLAYER_ANIM_ADJUSTED_SPEED (2.0f / 3.0f)
@@ -9673,7 +9677,7 @@ void Player_Action_8084411C(Player* this, PlayState* play) {
                         func_80843E14(this, NA_SE_VO_LI_FALL_L);
                     }
 
-                    if (!GameInteractor_GetDisableLedgeGrabsActive() &&
+                    if (!GameInteractor_GetDisableLedgeGrabsActive() && !ShipLua_ShouldBlockLedgeGrabs() &&
                         (this->actor.bgCheckFlags & BGCHECKFLAG_PLAYER_WALL_INTERACT) &&
                         !(this->stateFlags2 & PLAYER_STATE2_HOPPING) &&
                         !(this->stateFlags1 & (PLAYER_STATE1_CARRYING_ACTOR | PLAYER_STATE1_IN_WATER)) &&
