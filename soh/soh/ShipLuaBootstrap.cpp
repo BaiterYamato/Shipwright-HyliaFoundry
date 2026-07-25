@@ -961,6 +961,19 @@ int LuaCutsceneStart(lua_State* state) {
     }
     Play_ClearAllSubCameras(play);
     gCutsceneCamId = Play_CreateSubCamera(play);
+    if (gCutsceneCamId == SUBCAM_NONE) {
+        SPDLOG_WARN("ShipLua cutscene.start: sem slot de subc\xC3\xA2mera dispon\xC3\xADvel");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    // Semeia com a visão atual antes de ativar, como z_onepointdemo.c faz —
+    // sem isto o primeiro frame pode sair de uma posição indefinida.
+    if (Camera* seeded = Play_GetCamera(play, gCutsceneCamId); seeded != nullptr) {
+        seeded->at = play->view.lookAt;
+        seeded->eye = play->view.eye;
+        seeded->eyeNext = play->view.eye;
+        seeded->fov = play->view.fovy;
+    }
     Play_ChangeCameraStatus(play, CAM_ID_MAIN, CAM_STAT_WAIT);
     Play_ChangeCameraStatus(play, gCutsceneCamId, CAM_STAT_ACTIVE);
     gCutsceneFrames = frames;
@@ -1020,7 +1033,18 @@ void CutsceneUpdate(PlayState* play) {
     eye.y = at.y + gCutsceneHeight * 0.6f;
     eye.z = at.z + static_cast<f32>(std::cos(angle) * dist);
 
-    Play_CameraSetAtEye(play, gCutsceneCamId, &at, &eye);
+    // Escreve direto na struct da câmera, como os chefes do jogo fazem
+    // (z_boss_dodongo.c). NÃO usar Play_CameraSetAtEye aqui: ela termina
+    // gravando atLERPStepScale = 0.01f, uma interpolação lentíssima — a câmera
+    // se arrasta tão devagar rumo ao alvo que parece que nada aconteceu. Foi
+    // por isso que a primeira versão desta cutscene não mostrava nada apesar
+    // de iniciar corretamente.
+    Camera* cam = Play_GetCamera(play, gCutsceneCamId);
+    if (cam != nullptr) {
+        cam->at = at;
+        cam->eye = eye;
+        cam->eyeNext = eye;
+    }
     ++gCutsceneElapsed;
 }
 
