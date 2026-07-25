@@ -47,6 +47,7 @@
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/enhancementTypes.h"
 #include "soh/ResourceManagerHelpers.h"
+#include "soh/mmaudio/MmSoundFont.h"
 #include "align_asset_macro.h"
 #include "soh/ShipInit.hpp"
 // OPEN_DISPS declara FrameInterpolation_* em escopo de bloco com linkage C++;
@@ -4410,6 +4411,9 @@ void Initialize() {
     gModHost = std::make_unique<ShipLua::ModHost>(context, CreateLogger());
     MountCrossWorldArchives();
     MountModAssetArchives();
+    // Diagnóstico da Fase 1 do port de áudio do MM (handoff OOT-AUDIO-001).
+    // Só escreve no log; sai daqui assim que a Fase 1 fechar.
+    ShipLua::ProbeMmSoundFonts();
     LoadModsAndDispatchReady(context);
     SPDLOG_INFO("ShipLua inicializado");
 }
