@@ -38,6 +38,7 @@
 #include "Enhancements/randomizer/randomizer_check_tracker.h"
 #include "Enhancements/randomizer/static_data.h"
 #include "soh/mmaudio/MmSfxPlayer.h"
+#include "soh/mmaudio/mmseq/MmAudioEngine.h"
 #include "soh/Enhancements/randomizer/settings.h"
 #include "soh/Enhancements/savestates.h"
 #include "frame_interpolation.h"
@@ -2279,10 +2280,25 @@ extern "C" void AudioPlayer_Play(const uint8_t* buf, uint32_t len) {
     // funil único, logo antes de ir para o dispositivo. O formato dos dois lados
     // é o mesmo — 32 kHz, estéreo, s16 intercalado — então não há resample.
     // Ver coordination/handoffs/OOT-AUDIO-001-port-mm-sfx.md.
-    if (ShipLua::MmAudio_HasPending()) {
+    const bool hasSample = ShipLua::MmAudio_HasPending();
+    const bool hasSequence = ShipLua::MmSeq_IsReady();
+
+    if (hasSample || hasSequence) {
         static thread_local std::vector<uint8_t> mixed;
         mixed.assign(buf, buf + len);
-        ShipLua::MmAudio_MixInto(reinterpret_cast<int16_t*>(mixed.data()), len / (2 * sizeof(int16_t)));
+        int16_t* pcm = reinterpret_cast<int16_t*>(mixed.data());
+        const uint32_t frames = len / (2 * sizeof(int16_t));
+
+        // Amostra crua (Fase 1) e interpretador de sequência (Fase 2) somam no
+        // mesmo buffer; são caminhos independentes de propósito, para o primeiro
+        // continuar servindo de referência caso o segundo saia errado.
+        if (hasSample) {
+            ShipLua::MmAudio_MixInto(pcm, frames);
+        }
+        if (hasSequence) {
+            ShipLua::MmSeq_RenderInto(pcm, frames);
+        }
+
         AudioPlayerPlayFrame(mixed.data(), len);
         return;
     }

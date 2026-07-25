@@ -45,10 +45,13 @@
 #include <shiplua/world/WorldHandoff.h>
 
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
+#include "soh/Enhancements/custom-message/CustomMessageInterfaceAddon.h"
 #include "soh/Enhancements/enhancementTypes.h"
 #include "soh/ResourceManagerHelpers.h"
+#include "soh/ShipUtils.h"
 #include "soh/mmaudio/MmSoundFont.h"
 #include "soh/mmaudio/MmSfxPlayer.h"
+#include "soh/mmaudio/mmseq/MmAudioEngine.h"
 #include "align_asset_macro.h"
 #include "soh/ShipInit.hpp"
 // OPEN_DISPS declara FrameInterpolation_* em escopo de bloco com linkage C++;
@@ -436,7 +439,8 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
                              "oot.player.attach_model", "mod.assets",         "oot.player.immunity",
                              "oot.player.weight",       "oot.player.roll",    "hooks.bridge",
                              "oot.player.custom_body",  "oot.player.held_item_model",
-                             "hud.draw",                "oot.env",
+                             "hud.draw",                "hud.icons",          "game.state",
+                             "input.actions",           "oot.env",
                              "oot.cutscene" };
     context.hotkeys = gHotkeys;
     context.capabilityRegistry = gCapabilityRegistry;
@@ -453,6 +457,21 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
     }
     registered = RegisterHostCapability(
         "hud.draw", "Draw arbitrary rectangles and text over the HUD from hook.<game>.hud.draw.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability(
+        "hud.icons", "Draw validated resource textures as bounded HUD icons.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability(
+        "game.state", "Read a stable gameplay, pause, dialog, cutscene, transition, death or loading state.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability(
+        "input.actions", "Observe directional controller actions and consume only explicitly accepted presses.");
     if (!registered.isOk()) {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
@@ -1081,6 +1100,45 @@ int LuaEnvGet(lua_State* state) {
         return 1;
     }
     lua_pushnil(state);
+    return 1;
+}
+
+const char* CurrentGameStateMode() {
+    PlayState* play = gPlayState;
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (play == nullptr || player == nullptr) {
+        return "unavailable";
+    }
+    if (gSaveContext.gameMode != GAMEMODE_NORMAL) {
+        return "loading";
+    }
+    if (play->transitionTrigger != TRANS_TRIGGER_OFF || play->transitionMode != TRANS_MODE_OFF) {
+        return "transition";
+    }
+    if ((player->stateFlags1 & PLAYER_STATE1_DEAD) != 0) {
+        return "dead";
+    }
+    if (play->pauseCtx.state != 0) {
+        return "paused";
+    }
+    if (play->msgCtx.msgMode != 0) {
+        return "dialog";
+    }
+    if (play->csCtx.state != CS_STATE_IDLE || Player_InBlockingCsMode(play, player) || gCutsceneActive) {
+        return "cutscene";
+    }
+    return "gameplay";
+}
+
+// ship.game.state(): snapshot pequeno, sem ponteiro nem layout nativo.
+int LuaGameState(lua_State* state) {
+    lua_newtable(state);
+    lua_pushstring(state, CurrentGameStateMode());
+    lua_setfield(state, -2, "mode");
+    if (gSaveContext.fileNum >= 0 && gSaveContext.fileNum <= 2) {
+        lua_pushinteger(state, gSaveContext.fileNum);
+        lua_setfield(state, -2, "save_slot");
+    }
     return 1;
 }
 
@@ -2963,6 +3021,44 @@ std::optional<ShipLua::EventValue> DispatchHookTransform(const char* name, ShipL
     return found->second;
 }
 
+void DispatchDirectionalInput(PlayState* play) {
+    if (play == nullptr || std::strcmp(CurrentGameStateMode(), "gameplay") != 0) {
+        return;
+    }
+    struct Direction {
+        u16 mask;
+        const char* action;
+    };
+    constexpr std::array<Direction, 8> kDirections = {{
+        { BTN_DUP, "dpad_up" },
+        { BTN_DDOWN, "dpad_down" },
+        { BTN_DLEFT, "dpad_left" },
+        { BTN_DRIGHT, "dpad_right" },
+        { BTN_CUP, "c_up" },
+        { BTN_CDOWN, "c_down" },
+        { BTN_CLEFT, "c_left" },
+        { BTN_CRIGHT, "c_right" },
+    }};
+
+    Input& input = play->state.input[0];
+    for (const auto& direction : kDirections) {
+        if (!CHECK_BTN_ALL(input.press.button, direction.mask)) {
+            continue;
+        }
+        const auto accepted = DispatchHookTransform(
+            "input.action",
+            ShipLua::EventPayload{
+                { "action", direction.action },
+                { "pressed", true },
+                { "source", "controller" },
+            });
+        if (accepted.has_value() && std::holds_alternative<bool>(accepted->value) &&
+            std::get<bool>(accepted->value)) {
+            input.press.button &= static_cast<u16>(~direction.mask);
+        }
+    }
+}
+
 // Dispara um evento puro de notificação — nenhum retorno é lido.
 void DispatchHookEvent(const char* name, ShipLua::EventPayload payload) {
     if (gModHost == nullptr) {
@@ -3218,7 +3314,74 @@ int LuaHudDrawRing(lua_State* state) {
     return 1;
 }
 
+// ship.hud.draw_icon(path, x, y, w, h, { alpha = 255 })
+// A Fase 0 aceita texturas RGBA32 registradas no resource manager. Os ícones
+// vanilla em textures/icon_item_static têm 32x32 e cabem exatamente na TMEM.
+int LuaHudDrawIcon(lua_State* state) {
+    PlayState* play = gPlayState;
+    if (!gHudDrawActive || play == nullptr) {
+        SPDLOG_WARN("ShipLua hud.draw_icon: só pode ser chamado de hook.oot.hud.draw");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    const char* path = luaL_checkstring(state, 1);
+    const int x = static_cast<int>(luaL_checkinteger(state, 2));
+    const int y = static_cast<int>(luaL_checkinteger(state, 3));
+    const int w = static_cast<int>(luaL_checkinteger(state, 4));
+    const int h = static_cast<int>(luaL_checkinteger(state, 5));
+    int alpha = 255;
+    if (lua_istable(state, 6)) {
+        lua_getfield(state, 6, "alpha");
+        if (!lua_isnil(state, -1)) {
+            alpha = static_cast<int>(luaL_checkinteger(state, -1));
+        }
+        lua_pop(state, 1);
+    }
+    if (path == nullptr || *path == '\0' || w < 1 || w > 64 || h < 1 || h > 64 ||
+        !ResourceMgr_FileExists(path)) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    // icon_item_static é um atlas lógico de entradas RGBA32 32x32. As funções
+    // ResourceMgr_LoadTexWidth/HeightByName constam do header deste fork, mas
+    // não possuem definição ligada; usar o contrato fixo evita um LNK2001.
+    constexpr uint16_t texW = 32;
+    constexpr uint16_t texH = 32;
+    char* texture = ResourceMgr_LoadTexOrDListByName(path);
+    if (texture == nullptr) {
+        SPDLOG_WARN("ShipLua hud.draw_icon: textura '{}' ausente", path);
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    if (!HudTakeBudget(1)) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    OPEN_DISPS(play->state.gfxCtx);
+    Gfx_SetupDL_39Overlay(play->state.gfxCtx);
+    gDPSetCombineMode(OVERLAY_DISP++, G_CC_MODULATEIA_PRIM, G_CC_MODULATEIA_PRIM);
+    gDPSetPrimColor(OVERLAY_DISP++, 0, 0, 255, 255, 255, static_cast<u8>(std::clamp(alpha, 0, 255)));
+    gDPSetTextureFilter(OVERLAY_DISP++, G_TF_BILERP);
+    gDPLoadTextureBlock(OVERLAY_DISP++, texture, G_IM_FMT_RGBA, G_IM_SIZ_32b, texW, texH, 0,
+                        G_TX_NOMIRROR | G_TX_CLAMP, G_TX_NOMIRROR | G_TX_CLAMP,
+                        G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD, G_TX_NOLOD);
+    const int dsdx = std::max(1, (static_cast<int>(texW) << 10) / w);
+    const int dtdy = std::max(1, (static_cast<int>(texH) << 10) / h);
+    gSPWideTextureRectangle(OVERLAY_DISP++, x << 2, y << 2, (x + w) << 2, (y + h) << 2,
+                            G_TX_RENDERTILE, 0, 0, dsdx, dtdy);
+    CLOSE_DISPS(play->state.gfxCtx);
+    gHudTileDirty = true;
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 // ship.hud.draw_text(text, x, y, r, g, b, a, scale)
+//
+// Interface_DrawTextLine escreve em POLY_OPA. Os demais primitivos ShipLua
+// vivem em OVERLAY e, portanto, eram compostos depois do texto, escurecendo ou
+// cobrindo labels e quantidades. Este caminho equivalente escreve a fonte no
+// mesmo buffer OVERLAY para preservar a ordem declarada pelo mod.
 int LuaHudDrawText(lua_State* state) {
     PlayState* play = gPlayState;
     if (!gHudDrawActive || play == nullptr) {
@@ -3245,17 +3408,50 @@ int LuaHudDrawText(lua_State* state) {
         line.resize(128);
     }
     const auto clamp8 = [](int v) { return static_cast<uint16_t>(std::clamp(v, 0, 255)); };
-    // O caminho nativo de texto carrega as próprias texturas de fonte e mexe
-    // no tile, então o próximo retângulo precisa recarregar a de preenchimento.
-    // Cada caractere também consome display list — conta no orçamento.
+    // Cada caractere carrega sua textura I4 e consome display list.
     if (!HudTakeBudget(static_cast<int>(line.size()))) {
         lua_pushboolean(state, 0);
         return 1;
     }
+
+    const char* processed = Interface_ReplaceSpecialCharacters(line.data());
+    const float textScale = static_cast<float>(std::clamp(scale, 0.1, 4.0));
+    const int charSize = std::max(1, static_cast<int>(16.0f * textScale));
+    const int texScale = std::max(1, static_cast<int>(1024.0f / textScale));
+    int kerning = 0;
+    int lineOffset = 0;
+
+    OPEN_DISPS(play->state.gfxCtx);
+    Gfx_SetupDL_39Overlay(play->state.gfxCtx);
+    gDPSetCombineMode(OVERLAY_DISP++, G_CC_MODULATEIA_PRIM, G_CC_MODULATEIA_PRIM);
+    for (const unsigned char ch : std::string(processed)) {
+        if (ch == '\n') {
+            lineOffset += static_cast<int>(15.0f * textScale);
+            kerning = 0;
+            continue;
+        }
+        if (ch != ' ') {
+            void* texture = Ship_GetCharFontTexture(ch);
+            if (texture != nullptr) {
+                gDPPipeSync(OVERLAY_DISP++);
+                gDPLoadTextureBlock_4b(OVERLAY_DISP++, texture, G_IM_FMT_I, FONT_CHAR_TEX_WIDTH,
+                                       FONT_CHAR_TEX_HEIGHT, 0, G_TX_NOMIRROR | G_TX_CLAMP,
+                                       G_TX_NOMIRROR | G_TX_CLAMP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD, G_TX_NOLOD);
+                gDPSetPrimColor(OVERLAY_DISP++, 0, 0, 0, 0, 0, clamp8(a));
+                gSPTextureRectangle(OVERLAY_DISP++, (x + kerning + 1) << 2, (y + lineOffset + 1) << 2,
+                                    (x + kerning + 1 + charSize) << 2, (y + lineOffset + 1 + charSize) << 2,
+                                    G_TX_RENDERTILE, 0, 0, texScale, texScale);
+                gDPPipeSync(OVERLAY_DISP++);
+                gDPSetPrimColor(OVERLAY_DISP++, 0, 0, clamp8(r), clamp8(g), clamp8(b), clamp8(a));
+                gSPTextureRectangle(OVERLAY_DISP++, (x + kerning) << 2, (y + lineOffset) << 2,
+                                    (x + kerning + charSize) << 2, (y + lineOffset + charSize) << 2,
+                                    G_TX_RENDERTILE, 0, 0, texScale, texScale);
+            }
+        }
+        kerning += static_cast<int>(Ship_GetCharFontWidth(ch) * textScale);
+    }
+    CLOSE_DISPS(play->state.gfxCtx);
     gHudTileDirty = true;
-    Interface_DrawTextLine(play->state.gfxCtx, line.data(), static_cast<int16_t>(x), static_cast<int16_t>(y),
-                           clamp8(r), clamp8(g), clamp8(b), clamp8(a),
-                           static_cast<float>(std::clamp(scale, 0.1, 4.0)), 1);
     lua_pushboolean(state, 1);
     return 1;
 }
@@ -3663,6 +3859,15 @@ void InstallOotApi(lua_State* state) {
         return;
     }
     const int shipTable = lua_gettop(state);
+    lua_getfield(state, shipTable, "game");
+    if (!lua_istable(state, -1)) {
+        lua_pop(state, 1);
+        lua_newtable(state);
+    }
+    lua_pushcfunction(state, LuaGameState);
+    lua_setfield(state, -2, "state");
+    lua_setfield(state, shipTable, "game");
+
     lua_getfield(state, shipTable, "oot");
     if (!lua_istable(state, -1)) {
         lua_pop(state, 1);
@@ -3751,6 +3956,8 @@ void InstallOotApi(lua_State* state) {
     lua_setfield(state, -2, "draw_text");
     lua_pushcfunction(state, LuaHudDrawRing);
     lua_setfield(state, -2, "draw_ring");
+    lua_pushcfunction(state, LuaHudDrawIcon);
+    lua_setfield(state, -2, "draw_icon");
     lua_setfield(state, shipTable, "hud");
 
     lua_pop(state, 1);
@@ -4113,6 +4320,7 @@ void Initialize() {
     gImportTickHook =
         GameInteractor::Instance->RegisterGameHook<GameInteractor::OnGameFrameUpdate>([]() {
             TickWorldImport();
+            DispatchDirectionalInput(gPlayState);
             // Gatilho temporário da Fase 1 do port de áudio (OOT-AUDIO-001):
             // toca uma amostra crua do mm.o2r para provar o caminho até o
             // alto-falante. Sai daqui quando as primitivas Lua de áudio
@@ -4138,6 +4346,14 @@ void Initialize() {
                 const bool autoNow = !sAutoFired && sFrames > 120;
                 const bool pressed = CHECK_BTN_ALL(gPlayState->state.input[0].press.button, BTN_DLEFT);
 
+                // Init idempotente: o mm.o2r pode não ter montado no primeiro
+                // frame, então tentar todo frame até dar certo é o mais simples.
+                if (!ShipLua::MmSeq_IsReady()) {
+                    if (ShipLua::MmSeq_Init()) {
+                        SPDLOG_INFO("ShipLua/mmaudio: interpretador de sequÃªncia do MM pronto");
+                    }
+                }
+
                 if (autoNow || pressed) {
                     sAutoFired = true;
                     SPDLOG_INFO("ShipLua/mmaudio: disparo de teste ({}) no frame {} gameMode={}",
@@ -4147,6 +4363,12 @@ void Initialize() {
                     // do OoT não tem interpretação alternativa. Um grunhido de
                     // ataque do Link se confundiria com o som nativo do jogo.
                     ShipLua::MmAudio_PlaySampleOneShot("mm/audio/samples/GoronYawn_META");
+
+                    // NA_SE_SY_TRANSFORM_MASK_FLASH do MM, pelo interpretador —
+                    // é o teste que a Fase 2 existe para permitir: tocar por ID,
+                    // não por caminho de amostra.
+                    const bool sent = ShipLua::MmSeq_PlaySfx(0x4826);
+                    SPDLOG_INFO("ShipLua/mmaudio: sfx por id 0x4826 -> {}", sent ? "enfileirado" : "recusado");
                 }
             }
             // Avança a cutscene AQUI, não no update do Player: com atores
