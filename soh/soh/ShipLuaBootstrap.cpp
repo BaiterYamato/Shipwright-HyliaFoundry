@@ -434,7 +434,8 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
                              "oot.player.attach_model", "mod.assets",         "oot.player.immunity",
                              "oot.player.weight",       "oot.player.roll",    "hooks.bridge",
                              "oot.player.custom_body",  "oot.player.held_item_model",
-                             "hud.draw",                "oot.env" };
+                             "hud.draw",                "oot.env",
+                             "oot.cutscene" };
     context.hotkeys = gHotkeys;
     context.capabilityRegistry = gCapabilityRegistry;
     context.actors = gActorProvider;
@@ -454,6 +455,11 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
     registered = RegisterHostCapability("oot.env", "Read ambient world state: time of day, night flag and scene id.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability(
+        "oot.cutscene", "Take over the camera with a dedicated sub-camera for a bounded number of frames.");
     if (!registered.isOk()) {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
@@ -848,6 +854,152 @@ int LuaSetRollBlocked(lua_State* state) {
     return 1;
 }
 
+// ---------------------------------------------------------------------------
+// Cutscene de transformação: subcâmera orbitando o jogador.
+//
+// É a peça que faltava para a troca de máscara parecer a de MM/OoTMM. Até
+// aqui a transformação congelava o input e cobria a troca com um flash, mas a
+// câmera continuava normal — o momento não tinha peso nenhum.
+//
+// O ciclo de vida da câmera é a parte delicada (o design de providers nativos
+// listava justamente isto como risco): a arbitragem entre câmera principal e
+// subcâmera precisa ser exata, senão o renderer fica com estado inconsistente.
+// A sequência abaixo é a mesma que os chefes do próprio jogo usam
+// (z_boss_dodongo.c): entra em modo cutscene, congela atores, limpa
+// subcâmeras, cria a nova, põe a principal em WAIT e a nova em ACTIVE. Na
+// saída, devolve com func_800C08AC + func_80064534 + solta os atores.
+bool gCutsceneActive = false;
+s16 gCutsceneCamId = 0;
+int gCutsceneFrames = 0;
+int gCutsceneElapsed = 0;
+float gCutsceneStartDist = 160.0f;
+float gCutsceneEndDist = 62.0f;
+float gCutsceneHeight = 28.0f;
+float gCutsceneSpin = 0.0f;
+
+void CutsceneStop(PlayState* play) {
+    if (!gCutsceneActive) {
+        return;
+    }
+    gCutsceneActive = false;
+    if (play == nullptr) {
+        gCutsceneCamId = 0;
+        return;
+    }
+    if (gCutsceneCamId != 0) {
+        // Devolve o controle à câmera principal antes de descartar a nossa.
+        func_800C08AC(play, gCutsceneCamId, 0);
+        gCutsceneCamId = 0;
+    }
+    func_80064534(play, &play->csCtx);
+    Player* player = GET_PLAYER(play);
+    Player_SetCsActionWithHaltedActors(play, player != nullptr ? &player->actor : nullptr, 7);
+}
+
+// ship.oot.cutscene.start(frames, opções): assume a câmera por N frames.
+int LuaCutsceneStart(lua_State* state) {
+    PlayState* play = gPlayState;
+    Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    if (player == nullptr || gSaveContext.gameMode != GAMEMODE_NORMAL) {
+        SPDLOG_WARN("ShipLua cutscene.start: fora de gameplay");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    if (gCutsceneActive) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    const int frames = static_cast<int>(luaL_checkinteger(state, 1));
+    if (frames <= 0 || frames > 600) {
+        SPDLOG_WARN("ShipLua cutscene.start: frames fora da faixa 1..600");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    // Opções são todas opcionais; os padrões dão uma aproximação frontal.
+    if (lua_istable(state, 2)) {
+        lua_getfield(state, 2, "start_distance");
+        gCutsceneStartDist = static_cast<float>(luaL_optnumber(state, -1, 160.0));
+        lua_pop(state, 1);
+        lua_getfield(state, 2, "end_distance");
+        gCutsceneEndDist = static_cast<float>(luaL_optnumber(state, -1, 62.0));
+        lua_pop(state, 1);
+        lua_getfield(state, 2, "height");
+        gCutsceneHeight = static_cast<float>(luaL_optnumber(state, -1, 28.0));
+        lua_pop(state, 1);
+        lua_getfield(state, 2, "spin");
+        gCutsceneSpin = static_cast<float>(luaL_optnumber(state, -1, 0.0));
+        lua_pop(state, 1);
+    } else {
+        gCutsceneStartDist = 160.0f;
+        gCutsceneEndDist = 62.0f;
+        gCutsceneHeight = 28.0f;
+        gCutsceneSpin = 0.0f;
+    }
+
+    func_80064520(play, &play->csCtx);
+    Player_SetCsActionWithHaltedActors(play, &player->actor, 1);
+    Play_ClearAllSubCameras(play);
+    gCutsceneCamId = Play_CreateSubCamera(play);
+    Play_ChangeCameraStatus(play, CAM_ID_MAIN, CAM_STAT_WAIT);
+    Play_ChangeCameraStatus(play, gCutsceneCamId, CAM_STAT_ACTIVE);
+    gCutsceneFrames = frames;
+    gCutsceneElapsed = 0;
+    gCutsceneActive = true;
+    SPDLOG_INFO("ShipLua cutscene.start: assumindo a c\xC3\xA2mera por {} frames", frames);
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaCutsceneStop(lua_State* state) {
+    CutsceneStop(gPlayState);
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaCutsceneActive(lua_State* state) {
+    lua_pushboolean(state, gCutsceneActive ? 1 : 0);
+    return 1;
+}
+
+// Roda por frame: aproxima a câmera e encerra sozinha ao fim.
+void CutsceneUpdate(PlayState* play) {
+    if (!gCutsceneActive || play == nullptr) {
+        return;
+    }
+    Player* player = GET_PLAYER(play);
+    if (player == nullptr || gSaveContext.gameMode != GAMEMODE_NORMAL) {
+        CutsceneStop(play);
+        return;
+    }
+    if (gCutsceneElapsed >= gCutsceneFrames) {
+        CutsceneStop(play);
+        return;
+    }
+
+    constexpr double kPi = 3.14159265358979323846;
+    const double t = static_cast<double>(gCutsceneElapsed) / static_cast<double>(gCutsceneFrames);
+    // Ease-out: aproxima rápido e desacelera, dando peso ao instante da troca.
+    const double eased = 1.0 - (1.0 - t) * (1.0 - t);
+    const double dist = gCutsceneStartDist + (gCutsceneEndDist - gCutsceneStartDist) * eased;
+
+    // Ângulo: parte de frente para o Link e gira conforme "spin" (em voltas).
+    const double baseYaw = static_cast<double>(player->actor.shape.rot.y) * (kPi / 32768.0);
+    const double angle = baseYaw + kPi + gCutsceneSpin * 2.0 * kPi * eased;
+
+    Vec3f at;
+    at.x = player->actor.world.pos.x;
+    at.y = player->actor.world.pos.y + gCutsceneHeight;
+    at.z = player->actor.world.pos.z;
+
+    Vec3f eye;
+    eye.x = at.x + static_cast<f32>(std::sin(angle) * dist);
+    eye.y = at.y + gCutsceneHeight * 0.6f;
+    eye.z = at.z + static_cast<f32>(std::cos(angle) * dist);
+
+    Play_CameraSetAtEye(play, gCutsceneCamId, &at, &eye);
+    ++gCutsceneElapsed;
+}
+
 // ship.oot.env.get(campo): estado do AMBIENTE, não do jogador. Fica separado
 // de player.get de propósito — hora do dia e cena não são propriedades do
 // Link, e misturar as duas coisas envelhece mal.
@@ -1105,6 +1257,12 @@ void CustomBodyDeactivate(PlayState* play, bool clearSpec) {
 // ponteiros; o ator hospedeiro já foi destruído pela própria troca de cena.
 // Marca pending-restore para OnSceneInit religar sozinho na cena nova.
 void CustomBodyResetForSceneChange() {
+    // A cena nova cria câmeras próprias; segurar o id da subcâmera antiga
+    // deixaria o jogador sem controle de câmera. Só descarta o estado — não
+    // chama CutsceneStop, que mexeria em ponteiros já em teardown.
+    gCutsceneActive = false;
+    gCutsceneCamId = 0;
+    gCutsceneElapsed = 0;
     // O Player antigo já está em teardown; só descartamos o estado do flash.
     // A nova cena cria um Player limpo, portanto não há flag de input a limpar.
     MaskTransitionReset(nullptr);
@@ -3505,6 +3663,17 @@ void InstallOotApi(lua_State* state) {
     lua_setfield(state, -2, "get");
     lua_setfield(state, ootTable, "env");
 
+    // ship.oot.cutscene: assume a câmera por N frames. Genérica — serve para
+    // transformação, item dramático, revelação de porta, o que o mod quiser.
+    lua_newtable(state);
+    lua_pushcfunction(state, LuaCutsceneStart);
+    lua_setfield(state, -2, "start");
+    lua_pushcfunction(state, LuaCutsceneStop);
+    lua_setfield(state, -2, "stop");
+    lua_pushcfunction(state, LuaCutsceneActive);
+    lua_setfield(state, -2, "is_active");
+    lua_setfield(state, ootTable, "cutscene");
+
     lua_setfield(state, shipTable, "oot");
 
     // Primitiva comum aos dois jogos: ship.player.set_speed_multiplier.
@@ -3934,6 +4103,11 @@ void Initialize() {
     // aplicado. Rodar por frame é o suficiente — Player_UpdateBodyBurn só age
     // enquanto bodyIsBurning estiver ligado.
     gFireImmunityHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayerUpdate>([]() {
+        // A cutscene precisa avançar mesmo quando a imunidade a fogo está
+        // desligada, então roda antes do early-return abaixo.
+        if (gPlayState != nullptr) {
+            CutsceneUpdate(gPlayState);
+        }
         if (!gFireImmunity || gPlayState == nullptr) {
             return;
         }
