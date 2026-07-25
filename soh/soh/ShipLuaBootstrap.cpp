@@ -434,7 +434,7 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
                              "oot.player.attach_model", "mod.assets",         "oot.player.immunity",
                              "oot.player.weight",       "oot.player.roll",    "hooks.bridge",
                              "oot.player.custom_body",  "oot.player.held_item_model",
-                             "hud.draw" };
+                             "hud.draw",                "oot.env" };
     context.hotkeys = gHotkeys;
     context.capabilityRegistry = gCapabilityRegistry;
     context.actors = gActorProvider;
@@ -450,6 +450,10 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
     }
     registered = RegisterHostCapability(
         "hud.draw", "Draw arbitrary rectangles and text over the HUD from hook.<game>.hud.draw.");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability("oot.env", "Read ambient world state: time of day, night flag and scene id.");
     if (!registered.isOk()) {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
@@ -841,6 +845,40 @@ extern "C" u8 ShipLua_ShouldBlockRoll(void) {
 int LuaSetRollBlocked(lua_State* state) {
     gRollBlocked = lua_toboolean(state, 1) != 0;
     lua_pushboolean(state, 1);
+    return 1;
+}
+
+// ship.oot.env.get(campo): estado do AMBIENTE, não do jogador. Fica separado
+// de player.get de propósito — hora do dia e cena não são propriedades do
+// Link, e misturar as duas coisas envelhece mal.
+//
+//   time_of_day  0..1 (0 = meia-noite, 0.5 = meio-dia)
+//   is_night     0/1, pela mesma flag que o engine usa (IS_NIGHT)
+//   scene_id     número da cena atual
+//
+// Não há "is_indoors" aqui: o engine não expõe isso de forma direta e uma
+// heurística chutada seria pior que nada — o mod já distingue ambientes pela
+// própria tabela de cenas.
+int LuaEnvGet(lua_State* state) {
+    const char* field = luaL_checkstring(state, 1);
+    PlayState* play = gPlayState;
+    if (field == nullptr) {
+        lua_pushnil(state);
+        return 1;
+    }
+    if (std::strcmp(field, "time_of_day") == 0) {
+        lua_pushnumber(state, static_cast<double>(gSaveContext.dayTime) / 65535.0);
+        return 1;
+    }
+    if (std::strcmp(field, "is_night") == 0) {
+        lua_pushnumber(state, IS_NIGHT ? 1 : 0);
+        return 1;
+    }
+    if (std::strcmp(field, "scene_id") == 0) {
+        lua_pushnumber(state, play != nullptr ? static_cast<double>(play->sceneNum) : -1.0);
+        return 1;
+    }
+    lua_pushnil(state);
     return 1;
 }
 
@@ -3459,6 +3497,14 @@ void InstallOotApi(lua_State* state) {
     lua_pushcfunction(state, LuaSetRollBlocked);
     lua_setfield(state, -2, "set_roll_blocked");
     lua_setfield(state, ootTable, "player");
+
+    // ship.oot.env: estado do ambiente (hora do dia, cena). Separado de
+    // ship.oot.player porque não é propriedade do jogador.
+    lua_newtable(state);
+    lua_pushcfunction(state, LuaEnvGet);
+    lua_setfield(state, -2, "get");
+    lua_setfield(state, ootTable, "env");
+
     lua_setfield(state, shipTable, "oot");
 
     // Primitiva comum aos dois jogos: ship.player.set_speed_multiplier.
