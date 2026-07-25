@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "soh/mmaudio/mmseq/MmAudioContext.h"
+#include "soh/mmaudio/mmseq/MmAudioBridge.h"
 #include "soh/mmaudio/mmseq/MmAudioDecls.h"
 
 namespace ShipLua {
@@ -179,11 +180,37 @@ bool MmSeq_Init() {
     }
     gAudioCtx.soundFontList = font;
 
+    // A sequência 0 do MM É o motor de SFX: cada efeito é um canal dela. Sem
+    // carregar e iniciar isto o player fica desabilitado, ProcessSequences o
+    // ignora e nenhum canal existe para receber um id.
+    SequenceData* seq = reinterpret_cast<SequenceData*>(MmBridge_LoadSequence(gSequenceMap[0]));
+    if (seq == nullptr || seq->seqData == nullptr) {
+        return false;
+    }
+
     // Ordem importa: a lista de camadas e a de notas livres precisam existir
     // antes de qualquer canal tentar alocar.
     AudioScript_InitLayerFreelist();
     AudioPlayback_InitNoteFreeList();
     AudioScript_InitSequencePlayers();
+
+    // Start do player, espelhando AudioLoad_SyncInitSeqPlayerInternal
+    // (load.c) sem a parte de DMA e cache, que aqui não existe.
+    SequencePlayer* seqPlayer = &gAudioCtx.seqPlayers[kSfxSeqPlayer];
+    AudioScript_SequencePlayerDisable(seqPlayer);
+    AudioScript_ResetSequencePlayer(seqPlayer);
+
+    seqPlayer->seqId = 0;
+    seqPlayer->defaultFont = 0;
+    seqPlayer->seqData = (u8*)seq->seqData;
+    seqPlayer->scriptState.pc = (u8*)seq->seqData;
+    seqPlayer->scriptState.depth = 0;
+    seqPlayer->delay = 0;
+    seqPlayer->finished = false;
+    seqPlayer->playerIndex = kSfxSeqPlayer;
+    seqPlayer->enabled = true;
+
+    AudioScript_InitSequencePlayerChannels(kSfxSeqPlayer);
 
     gReady = true;
     return true;
