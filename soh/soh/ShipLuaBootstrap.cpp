@@ -877,6 +877,12 @@ float gCutsceneEndDist = 62.0f;
 float gCutsceneHeight = 28.0f;
 float gCutsceneSpin = 0.0f;
 
+// Quando true, a cutscene também congelou atores/entrou em csMode e precisa
+// desfazer isso na saída. Por padrão a primitiva é SÓ câmera.
+bool gCutsceneFroze = false;
+
+void CutsceneUpdate(PlayState* play); // definida abaixo; start() já posiciona
+
 void CutsceneStop(PlayState* play) {
     if (!gCutsceneActive) {
         return;
@@ -884,6 +890,7 @@ void CutsceneStop(PlayState* play) {
     gCutsceneActive = false;
     if (play == nullptr) {
         gCutsceneCamId = 0;
+        gCutsceneFroze = false;
         return;
     }
     if (gCutsceneCamId != 0) {
@@ -891,9 +898,12 @@ void CutsceneStop(PlayState* play) {
         func_800C08AC(play, gCutsceneCamId, 0);
         gCutsceneCamId = 0;
     }
-    func_80064534(play, &play->csCtx);
-    Player* player = GET_PLAYER(play);
-    Player_SetCsActionWithHaltedActors(play, player != nullptr ? &player->actor : nullptr, 7);
+    if (gCutsceneFroze) {
+        gCutsceneFroze = false;
+        func_80064534(play, &play->csCtx);
+        Player* player = GET_PLAYER(play);
+        Player_SetCsActionWithHaltedActors(play, player != nullptr ? &player->actor : nullptr, 7);
+    }
 }
 
 // ship.oot.cutscene.start(frames, opções): assume a câmera por N frames.
@@ -929,15 +939,26 @@ int LuaCutsceneStart(lua_State* state) {
         lua_getfield(state, 2, "spin");
         gCutsceneSpin = static_cast<float>(luaL_optnumber(state, -1, 0.0));
         lua_pop(state, 1);
+        lua_getfield(state, 2, "freeze_player");
+        gCutsceneFroze = lua_toboolean(state, -1) != 0;
+        lua_pop(state, 1);
     } else {
         gCutsceneStartDist = 160.0f;
         gCutsceneEndDist = 62.0f;
         gCutsceneHeight = 28.0f;
         gCutsceneSpin = 0.0f;
+        gCutsceneFroze = false;
     }
 
-    func_80064520(play, &play->csCtx);
-    Player_SetCsActionWithHaltedActors(play, &player->actor, 1);
+    // Por padrão a primitiva é SÓ câmera. Congelar o jogador aqui atropelaria
+    // qualquer animação que o mod tenha acabado de tocar — foi exatamente o
+    // que quebrou a primeira versão desta cutscene: Player_SetCsActionWithHaltedActors
+    // substitui a ação do Link, apagando a animação de colocar a máscara.
+    // Quem quiser o congelamento completo pede freeze_player = true.
+    if (gCutsceneFroze) {
+        func_80064520(play, &play->csCtx);
+        Player_SetCsActionWithHaltedActors(play, &player->actor, 1);
+    }
     Play_ClearAllSubCameras(play);
     gCutsceneCamId = Play_CreateSubCamera(play);
     Play_ChangeCameraStatus(play, CAM_ID_MAIN, CAM_STAT_WAIT);
@@ -945,6 +966,9 @@ int LuaCutsceneStart(lua_State* state) {
     gCutsceneFrames = frames;
     gCutsceneElapsed = 0;
     gCutsceneActive = true;
+    // Posiciona já neste frame: esperar o próximo update deixaria um frame com
+    // a subcâmera em posição indefinida.
+    CutsceneUpdate(play);
     SPDLOG_INFO("ShipLua cutscene.start: assumindo a c\xC3\xA2mera por {} frames", frames);
     lua_pushboolean(state, 1);
     return 1;
@@ -4063,6 +4087,12 @@ void Initialize() {
     gImportTickHook =
         GameInteractor::Instance->RegisterGameHook<GameInteractor::OnGameFrameUpdate>([]() {
             TickWorldImport();
+            // Avança a cutscene AQUI, não no update do Player: com atores
+            // congelados (freeze_player) o hook do Player não dispara, e a
+            // câmera ficaria parada e sem nunca ser devolvida.
+            if (gPlayState != nullptr) {
+                CutsceneUpdate(gPlayState);
+            }
             // Avança os timers de mod uma vez por frame. Sem isto, ship.timer
             // nunca dispara e qualquer mod que sequencie ações (animação e
             // depois efeito) trava no primeiro passo.
@@ -4103,11 +4133,6 @@ void Initialize() {
     // aplicado. Rodar por frame é o suficiente — Player_UpdateBodyBurn só age
     // enquanto bodyIsBurning estiver ligado.
     gFireImmunityHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayerUpdate>([]() {
-        // A cutscene precisa avançar mesmo quando a imunidade a fogo está
-        // desligada, então roda antes do early-return abaixo.
-        if (gPlayState != nullptr) {
-            CutsceneUpdate(gPlayState);
-        }
         if (!gFireImmunity || gPlayState == nullptr) {
             return;
         }
