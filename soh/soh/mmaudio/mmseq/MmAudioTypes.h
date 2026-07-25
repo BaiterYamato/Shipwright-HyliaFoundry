@@ -41,6 +41,43 @@ typedef double f64;
 typedef volatile u8 vu8;
 typedef volatile s32 vs32;
 
+// Ponteiro genérico do nó de lista encadeada do áudio. No decomp é um `void*`
+// que recebe e devolve Note* ou SequenceLayer* livremente — legal em C, erro em
+// C++. Este proxy converte nos dois sentidos, é trivialmente copiável (logo cabe
+// numa union) e tem o mesmo tamanho de um ponteiro, preservando o layout.
+struct AnyPtr {
+    void* raw;
+
+    // `= default` mantém o tipo trivialmente construtível, que é o que permite
+    // usá-lo dentro de uma union sem apagar os membros especiais dela.
+    AnyPtr() = default;
+    AnyPtr(decltype(nullptr)) : raw(nullptr) {
+    }
+    template <typename T> AnyPtr(T* p) : raw(static_cast<void*>(p)) {
+    }
+
+    template <typename T> operator T*() const {
+        return static_cast<T*>(raw);
+    }
+    template <typename T> AnyPtr& operator=(T* p) {
+        raw = static_cast<void*>(p);
+        return *this;
+    }
+    AnyPtr& operator=(decltype(nullptr)) {
+        raw = nullptr;
+        return *this;
+    }
+    bool operator==(const void* p) const {
+        return raw == p;
+    }
+    bool operator!=(const void* p) const {
+        return raw != p;
+    }
+    explicit operator bool() const {
+        return raw != nullptr;
+    }
+};
+
 // Macros de unk.h do MM. O decomp as usa em campos ainda não identificados;
 // sem elas as structs de DMA não compilam.
 #define UNK_TYPE s32
@@ -288,25 +325,6 @@ typedef struct {
     /* 0xC */ size_t cachePoolSize; 
 } AudioSessionPoolSplit; // size = 0x10
 
-void AudioHeap_DiscardFont(s32 fontId);
-void* AudioHeap_WritebackDCache(void* addr, size_t size);
-void* AudioHeap_AllocAttemptExternal(AudioAllocPool* pool, size_t size);
-void* AudioHeap_AllocDmaMemory(AudioAllocPool* pool, size_t size);
-void* AudioHeap_AllocZeroed(AudioAllocPool* pool, size_t size);
-void* AudioHeap_Alloc(AudioAllocPool* pool, size_t size);
-void AudioHeap_InitPool(AudioAllocPool* pool, void* addr, size_t size);
-void AudioHeap_PopPersistentCache(s32 tableType);
-void AudioHeap_InitMainPool(size_t initPoolSize);
-void* AudioHeap_AllocCached(s32 tableType, size_t size, s32 cache, s32 id);
-void* AudioHeap_SearchCaches(s32 tableType, s32 cache, s32 id);
-void AudioHeap_LoadFilter(s16* filter, s32 lowPassCutoff, s32 highPassCutoff);
-s32 AudioHeap_ResetStep(void);
-void AudioHeap_Init(void);
-void* AudioHeap_SearchPermanentCache(s32 tableType, s32 id);
-void* AudioHeap_AllocPermanent(s32 tableType, s32 id, size_t size);
-void* AudioHeap_AllocSampleCache(size_t size, s32 sampleBankId, void* sampleAddr, s8 medium, s32 cache);
-void AudioHeap_ApplySampleBankCache(s32 sampleBankId);
-void AudioHeap_SetReverbData(s32 reverbIndex, u32 dataType, uintptr_t data, s32 isFirstInit);
 
 
 
@@ -316,7 +334,6 @@ void AudioHeap_SetReverbData(s32 reverbIndex, u32 dataType, uintptr_t data, s32 
 
 struct Sample;
 
-typedef s32 (*DmaHandler)(OSPiHandle* handle, OSIoMesg* mb, s32 direction);
 
 typedef enum {
     /* 0 */ SEQUENCE_TABLE,
@@ -419,34 +436,6 @@ typedef struct {
     /* 0x10 */ s32 isFree;
 } AudioPreloadReq; // size = 0x14
 
-void AudioLoad_DecreaseSampleDmaTtls(void);
-void* AudioLoad_DmaSampleData(uintptr_t devAddr, size_t size, s32 arg2, u8* dmaIndexRef, s32 medium);
-void AudioLoad_InitSampleDmaBuffers(s32 numNotes);
-s32 AudioLoad_IsFontLoadComplete(s32 fontId);
-s32 AudioLoad_IsSeqLoadComplete(s32 seqId);
-void AudioLoad_SetFontLoadStatus(s32 fontId, s32 loadStatus);
-void AudioLoad_SetSeqLoadStatus(s32 seqId, s32 loadStatus);
-void AudioLoad_SyncLoadSeqParts(s32 seqId, s32 arg1, s32 arg2, OSMesgQueue* arg3);
-s32 AudioLoad_SyncLoadInstrument(s32 fontId, s32 instId, s32 drumId);
-void AudioLoad_AsyncLoadSeq(s32 seqId, s32 arg1, s32 retData, OSMesgQueue* retQueue);
-void AudioLoad_AsyncLoadSampleBank(s32 sampleBankId, s32 arg1, s32 retData, OSMesgQueue* retQueue);
-void AudioLoad_AsyncLoadFont(s32 fontId, s32 arg1, s32 retData, OSMesgQueue* retQueue);
-u8* AudioLoad_GetFontsForSequence(s32 seqId, u32* outNumFonts, u8* buff);
-void AudioLoad_DiscardSeqFonts(s32 seqId);
-void func_8018FA60(u32 tableType, u32 id, s32 type, s32 data);
-s32 AudioLoad_SyncInitSeqPlayer(s32 playerIndex, s32 seqId, s32 arg2);
-s32 AudioLoad_SyncInitSeqPlayerSkipTicks(s32 playerIndex, s32 seqId, s32 skipTicks);
-void AudioLoad_ProcessLoads(s32 resetStatus);
-void AudioLoad_SetDmaHandler(DmaHandler callback);
-void AudioLoad_Init(void* heap, size_t heapSize);
-void AudioLoad_InitSlowLoads(void);
-s32 AudioLoad_SlowLoadSample(s32 fontId, s32 instId, s8* isDone);
-s32 AudioLoad_SlowLoadSeq(s32 seqId, u8* ramAddr, s8* isDone);
-void AudioLoad_InitAsyncLoads(void);
-void AudioLoad_LoadPermanentSamples(void);
-void AudioLoad_ScriptLoad(s32 tableType, s32 id, s8* isDone);
-void AudioLoad_ProcessScriptLoads(void);
-void AudioLoad_InitScriptLoads(void);
 
 
 
@@ -778,7 +767,7 @@ typedef struct AudioListItem {
     /* 0x00 */ struct AudioListItem* prev;
     /* 0x04 */ struct AudioListItem* next;
     union {
-        /* 0x08 */ void* value; // either Note* or SequenceLayer*
+        /* 0x08 */ AnyPtr value; // either Note* or SequenceLayer*
         /* 0x08 */ s32 count;
                } u;
     /* 0x0C */ struct NotePool* pool;
