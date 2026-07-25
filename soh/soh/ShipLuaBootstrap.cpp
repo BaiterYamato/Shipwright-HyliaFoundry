@@ -48,6 +48,7 @@
 #include "soh/Enhancements/enhancementTypes.h"
 #include "soh/ResourceManagerHelpers.h"
 #include "soh/mmaudio/MmSoundFont.h"
+#include "soh/mmaudio/MmSfxPlayer.h"
 #include "align_asset_macro.h"
 #include "soh/ShipInit.hpp"
 // OPEN_DISPS declara FrameInterpolation_* em escopo de bloco com linkage C++;
@@ -4112,6 +4113,39 @@ void Initialize() {
     gImportTickHook =
         GameInteractor::Instance->RegisterGameHook<GameInteractor::OnGameFrameUpdate>([]() {
             TickWorldImport();
+            // Gatilho temporário da Fase 1 do port de áudio (OOT-AUDIO-001):
+            // toca uma amostra crua do mm.o2r para provar o caminho até o
+            // alto-falante. Sai daqui quando as primitivas Lua de áudio
+            // existirem (Fase 4).
+            //
+            // Dispara sozinho ~2s depois de entrar em gameplay, e repete a cada
+            // D-pad esquerda. O automático existe porque um gatilho só por botão
+            // não distingue "áudio falhou" de "o botão não chegou aqui".
+            // Sem filtro de gameMode: áudio toca no título também, e amarrar o
+            // teste a "estar em gameplay" só acrescenta uma variável a errar.
+            if (gPlayState != nullptr) {
+                static int sFrames = 0;
+                static bool sAutoFired = false;
+                sFrames++;
+
+                // Batimento limitado: se o disparo não acontecer, estas linhas
+                // dizem por quê, em vez de deixar o log mudo.
+                if (sFrames % 60 == 0 && sFrames <= 300) {
+                    SPDLOG_INFO("ShipLua/mmaudio: aguardando disparo — frame {} gameMode={} disparado={}", sFrames,
+                                static_cast<int>(gSaveContext.gameMode), sAutoFired);
+                }
+
+                const bool autoNow = !sAutoFired && sFrames > 120;
+                const bool pressed = CHECK_BTN_ALL(gPlayState->state.input[0].press.button, BTN_DLEFT);
+
+                if (autoNow || pressed) {
+                    sAutoFired = true;
+                    SPDLOG_INFO("ShipLua/mmaudio: disparo de teste ({}) no frame {} gameMode={}",
+                                autoNow ? "autom\xC3\xA1tico" : "D-pad esquerda", sFrames,
+                                static_cast<int>(gSaveContext.gameMode));
+                    ShipLua::MmAudio_PlaySampleOneShot("mm/audio/samples/AdultLinkAttack1_META");
+                }
+            }
             // Avança a cutscene AQUI, não no update do Player: com atores
             // congelados (freeze_player) o hook do Player não dispara, e a
             // câmera ficaria parada e sem nunca ser devolvida.

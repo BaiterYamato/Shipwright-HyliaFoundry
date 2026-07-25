@@ -37,6 +37,7 @@
 #include "Enhancements/randomizer/randomizer_entrance_tracker.h"
 #include "Enhancements/randomizer/randomizer_check_tracker.h"
 #include "Enhancements/randomizer/static_data.h"
+#include "soh/mmaudio/MmSfxPlayer.h"
 #include "soh/Enhancements/randomizer/settings.h"
 #include "soh/Enhancements/savestates.h"
 #include "frame_interpolation.h"
@@ -2274,6 +2275,18 @@ extern "C" int AudioPlayer_GetDesiredBuffered(void) {
 }
 
 extern "C" void AudioPlayer_Play(const uint8_t* buf, uint32_t len) {
+    // Áudio vindo do mm.o2r é sintetizado fora do motor do OoT e somado aqui, no
+    // funil único, logo antes de ir para o dispositivo. O formato dos dois lados
+    // é o mesmo — 32 kHz, estéreo, s16 intercalado — então não há resample.
+    // Ver coordination/handoffs/OOT-AUDIO-001-port-mm-sfx.md.
+    if (ShipLua::MmAudio_HasPending()) {
+        static thread_local std::vector<uint8_t> mixed;
+        mixed.assign(buf, buf + len);
+        ShipLua::MmAudio_MixInto(reinterpret_cast<int16_t*>(mixed.data()), len / (2 * sizeof(int16_t)));
+        AudioPlayerPlayFrame(mixed.data(), len);
+        return;
+    }
+
     AudioPlayerPlayFrame(buf, len);
 }
 
