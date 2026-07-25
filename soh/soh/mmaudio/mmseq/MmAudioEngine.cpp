@@ -24,6 +24,24 @@ constexpr s32 kNumNotes = 32;         // simultaneidade; o MM usa mais, mas SFX 
 constexpr s32 kUpdatesPerFrame = 4;   // divisões do tick de áudio por frame de vídeo
 constexpr s32 kOutputRate = 32000;
 
+// DESLIGADO POR PADRAO. O interpretador ja roda, mas o script da Sequence_0
+// avanca o pc ate sair da regiao valida e derruba o jogo em ~350 ms
+// (AudioScript_ScriptReadU8, seqplayer.cpp:554). Enquanto a causa nao estiver
+// entendida, o motor nao pode ficar no caminho de audio do usuario.
+//
+// Ligar com SHIPLUA_MM_SEQ=1 no ambiente para investigar.
+bool gEnabled = false;
+bool gEnabledChecked = false;
+
+bool EngineEnabled() {
+    if (!gEnabledChecked) {
+        gEnabledChecked = true;
+        const char* env = std::getenv("SHIPLUA_MM_SEQ");
+        gEnabled = (env != nullptr && env[0] == '1');
+    }
+    return gEnabled;
+}
+
 bool gReady = false;
 bool gInitFailed = false;
 
@@ -162,6 +180,10 @@ bool MmSeq_IsReady() {
 bool MmSeq_Init() {
     if (gReady || gInitFailed) {
         return gReady;
+    }
+    if (!EngineEnabled()) {
+        gInitFailed = true; // nao tenta de novo todo frame
+        return false;
     }
 
     MmAudio_InitPathTables();
