@@ -40,6 +40,10 @@
 // separate from GameInteractor's global Crowd Control state.
 extern u8 ShipLua_ShouldBlockLedgeGrabs(void);
 
+// A mod may veto rolling (e.g. a stamina system with an empty meter). Opt-in:
+// returns 0 unless a mod asked for it.
+extern u8 ShipLua_ShouldBlockRoll(void);
+
 // Some player animations are played at this reduced speed, for reasons yet unclear.
 // This is called "adjusted" for now.
 #define PLAYER_ANIM_ADJUSTED_SPEED (2.0f / 3.0f)
@@ -6313,6 +6317,12 @@ void Player_SetupRoll(Player* this, PlayState* play) {
 }
 
 s32 Player_TryRoll(Player* this, PlayState* play) {
+    // ShipLua: um mod pode vetar o rolamento (por exemplo, sem stamina).
+    // Opt-in — sem mod pedindo, retorna 0 e nada muda.
+    if (ShipLua_ShouldBlockRoll()) {
+        return false;
+    }
+
     if ((this->controlStickDirections[this->controlStickDataIndex] == 0) && (sFloorType != 7)) {
         Player_SetupRoll(this, play);
 

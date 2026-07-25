@@ -829,6 +829,21 @@ extern "C" u8 ShipLua_ShouldBlockLedgeGrabs(void) {
     return gCustomBodyActive && gCustomBodySpec.blockLedgeGrab;
 }
 
+// ship.oot.player.set_roll_blocked(bool): veta o rolamento no portão nativo
+// (Player_TryRoll). Um sistema de stamina precisa disto — só drenar o medidor
+// não impede a ação; sem bloquear, rolar com a barra vazia continua saindo.
+bool gRollBlocked = false;
+
+extern "C" u8 ShipLua_ShouldBlockRoll(void) {
+    return gRollBlocked ? 1 : 0;
+}
+
+int LuaSetRollBlocked(lua_State* state) {
+    gRollBlocked = lua_toboolean(state, 1) != 0;
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 // hook.oot.item.give (transform). Chamado do funil GiveItemEntryFromActor
 // (z_actor.c) logo antes do item ser entregue ao Player. O Lua recebe o item
 // atual e pode devolver, via ship.hooks.result, um NOVO get_item_id — o host
@@ -3378,6 +3393,8 @@ void InstallOotApi(lua_State* state) {
     lua_setfield(state, -2, "set_weight");
     lua_pushcfunction(state, LuaSetRollMode);
     lua_setfield(state, -2, "set_roll_mode");
+    lua_pushcfunction(state, LuaSetRollBlocked);
+    lua_setfield(state, -2, "set_roll_blocked");
     lua_setfield(state, ootTable, "player");
     lua_setfield(state, shipTable, "oot");
 
