@@ -4143,7 +4143,10 @@ void Initialize() {
                     SPDLOG_INFO("ShipLua/mmaudio: disparo de teste ({}) no frame {} gameMode={}",
                                 autoNow ? "autom\xC3\xA1tico" : "D-pad esquerda", sFrames,
                                 static_cast<int>(gSaveContext.gameMode));
-                    ShipLua::MmAudio_PlaySampleOneShot("mm/audio/samples/AdultLinkAttack1_META");
+                    // Voz de Goron: existe SÓ no mm.o2r, então ouvir isto dentro
+                    // do OoT não tem interpretação alternativa. Um grunhido de
+                    // ataque do Link se confundiria com o som nativo do jogo.
+                    ShipLua::MmAudio_PlaySampleOneShot("mm/audio/samples/GoronYawn_META");
                 }
             }
             // Avança a cutscene AQUI, não no update do Player: com atores

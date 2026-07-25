@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <mutex>
 #include <vector>
 
@@ -16,9 +17,10 @@ namespace ShipLua {
 
 namespace {
 
-// Formato VADPCM (CODEC_ADPCM) do N64: cada quadro é 1 byte de cabeçalho mais
-// 8 bytes de nibbles, produzindo 16 amostras.
-constexpr int kFrameBytes = 9;
+// VADPCM do N64, duas variantes — ambas produzem 16 amostras por quadro:
+//   CODEC_ADPCM (0)       1 byte de cabeçalho + 8 bytes de nibbles de 4 bits
+//   CODEC_SMALL_ADPCM (3) 1 byte de cabeçalho + 4 bytes de pares de 2 bits
+// O mm.o2r usa as duas; GoronYawn, por exemplo, é a de 2 bits.
 constexpr int kSamplesPerFrame = 16;
 constexpr int kOrder = 2; // o VADPCM do N64 é sempre de ordem 2
 
@@ -43,11 +45,13 @@ std::vector<int16_t> DecodeVadpcm(const SoundFontSample* sample) {
         sample->book->book == nullptr) {
         return pcm;
     }
-    if (sample->codec != CODEC_ADPCM) {
-        SPDLOG_WARN("ShipLua/mmaudio: codec {} n\xC3\xA3o suportado nesta fase (s\xC3\xB3 CODEC_ADPCM)",
+    const bool small = (sample->codec == CODEC_SMALL_ADPCM);
+    if (sample->codec != CODEC_ADPCM && !small) {
+        SPDLOG_WARN("ShipLua/mmaudio: codec {} n\xC3\xA3o suportado (s\xC3\xB3 CODEC_ADPCM e CODEC_SMALL_ADPCM)",
                     static_cast<uint32_t>(sample->codec));
         return pcm;
     }
+    const int frameBytes = small ? 5 : 9;
     if (sample->book->order != kOrder || sample->book->npredictors <= 0) {
         SPDLOG_WARN("ShipLua/mmaudio: book inesperado (order={} npredictors={})", sample->book->order,
                     sample->book->npredictors);
@@ -55,7 +59,7 @@ std::vector<int16_t> DecodeVadpcm(const SoundFontSample* sample) {
     }
 
     const uint8_t* in = sample->sampleAddr;
-    const uint32_t frames = sample->size / kFrameBytes;
+    const uint32_t frames = sample->size / frameBytes;
     pcm.reserve(static_cast<size_t>(frames) * kSamplesPerFrame);
 
     int16_t prev1 = 0;
@@ -67,7 +71,7 @@ std::vector<int16_t> DecodeVadpcm(const SoundFontSample* sample) {
         const int tableIndex = header & 0xF;
 
         if (tableIndex >= sample->book->npredictors) {
-            in += kFrameBytes - 1; // quadro corrompido: pula sem tentar prever
+            in += frameBytes - 1; // quadro corrompido: pula sem tentar prever
             continue;
         }
 
@@ -79,11 +83,24 @@ std::vector<int16_t> DecodeVadpcm(const SoundFontSample* sample) {
         // metade — a recorrência dentro dela sai do somatório em k.
         for (int half = 0; half < 2; half++) {
             int32_t ins[8];
-            for (int j = 0; j < 4; j++) {
-                const uint8_t byte = *in++;
-                // (x << 28) >> 28 estende o sinal do valor de 4 bits, igual ao mixer.
-                ins[j * 2] = ((static_cast<int32_t>(byte >> 4) << 28) >> 28) << shift;
-                ins[j * 2 + 1] = ((static_cast<int32_t>(byte & 0xF) << 28) >> 28) << shift;
+            if (small) {
+                // 2 bits por amostra: 4 amostras por byte, 2 bytes por metade.
+                // (x << 30) >> 30 estende o sinal do valor de 2 bits.
+                for (int j = 0; j < 2; j++) {
+                    const uint8_t byte = *in++;
+                    ins[j * 4] = ((static_cast<int32_t>(byte >> 6) << 30) >> 30) << shift;
+                    ins[j * 4 + 1] = ((static_cast<int32_t>((byte >> 4) & 0x3) << 30) >> 30) << shift;
+                    ins[j * 4 + 2] = ((static_cast<int32_t>((byte >> 2) & 0x3) << 30) >> 30) << shift;
+                    ins[j * 4 + 3] = ((static_cast<int32_t>(byte & 0x3) << 30) >> 30) << shift;
+                }
+            } else {
+                // 4 bits por amostra: 2 amostras por byte, 4 bytes por metade.
+                // (x << 28) >> 28 estende o sinal do valor de 4 bits.
+                for (int j = 0; j < 4; j++) {
+                    const uint8_t byte = *in++;
+                    ins[j * 2] = ((static_cast<int32_t>(byte >> 4) << 28) >> 28) << shift;
+                    ins[j * 2 + 1] = ((static_cast<int32_t>(byte & 0xF) << 28) >> 28) << shift;
+                }
             }
 
             int16_t written[8];
@@ -132,8 +149,23 @@ bool MmAudio_PlaySampleOneShot(const char* prefixedSamplePath) {
         return false;
     }
 
-    SPDLOG_INFO("ShipLua/mmaudio: tocando '{}' — {}B comprimidos -> {} amostras ({} ms a 32 kHz)", prefixedSamplePath,
-                sample->size, pcm.size(), pcm.size() * 1000 / 32000);
+    // Pico e RMS dizem se o sinal decodificou com amplitude sã. Um pico na casa
+    // das centenas (em vez de milhares) apontaria erro de `shift` no VADPCM:
+    // audível só com fone, fácil de confundir com "não saiu som".
+    int32_t peak = 0;
+    int64_t sumSquares = 0;
+    for (const int16_t value : pcm) {
+        const int32_t magnitude = value < 0 ? -value : value;
+        if (magnitude > peak) {
+            peak = magnitude;
+        }
+        sumSquares += static_cast<int64_t>(value) * value;
+    }
+    const int32_t rms = pcm.empty() ? 0 : static_cast<int32_t>(std::sqrt(static_cast<double>(sumSquares) / pcm.size()));
+
+    SPDLOG_INFO("ShipLua/mmaudio: tocando '{}' — {}B comprimidos -> {} amostras ({} ms a 32 kHz) | "
+                "pico={} rms={} (cheio seria ~32767)",
+                prefixedSamplePath, sample->size, pcm.size(), pcm.size() * 1000 / 32000, peak, rms);
 
     {
         std::lock_guard<std::mutex> lock(gMutex);
@@ -168,9 +200,11 @@ void MmAudio_MixInto(int16_t* buffer, uint32_t frames) {
         const size_t count = (available < frames) ? available : frames;
 
         for (size_t i = 0; i < count; i++) {
-            // Amostra mono do MM entra nos dois canais; a atenuação evita somar
-            // em cima do áudio do jogo e estourar o clamp.
-            const int32_t value = shot.pcm[shot.cursor + i] / 2;
+            // Amostra mono do MM entra nos dois canais, em volume cheio. Somar
+            // sobre o áudio do jogo pode saturar no clamp em picos, o que é
+            // aceitável enquanto isto é uma prova; a mixagem de verdade
+            // (headroom, ducking, volume por banco) vem na Fase 3.
+            const int32_t value = shot.pcm[shot.cursor + i];
             buffer[i * 2] = Clamp16(buffer[i * 2] + value);
             buffer[i * 2 + 1] = Clamp16(buffer[i * 2 + 1] + value);
         }
