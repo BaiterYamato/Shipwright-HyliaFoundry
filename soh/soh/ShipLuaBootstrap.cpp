@@ -2943,10 +2943,11 @@ extern "C" void DrawHudOverlay(PlayState* play) {
     if (gModHost == nullptr) {
         return;
     }
-    // Só dentro do jogo. Na tela de título e no menu de arquivos o gPlayState
-    // ainda existe, mas não há Player na lista de atores — sem esta guarda o
-    // HUD do mod aparece por cima do logo e do "PRESS START".
-    if (play == nullptr || GET_PLAYER(play) == nullptr) {
+    // Só durante jogo de verdade. Checar apenas "existe Player" NÃO basta: a
+    // tela de título carrega uma cena real, com Link nela, então o HUD do mod
+    // aparecia por cima do logo. gameMode é o discriminador que o próprio
+    // engine usa (z_play.c) e cobre título, file select e créditos.
+    if (play == nullptr || GET_PLAYER(play) == nullptr || gSaveContext.gameMode != GAMEMODE_NORMAL) {
         return;
     }
     HudBeginOverlay(play);
