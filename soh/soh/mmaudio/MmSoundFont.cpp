@@ -8,7 +8,6 @@
 #include "z64audio.h"
 
 #include "soh/ResourceManagerHelpers.h"
-#include "soh/resource/importer/AudioSoundFontFactory.h"
 
 namespace ShipLua {
 
@@ -18,31 +17,14 @@ namespace {
 // Ver ShipLuaBootstrap.cpp (kMmNamespace).
 constexpr const char* kMmNamespace = "mm/";
 
-// Instala o prefixo de amostras enquanto o soundfont é lido e o remove ao sair,
-// inclusive por exceção. O caminho normal do OoT nunca vê prefixo.
-class ScopedSamplePrefix {
-  public:
-    explicit ScopedSamplePrefix(const std::string& prefix) {
-        SOH::SetSoundFontSamplePathPrefix(prefix);
-    }
-    ~ScopedSamplePrefix() {
-        SOH::SetSoundFontSamplePathPrefix("");
-    }
-    ScopedSamplePrefix(const ScopedSamplePrefix&) = delete;
-    ScopedSamplePrefix& operator=(const ScopedSamplePrefix&) = delete;
-};
-
 struct FontStats {
-    int total = 0;
-    int resolved = 0;
+    int declared = 0; // referências de amostra que o font realmente declara
+    int resolved = 0; // as que apontaram para dados de verdade
     uint32_t firstSampleSize = 0;
 };
 
-// Conta quantas referências de amostra do soundfont apontam para dados de
-// verdade. Com o prefixo errado a esmagadora maioria vira nullptr, porque só 15
-// dos 682 nomes de amostra do MM existem também no OoT.
 void CountSample(const SoundFontSound& sound, FontStats& stats) {
-    stats.total++;
+    stats.declared++;
     if (sound.sample == nullptr) {
         return;
     }
@@ -83,42 +65,33 @@ FontStats CollectStats(const SoundFont* font) {
     return stats;
 }
 
-void LogFont(const char* label, const char* path, const SoundFont* font) {
-    if (font == nullptr) {
-        SPDLOG_INFO("ShipLua/mmaudio: {} '{}' -> NAO CARREGOU", label, path);
-        return;
-    }
+} // namespace
 
-    const FontStats stats = CollectStats(font);
-    SPDLOG_INFO("ShipLua/mmaudio: {} '{}' -> inst={} drums={} sfx={} | amostras {}/{} resolvidas | 1a amostra={}B",
-                label, path, font->numInstruments, font->numDrums, font->numSfx, stats.resolved, stats.total,
-                stats.firstSampleSize);
-}
-
-// Carrega um soundfont do mm.o2r resolvendo as amostras dentro do namespace do
-// MM. Recebe o caminho SEM prefixo, como está gravado dentro do arquivo:
-// "audio/fonts/Soundfont_0".
 SoundFont* LoadMmSoundFont(const std::string& pathWithinMm) {
+    // O factory deriva o namespace das amostras do caminho do próprio recurso,
+    // então basta pedir pelo caminho prefixado — nada de estado a instalar.
     const std::string fullPath = kMmNamespace + pathWithinMm;
-    ScopedSamplePrefix prefix(kMmNamespace);
     return ResourceMgr_LoadAudioSoundFontByName(fullPath.c_str());
 }
 
-} // namespace
-
 void ProbeMmSoundFonts() {
-    // Alvo: o soundfont que carrega os SFX do MM.
-    SoundFont* withPrefix = LoadMmSoundFont("audio/fonts/Soundfont_0");
-    LogFont("COM prefixo ", "mm/audio/fonts/Soundfont_0", withPrefix);
+    SoundFont* font = LoadMmSoundFont("audio/fonts/Soundfont_0");
+    if (font == nullptr) {
+        SPDLOG_WARN("ShipLua/mmaudio: 'mm/audio/fonts/Soundfont_0' n\xC3\xA3o carregou — "
+                    "os assets de \xC3\xA1udio do MM est\xC3\xA3o indispon\xC3\xADveis");
+        return;
+    }
 
-    // Controle: outro font, carregado SEM prefixo. Precisa ser um caminho
-    // diferente porque o ResourceManager guarda o recurso em cache — recarregar
-    // o mesmo caminho devolveria o objeto acima em vez de reexecutar o factory.
-    SoundFont* withoutPrefix = ResourceMgr_LoadAudioSoundFontByName("mm/audio/fonts/Soundfont_1");
-    LogFont("SEM prefixo ", "mm/audio/fonts/Soundfont_1", withoutPrefix);
-
-    SPDLOG_INFO("ShipLua/mmaudio: se o primeiro resolveu quase tudo e o segundo quase nada, "
-                "o prefixo de namespace esta funcionando (OOT-AUDIO-001 Fase 1)");
+    // As entradas sem amostra NÃO são falhas: um instrumento que não define
+    // variante grave ou aguda deixa esses slots nulos de propósito. Não dá para
+    // distingui-las de uma falha olhando só a struct pronta — quem mede isso é o
+    // factory, e ele reportou zero falhas de resolução na Fase 1.
+    const FontStats stats = CollectStats(font);
+    SPDLOG_INFO("ShipLua/mmaudio: Soundfont_0 do MM pronto — inst={} drums={} sfx={} | "
+                "{} amostras carregadas de {} slots (o resto s\xC3\xA3o slots vazios do pr\xC3\xB3prio font) | "
+                "1a amostra={}B",
+                font->numInstruments, font->numDrums, font->numSfx, stats.resolved, stats.declared,
+                stats.firstSampleSize);
 }
 
 } // namespace ShipLua

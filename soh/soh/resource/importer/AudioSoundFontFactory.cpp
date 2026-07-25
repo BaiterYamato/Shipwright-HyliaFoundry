@@ -11,26 +11,35 @@ namespace SOH {
 
 // O caminho de cada amostra vem gravado DENTRO do arquivo de soundfont e é
 // sempre relativo à raiz do o2r de origem ("audio/samples/..."). Ao carregar uma
-// fonte do jogo vizinho — que o MmCrossWorldArchive expõe sob "mm/" — resolver o
-// caminho literal traria a amostra do OoT de mesmo nome (ou nullptr), sem erro
-// nenhum. Este prefixo é aplicado durante o load cross-world e limpo depois.
+// fonte de um archive montado sob um namespace — o mm.o2r do jogo vizinho fica
+// sob "mm/", os assets próprios de um mod sob "mod/<id>/" — resolver o caminho
+// literal traz a amostra do OoT de mesmo nome, ou nullptr, sem erro nenhum.
 //
-// thread_local: a leitura do recurso é síncrona na thread que chamou, então o
-// prefixo nunca precisa atravessar threads — e assim um load de soundfont numa
-// thread não pode contaminar outro load acontecendo em paralelo.
-static thread_local std::string sSamplePathPrefix;
-
-void SetSoundFontSamplePathPrefix(const std::string& prefix) {
-    sSamplePathPrefix = prefix;
+// O prefixo é DERIVADO do caminho do próprio recurso em vez de vir de estado
+// global: o factory roda em worker thread (medido em OOT-AUDIO-001 Fase 1 —
+// o load foi pedido na thread 13150 e o factory rodou na 63696), então um
+// global seria compartilhado entre carregamentos concorrentes.
+//
+//   "mm/audio/fonts/Soundfont_0" -> "mm/"
+//   "audio/fonts/Soundfont_0"    -> ""
+static std::string NamespacePrefixOf(const std::shared_ptr<Ship::ResourceInitData>& initData) {
+    if (initData == nullptr) {
+        return "";
+    }
+    const std::size_t root = initData->Path.find("audio/");
+    if (root == std::string::npos) {
+        return "";
+    }
+    return initData->Path.substr(0, root);
 }
 
-// Resolve uma amostra tentando primeiro o namespace prefixado; cai no caminho
-// literal quando não há prefixo ou quando a fonte referencia algo de fora dele.
-static std::shared_ptr<Ship::IResource> LoadSoundFontSample(const std::string& path) {
+// Resolve uma amostra dentro do namespace do soundfont; cai no caminho literal
+// quando não há namespace ou quando a fonte referencia algo de fora dele.
+static std::shared_ptr<Ship::IResource> LoadSoundFontSample(const std::string& prefix, const std::string& path) {
     auto resourceManager = Ship::Context::GetRawInstance()->GetResourceManager();
 
-    if (!sSamplePathPrefix.empty()) {
-        if (auto prefixed = resourceManager->LoadResourceProcess((sSamplePathPrefix + path).c_str())) {
+    if (!prefix.empty()) {
+        if (auto prefixed = resourceManager->LoadResourceProcess((prefix + path).c_str())) {
             return prefixed;
         }
     }
@@ -44,6 +53,9 @@ ResourceFactoryBinaryAudioSoundFontV2::ReadResource(std::shared_ptr<Ship::File> 
     if (!FileHasValidFormatAndReader(file, initData)) {
         return nullptr;
     }
+
+    // Namespace deste soundfont; vazio para os do próprio OoT.
+    const std::string samplePrefix = NamespacePrefixOf(initData);
 
     auto audioSoundFont = std::make_shared<AudioSoundFont>(initData);
     auto reader = std::get<std::shared_ptr<Ship::BinaryReader>>(file->Reader);
@@ -95,7 +107,7 @@ ResourceFactoryBinaryAudioSoundFontV2::ReadResource(std::shared_ptr<Ship::File> 
         if (sampleFileName.empty()) {
             drum->sound.sample = nullptr;
         } else {
-            auto res = LoadSoundFontSample(sampleFileName);
+            auto res = LoadSoundFontSample(samplePrefix, sampleFileName);
             drum->sound.sample = static_cast<Sample*>(res ? res->GetRawPointer() : nullptr);
         }
 
@@ -139,7 +151,7 @@ ResourceFactoryBinaryAudioSoundFontV2::ReadResource(std::shared_ptr<Ship::File> 
             bool hasSampleRef = reader->ReadInt8();
             std::string sampleFileName = reader->ReadString();
             instrument->lowNotesSound.tuning = reader->ReadFloat();
-            auto res = LoadSoundFontSample(sampleFileName);
+            auto res = LoadSoundFontSample(samplePrefix, sampleFileName);
             instrument->lowNotesSound.sample = static_cast<Sample*>(res ? res->GetRawPointer() : nullptr);
         } else {
             instrument->lowNotesSound.sample = nullptr;
@@ -152,7 +164,7 @@ ResourceFactoryBinaryAudioSoundFontV2::ReadResource(std::shared_ptr<Ship::File> 
             bool hasSampleRef = reader->ReadInt8();
             std::string sampleFileName = reader->ReadString();
             instrument->normalNotesSound.tuning = reader->ReadFloat();
-            auto res = LoadSoundFontSample(sampleFileName);
+            auto res = LoadSoundFontSample(samplePrefix, sampleFileName);
             instrument->normalNotesSound.sample = static_cast<Sample*>(res ? res->GetRawPointer() : nullptr);
         } else {
             instrument->normalNotesSound.sample = nullptr;
@@ -164,7 +176,7 @@ ResourceFactoryBinaryAudioSoundFontV2::ReadResource(std::shared_ptr<Ship::File> 
             bool hasSampleRef = reader->ReadInt8();
             std::string sampleFileName = reader->ReadString();
             instrument->highNotesSound.tuning = reader->ReadFloat();
-            auto res = LoadSoundFontSample(sampleFileName);
+            auto res = LoadSoundFontSample(samplePrefix, sampleFileName);
             instrument->highNotesSound.sample = static_cast<Sample*>(res ? res->GetRawPointer() : nullptr);
         } else {
             instrument->highNotesSound.sample = nullptr;
@@ -191,7 +203,7 @@ ResourceFactoryBinaryAudioSoundFontV2::ReadResource(std::shared_ptr<Ship::File> 
             bool hasSampleRef = reader->ReadInt8();
             std::string sampleFileName = reader->ReadString();
             soundEffect.tuning = reader->ReadFloat();
-            auto res = LoadSoundFontSample(sampleFileName);
+            auto res = LoadSoundFontSample(samplePrefix, sampleFileName);
             soundEffect.sample = static_cast<Sample*>(res ? res->GetRawPointer() : nullptr);
         }
 
