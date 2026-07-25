@@ -4338,6 +4338,13 @@ void Initialize() {
 
                 // Batimento limitado: se o disparo não acontecer, estas linhas
                 // dizem por quê, em vez de deixar o log mudo.
+                static bool sReportedEscape = false;
+                if (!sReportedEscape && ShipLua::MmSeq_PcEscaped()) {
+                    sReportedEscape = true;
+                    SPDLOG_WARN("ShipLua/mmaudio: o script da sequÃªncia saiu do bloco vÃ¡lido; "
+                                "motor desligado pela guarda em vez de derrubar o jogo");
+                }
+
                 if (sFrames % 60 == 0 && sFrames <= 300) {
                     SPDLOG_INFO("ShipLua/mmaudio: aguardando disparo — frame {} gameMode={} disparado={}", sFrames,
                                 static_cast<int>(gSaveContext.gameMode), sAutoFired);
@@ -4368,7 +4375,8 @@ void Initialize() {
                     // é o teste que a Fase 2 existe para permitir: tocar por ID,
                     // não por caminho de amostra.
                     const bool sent = ShipLua::MmSeq_PlaySfx(0x4826);
-                    SPDLOG_INFO("ShipLua/mmaudio: sfx por id 0x4826 -> {}", sent ? "enfileirado" : "recusado");
+                    SPDLOG_INFO("ShipLua/mmaudio: sfx por id 0x4826 -> {} (motor {})", sent ? "enfileirado" : "recusado",
+                                ShipLua::MmSeq_IsReady() ? "ligado" : "desligado");
                 }
             }
             // Avança a cutscene AQUI, não no update do Player: com atores

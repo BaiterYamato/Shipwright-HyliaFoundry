@@ -17,6 +17,10 @@ bool MmSeq_Init();
 
 bool MmSeq_IsReady();
 
+// True se o script da sequência saiu do bloco válido e o motor se desligou
+// sozinho. Diagnóstico: distingue "não tocou" de "se perdeu no script".
+bool MmSeq_PcEscaped();
+
 // Dispara um sfxId do MM escrevendo nas portas de channel IO da sequência,
 // que é como o próprio MM toca seus efeitos.
 bool MmSeq_PlaySfx(uint16_t sfxId);

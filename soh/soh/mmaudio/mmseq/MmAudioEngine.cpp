@@ -44,6 +44,20 @@ bool EngineEnabled() {
 
 bool gReady = false;
 bool gInitFailed = false;
+bool gPcEscaped = false;
+
+// O pc do script tem que estar dentro do bloco de bytes da sequência. Se sair,
+// o decomp continuaria lendo memória arbitrária.
+const u8* gSeqStart = nullptr;
+size_t gSeqSize = 0;
+
+bool PcInBounds(const SequencePlayer* sp) {
+    if (gSeqStart == nullptr || sp->scriptState.pc == nullptr) {
+        return false;
+    }
+    const u8* pc = sp->scriptState.pc;
+    return pc >= gSeqStart && pc < (gSeqStart + gSeqSize);
+}
 
 // Posição de leitura por nota. O NoteSampleState do MM descreve O QUE tocar
 // (amostra, pitch, volume) mas não ONDE está — isso vive no estado de síntese
@@ -177,6 +191,10 @@ bool MmSeq_IsReady() {
     return gReady;
 }
 
+bool MmSeq_PcEscaped() {
+    return gPcEscaped;
+}
+
 bool MmSeq_Init() {
     if (gReady || gInitFailed) {
         return gReady;
@@ -224,6 +242,8 @@ bool MmSeq_Init() {
 
     seqPlayer->seqId = 0;
     seqPlayer->defaultFont = 0;
+    gSeqStart = (const u8*)seq->seqData;
+    gSeqSize = (size_t)seq->seqDataSize;
     seqPlayer->seqData = (u8*)seq->seqData;
     seqPlayer->scriptState.pc = (u8*)seq->seqData;
     seqPlayer->scriptState.depth = 0;
@@ -268,12 +288,36 @@ void MmSeq_RenderInto(int16_t* buffer, uint32_t frames) {
         return;
     }
 
-    // Um tick de sequência por chamada. O interpretador escreve o que cada nota
-    // deve tocar em gAudioCtx.sampleStateList.
-    AudioScript_ProcessSequences(0);
+    // Cadência do MM (AudioSynth_Update, synthesis.c:227): por quadro de áudio,
+    // ProcessSequences roda updatesPerFrame vezes com o índice descendo até 0.
+    // Chamar uma vez por bloco de render, como a primeira versão fazia, avança a
+    // sequência ~12x devagar demais.
+    const s32 samplesPerAudioFrame = kOutputRate / 60;
+    const s32 audioFrames = (s32)(frames / samplesPerAudioFrame) + 1;
+
+    for (s32 af = 0; af < audioFrames; af++) {
+        for (s32 rev = kUpdatesPerFrame; rev > 0; rev--) {
+            // Guarda: se o pc saiu do bloco da sequência, o script se perdeu.
+            // Sem isto o decomp lê memória inválida e derruba o processo — foi
+            // o crash de 25/07 (AudioScript_ScriptReadU8, seqplayer.cpp:554).
+            SequencePlayer* sp = &gAudioCtx.seqPlayers[kSfxSeqPlayer];
+            if (sp->enabled && !PcInBounds(sp)) {
+                sp->enabled = false;
+                gPcEscaped = true;
+                break;
+            }
+            AudioScript_ProcessSequences(rev - 1);
+        }
+    }
+
+    // O interpretador escreve no slot indicado por sampleStateOffset, que é
+    // (updatesPerFrame - arg0 - 1) * numNotes. Com o último arg0 = 0, o bloco
+    // válido é o do índice updatesPerFrame-1 — ler a partir de 0, como a
+    // primeira versão fazia, pegaria slots que ninguém preencheu.
+    NoteSampleState* states = &gAudioCtx.sampleStateList[(kUpdatesPerFrame - 1) * kNumNotes];
 
     for (s32 i = 0; i < gAudioCtx.numNotes; i++) {
-        NoteSampleState* state = &gAudioCtx.sampleStateList[i];
+        NoteSampleState* state = &states[i];
         if (!state->bitField0.enabled || state->tunedSample == nullptr) {
             continue;
         }
