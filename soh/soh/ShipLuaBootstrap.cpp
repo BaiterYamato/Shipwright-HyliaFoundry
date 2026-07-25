@@ -72,6 +72,10 @@ extern u8 gWalkSpeedToggle;
 // O parâmetro se chama "this" no C original — aqui precisa de outro nome.
 void Player_SetupRoll(Player* player, PlayState* play);
 void Player_Action_Roll(Player* player, PlayState* play);
+// Solta o jogador da escada e o deixa cair: limpa CLIMBING_LADDER, transiciona
+// a ação e dá um empurrão para trás. É o mesmo caminho que o engine usa quando
+// o jogador larga a escada (z_player.c:7890) — não é invenção nossa.
+void func_8083FB7C(Player* player, PlayState* play);
 void Player_Action_80845EF8(Player* player, PlayState* play);
 
 static void ShipLuaEmitDisplayList(PlayState* play, const char* path) {
@@ -93,6 +97,10 @@ std::shared_ptr<OotHotkeyRegistry> gHotkeys;
 // indisponível e mods que dependem de sequenciamento (por exemplo a animação
 // de colocar máscara antes de trocar o corpo) degradam para ação instantânea.
 std::shared_ptr<ShipLua::FrameTimerScheduler> gTimers;
+// Stores persistentes. Guardados aqui para o flush periódico e o do shutdown —
+// a gravação é adiada de propósito (ver KeyValueStorage::EnablePersistence).
+std::shared_ptr<ShipLua::KeyValueStorage> gStorage;
+std::shared_ptr<ShipLua::KeyValueStorage> gSharedStorage;
 std::shared_ptr<OotWorldAdapter> gWorldAdapter;
 HOOK_ID gLoadGameHook = 0;
 HOOK_ID gImportTickHook = 0;
@@ -539,6 +547,7 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
             SPDLOG_WARN("ShipLua: storage persistente corrompido ({}), recomeçando vazio: {}",
                         storagePath.string(), loaded.message);
         }
+        gStorage = storage;
         context.storage = storage;
         context.capabilities.push_back("core.storage");
         registered = RegisterHostCapability(
@@ -559,6 +568,7 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
             SPDLOG_WARN("ShipLua: storage compartilhado corrompido ({}), recomeçando vazio: {}",
                         sharedPath.string(), loaded.message);
         }
+        gSharedStorage = shared;
         context.sharedStorage = shared;
         context.capabilities.push_back("core.storage.shared");
         registered = RegisterHostCapability(
@@ -2836,6 +2846,65 @@ int LuaHudDrawRect(lua_State* state) {
     return 1;
 }
 
+// ship.hud.draw_ring(cx, cy, raio, espessura, fração, r, g, b, a)
+//
+// Desenha um arco circular preenchido de `fração` (0..1) a partir do topo, no
+// sentido horário — a roda de stamina de BotW/Skyward Sword. Combinada com
+// ship.player.get("screen_x"/"screen_y"), o medidor acompanha o personagem.
+//
+// Implementação: o arco é composto por quadrados pequenos ao longo da
+// circunferência. gSPTextureRectangle só desenha retângulos alinhados aos
+// eixos — não há como rotacionar um quad por aqui sem montar vértices e
+// matriz à mão. Com raio típico (12-20px) e ~48 segmentos o resultado lê como
+// um anel contínuo. É uma aproximação assumida, não um arco analítico.
+int LuaHudDrawRing(lua_State* state) {
+    PlayState* play = gPlayState;
+    if (!gHudDrawActive || play == nullptr) {
+        SPDLOG_WARN("ShipLua hud.draw_ring: s\xC3\xB3 pode ser chamado de hook.oot.hud.draw");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    const double cx = luaL_checknumber(state, 1);
+    const double cy = luaL_checknumber(state, 2);
+    const double radius = luaL_checknumber(state, 3);
+    const double thickness = luaL_optnumber(state, 4, 3.0);
+    const double fraction = std::clamp(luaL_optnumber(state, 5, 1.0), 0.0, 1.0);
+    const int r = static_cast<int>(luaL_optinteger(state, 6, 255));
+    const int g = static_cast<int>(luaL_optinteger(state, 7, 255));
+    const int b = static_cast<int>(luaL_optinteger(state, 8, 255));
+    const int a = static_cast<int>(luaL_optinteger(state, 9, 255));
+    if (radius <= 0.0 || fraction <= 0.0) {
+        lua_pushboolean(state, 1); // nada a desenhar não é erro
+        return 1;
+    }
+    const auto clamp8 = [](int v) { return static_cast<u8>(std::clamp(v, 0, 255)); };
+    const int seg = static_cast<int>(std::clamp(radius * 3.0, 16.0, 96.0));
+    const int drawn = static_cast<int>(seg * fraction + 0.5);
+    const int dot = std::max(1, static_cast<int>(thickness + 0.5));
+
+    OPEN_DISPS(play->state.gfxCtx);
+    gDPPipeSync(OVERLAY_DISP++);
+    gDPSetPrimColor(OVERLAY_DISP++, 0, 0, clamp8(r), clamp8(g), clamp8(b), clamp8(a));
+    gDPLoadMultiBlock_4b(OVERLAY_DISP++, gMagicMeterFillTex, 0, G_TX_RENDERTILE, G_IM_FMT_I, 16, 16, 0,
+                         G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD,
+                         G_TX_NOLOD);
+    // Constante local: M_PI não é garantido no MSVC sem _USE_MATH_DEFINES
+    // antes dos headers de math, e mexer na ordem de includes deste arquivo
+    // por causa disso não vale a pena.
+    constexpr double kPi = 3.14159265358979323846;
+    for (int i = 0; i < drawn; ++i) {
+        // Começa no topo (-PI/2) e avança no sentido horário.
+        const double ang = -kPi / 2.0 + (2.0 * kPi * i) / seg;
+        const int px = static_cast<int>(cx + std::cos(ang) * radius - dot / 2.0 + 0.5);
+        const int py = static_cast<int>(cy + std::sin(ang) * radius - dot / 2.0 + 0.5);
+        gSPWideTextureRectangle(OVERLAY_DISP++, px << 2, py << 2, (px + dot) << 2, (py + dot) << 2, G_TX_RENDERTILE, 0,
+                                0, 1 << 10, 1 << 10);
+    }
+    CLOSE_DISPS(play->state.gfxCtx);
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 // ship.hud.draw_text(text, x, y, r, g, b, a, scale)
 int LuaHudDrawText(lua_State* state) {
     PlayState* play = gPlayState;
@@ -2872,6 +2941,12 @@ int LuaHudDrawText(lua_State* state) {
 
 extern "C" void DrawHudOverlay(PlayState* play) {
     if (gModHost == nullptr) {
+        return;
+    }
+    // Só dentro do jogo. Na tela de título e no menu de arquivos o gPlayState
+    // ainda existe, mas não há Player na lista de atores — sem esta guarda o
+    // HUD do mod aparece por cima do logo e do "PRESS START".
+    if (play == nullptr || GET_PLAYER(play) == nullptr) {
         return;
     }
     HudBeginOverlay(play);
@@ -2958,7 +3033,15 @@ int LuaSetHeldItemModel(lua_State* state) {
 
 // PASSO 3 — ship.player.get/set: acesso a campos do player por nome, com
 // validação, em vez de uma função nativa dedicada por ideia.
-enum class FieldKind { Health, HealthCapacity, Magic, Rupees, PosX, PosY, PosZ, RotY, Speed, VelX, VelY, VelZ, OnGround };
+enum class FieldKind {
+    Health, HealthCapacity, Magic, Rupees, PosX, PosY, PosZ, RotY, Speed, VelX, VelY, VelZ, OnGround,
+    // Estados de ação, somente leitura. Semânticos de propósito: expor
+    // stateFlags cru amarraria os mods a bits internos do engine.
+    Rolling, Climbing, Swimming,
+    // Posição do jogador projetada na tela — permite ancorar um medidor ao
+    // personagem (roda de stamina ao estilo BotW) em vez de fixá-lo num canto.
+    ScreenX, ScreenY
+};
 
 struct PlayerField {
     const char* name;
@@ -2968,7 +3051,11 @@ struct PlayerField {
     bool writable;
 };
 
-constexpr std::array<PlayerField, 13> kPlayerFields = { {
+// Array C cru de propósito: com std::array<N> era preciso manter o N à mão, e
+// esquecer disso ao acrescentar um campo dá um erro de "muitos inicializadores"
+// que não aponta para a linha do campo novo. std::begin/std::end abaixo tiram
+// o tamanho do próprio literal.
+constexpr PlayerField kPlayerFields[] = {
     { "health", FieldKind::Health, 0, 20 * 16, true },
     { "health_capacity", FieldKind::HealthCapacity, 16, 20 * 16, true },
     { "magic", FieldKind::Magic, 0, 96, true },
@@ -2986,12 +3073,23 @@ constexpr std::array<PlayerField, 13> kPlayerFields = { {
     { "vel_y", FieldKind::VelY, -100, 100, true },
     { "vel_z", FieldKind::VelZ, -100, 100, true },
     { "on_ground", FieldKind::OnGround, 0, 1, false },
-} };
+    // Estados de ação (0/1, somente leitura). Permitem a um mod cobrar custo
+    // por esforço — rolar, escalar, nadar — sem inferir da velocidade.
+    { "rolling", FieldKind::Rolling, 0, 1, false },
+    // climbing é gravável: escrever 0 solta o jogador da escada e o faz cair
+    // (um mod de stamina precisa disso para "ficou sem força no meio da subida").
+    { "climbing", FieldKind::Climbing, 0, 1, true },
+    { "swimming", FieldKind::Swimming, 0, 1, false },
+    // Coordenadas de tela do jogador (só leitura). Podem sair da tela quando a
+    // câmera não o enquadra — o mod decide se desenha mesmo assim.
+    { "screen_x", FieldKind::ScreenX, -10000, 10000, false },
+    { "screen_y", FieldKind::ScreenY, -10000, 10000, false },
+};
 
 const PlayerField* FindPlayerField(const char* name) {
-    const auto found = std::find_if(kPlayerFields.begin(), kPlayerFields.end(),
+    const auto found = std::find_if(std::begin(kPlayerFields), std::end(kPlayerFields),
                                     [name](const PlayerField& f) { return std::strcmp(f.name, name) == 0; });
-    return found == kPlayerFields.end() ? nullptr : &*found;
+    return found == std::end(kPlayerFields) ? nullptr : &*found;
 }
 
 double ReadPlayerField(const PlayerField& field, Player* player) {
@@ -3022,6 +3120,26 @@ double ReadPlayerField(const PlayerField& field, Player* player) {
             return player->actor.velocity.z;
         case FieldKind::OnGround:
             return (player->actor.bgCheckFlags & 1) ? 1.0 : 0.0;
+        case FieldKind::Rolling:
+            // Comparar a actionFunc é o teste confiável — não há flag de estado
+            // para rolamento. Mesmo critério que o corpo customizado usa.
+            return player->actionFunc == Player_Action_Roll ? 1.0 : 0.0;
+        case FieldKind::Climbing:
+            return (player->stateFlags1 & (PLAYER_STATE1_CLIMBING_LADDER | PLAYER_STATE1_CLIMBING_LEDGE)) ? 1.0 : 0.0;
+        case FieldKind::Swimming:
+            return (player->stateFlags1 & PLAYER_STATE1_IN_WATER) ? 1.0 : 0.0;
+        case FieldKind::ScreenX:
+        case FieldKind::ScreenY: {
+            if (gPlayState == nullptr) {
+                return 0.0;
+            }
+            s16 sx = 0;
+            s16 sy = 0;
+            // Projeta focus.pos (a cabeça), não world.pos — é o ponto que o
+            // próprio engine usa para ancorar UI ao ator.
+            Actor_GetScreenPos(gPlayState, &player->actor, &sx, &sy);
+            return field.kind == FieldKind::ScreenX ? static_cast<double>(sx) : static_cast<double>(sy);
+        }
     }
     return 0.0;
 }
@@ -3064,7 +3182,18 @@ void WritePlayerField(const PlayerField& field, Player* player, double value) {
         case FieldKind::VelZ:
             player->actor.velocity.z = static_cast<float>(value);
             break;
+        case FieldKind::Climbing:
+            // Só faz sentido soltar (0); escrever 1 não gruda o jogador numa
+            // escada do nada, então é ignorado.
+            if (value < 0.5 && (player->stateFlags1 & PLAYER_STATE1_CLIMBING_LADDER) && gPlayState != nullptr) {
+                func_8083FB7C(player, gPlayState);
+            }
+            break;
         case FieldKind::OnGround:
+        case FieldKind::Rolling:
+        case FieldKind::Swimming:
+        case FieldKind::ScreenX:
+        case FieldKind::ScreenY:
             break; // somente leitura
     }
 }
@@ -3274,6 +3403,8 @@ void InstallOotApi(lua_State* state) {
     lua_setfield(state, -2, "draw_rect");
     lua_pushcfunction(state, LuaHudDrawText);
     lua_setfield(state, -2, "draw_text");
+    lua_pushcfunction(state, LuaHudDrawRing);
+    lua_setfield(state, -2, "draw_ring");
     lua_setfield(state, shipTable, "hud");
 
     lua_pop(state, 1);
@@ -3647,6 +3778,28 @@ void Initialize() {
                     }
                 }
             }
+            // Grava o storage no máximo a cada ~5s, e só se algo mudou. Gravar
+            // a cada ship.storage.set serializava o store inteiro e fazia um
+            // write+rename síncronos na thread do jogo — um mod que atualize
+            // contadores por segundo travava visivelmente, ainda mais com um
+            // antivírus segurando o arquivo (o rename tenta de novo por dezenas
+            // de ms). Flush() é no-op barato quando nada mudou.
+            static int sFlushCountdown = 0;
+            if (--sFlushCountdown <= 0) {
+                sFlushCountdown = 300; // ~5s a 60fps
+                if (gStorage != nullptr && gStorage->IsDirty()) {
+                    const auto flushed = gStorage->Flush();
+                    if (!flushed.isOk()) {
+                        SPDLOG_WARN("ShipLua: falha ao gravar o storage: {}", flushed.message);
+                    }
+                }
+                if (gSharedStorage != nullptr && gSharedStorage->IsDirty()) {
+                    const auto flushed = gSharedStorage->Flush();
+                    if (!flushed.isOk()) {
+                        SPDLOG_WARN("ShipLua: falha ao gravar o storage compartilhado: {}", flushed.message);
+                    }
+                }
+            }
         });
     // attach_model: substitui a DL da máscara-veículo pela do mod. O hook roda
     // já dentro do contexto de matriz da cabeça, então basta emitir a DL.
@@ -3948,6 +4101,18 @@ void Shutdown() {
         GameInteractor::Instance->UnregisterGameHook<GameInteractor::OnPlayerUpdate>(gMaskTransitionUpdateHook);
         gMaskTransitionUpdateHook = 0;
     }
+    // Última chance de gravar: a persistência é adiada, então sem isto os
+    // segundos finais de jogo se perderiam ao fechar.
+    for (const auto& store : { gStorage, gSharedStorage }) {
+        if (store != nullptr && store->IsDirty()) {
+            const auto flushed = store->Flush();
+            if (!flushed.isOk()) {
+                SPDLOG_WARN("ShipLua: falha ao gravar o storage no shutdown: {}", flushed.message);
+            }
+        }
+    }
+    gStorage.reset();
+    gSharedStorage.reset();
     gActorProvider.reset();
     gCapabilityRegistry.reset();
     gWorldAdapter.reset();
