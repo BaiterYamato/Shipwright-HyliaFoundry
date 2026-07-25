@@ -5,6 +5,9 @@
 #include "ShipLuaPuppet.h"
 #include "soh/Enhancements/item-tables/ItemTableTypes.h"
 #include "soh/Enhancements/item-tables/ItemTableManager.h"
+// gMagicMeterFillTex: textura de preenchimento sólido reaproveitada por
+// ship.hud.draw_rect (mesma que o medidor de magia usa).
+#include "textures/parameter_static/parameter_static.h"
 
 #include <filesystem>
 #include <algorithm>
@@ -422,7 +425,8 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
                              "oot.player.mask",         "player.speed",       "player.fields",
                              "oot.player.attach_model", "mod.assets",         "oot.player.immunity",
                              "oot.player.weight",       "oot.player.roll",    "hooks.bridge",
-                             "oot.player.custom_body",  "oot.player.held_item_model" };
+                             "oot.player.custom_body",  "oot.player.held_item_model",
+                             "hud.draw" };
     context.hotkeys = gHotkeys;
     context.capabilityRegistry = gCapabilityRegistry;
     context.actors = gActorProvider;
@@ -433,6 +437,11 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
     registered = RegisterHostCapability("core.timers", "Per-frame timers owned by each mod (ship.timer).");
+    if (!registered.isOk()) {
+        return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
+    }
+    registered = RegisterHostCapability(
+        "hud.draw", "Draw arbitrary rectangles and text over the HUD from hook.<game>.hud.draw.");
     if (!registered.isOk()) {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
@@ -2744,8 +2753,132 @@ int LuaAttachModel(lua_State* state) {
 // Rod, Cane of Somaria, os cajados... 10+ itens no relatório de um deles
 // dependiam exatamente disto). bodyPartsPos já vem resolvido pelo próprio
 // desenho do esqueleto do player no mesmo frame — só ler e desenhar.
+// ---------------------------------------------------------------------------
+// HUD: primitiva genérica de desenho em overlay.
+//
+// Um mod que precise mostrar qualquer medidor próprio (fome/sede/stamina de um
+// sistema de sobrevivência, barra de XP de um RPG, cronômetro) não tinha como
+// desenhar nada — a única saída era sequestrar os medidores do jogo. Aqui o
+// host só oferece "desenhe um retângulo colorido" e "escreva um texto"; o que
+// isso significa é decisão inteira do mod.
+//
+// Ancorado no evento hook.oot.hud.draw, disparado de OnPlayDrawEnd. Emitir em
+// OVERLAY_DISP é o que garante a ordem correta: os buckets de display list
+// (POLY_OPA/POLY_XLU/OVERLAY) são concatenados numa ordem fixa no fim do frame,
+// então o overlay sai por cima do HUD nativo mesmo sendo emitido antes dele.
+//
+// gMagicMeterFillTex é a textura de preenchimento sólido que o próprio medidor
+// de magia usa (z_parameter.c, Interface_DrawMagicBar) — reaproveitá-la evita
+// trocar o cycle type para G_CYC_FILL, que exigiria restaurar estado e poderia
+// corromper o desenho seguinte.
+// OPEN_DISPS/CLOSE_DISPS expandem para estas funções. frame_interpolation.h as
+// declara FORA do seu bloco extern "C" (que está vazio), então em C++ elas
+// ganhariam linkage C++ — mas a definição, em frame_interpolation.cpp, está
+// dentro de extern "C". O resto deste arquivo só usa as macros dentro de
+// funções extern "C" e por isso nunca esbarrou nisso; as funções de HUD abaixo
+// são C++ normais, então precisam da declaração com o linkage certo.
+extern "C" {
+void FrameInterpolation_RecordOpenChild(const void* a, int b);
+void FrameInterpolation_RecordCloseChild(void);
+}
+
+bool gHudDrawActive = false; // true só durante o dispatch do evento
+
+// Modelos anexados às mãos (ship.oot.player.set_held_item_model). Declarados
+// aqui porque DrawHeldItemModels, logo abaixo, os consome.
 std::string gHeldItemModelLeft;
 std::string gHeldItemModelRight;
+
+void HudBeginOverlay(PlayState* play) {
+    OPEN_DISPS(play->state.gfxCtx);
+    // Setup de overlay padrão — sem isto a geometria sai com o estado de render
+    // herdado do que foi desenhado antes (mesma classe de bug que deixou o
+    // corpo do Goron invisível).
+    Gfx_SetupDL_39Overlay(play->state.gfxCtx);
+    gDPSetCombineLERP(OVERLAY_DISP++, PRIMITIVE, ENVIRONMENT, TEXEL0, ENVIRONMENT, 0, 0, 0, PRIMITIVE, PRIMITIVE,
+                      ENVIRONMENT, TEXEL0, ENVIRONMENT, 0, 0, 0, PRIMITIVE);
+    gDPSetEnvColor(OVERLAY_DISP++, 0, 0, 0, 255);
+    CLOSE_DISPS(play->state.gfxCtx);
+}
+
+// ship.hud.draw_rect(x, y, w, h, r, g, b, a)
+int LuaHudDrawRect(lua_State* state) {
+    PlayState* play = gPlayState;
+    if (!gHudDrawActive || play == nullptr) {
+        SPDLOG_WARN("ShipLua hud.draw_rect: s\xC3\xB3 pode ser chamado de hook.oot.hud.draw");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    const int x = static_cast<int>(luaL_checkinteger(state, 1));
+    const int y = static_cast<int>(luaL_checkinteger(state, 2));
+    const int w = static_cast<int>(luaL_checkinteger(state, 3));
+    const int h = static_cast<int>(luaL_checkinteger(state, 4));
+    const int r = static_cast<int>(luaL_optinteger(state, 5, 255));
+    const int g = static_cast<int>(luaL_optinteger(state, 6, 255));
+    const int b = static_cast<int>(luaL_optinteger(state, 7, 255));
+    const int a = static_cast<int>(luaL_optinteger(state, 8, 255));
+    if (w <= 0 || h <= 0) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    const auto clamp8 = [](int v) { return static_cast<u8>(std::clamp(v, 0, 255)); };
+
+    OPEN_DISPS(play->state.gfxCtx);
+    gDPPipeSync(OVERLAY_DISP++);
+    gDPSetPrimColor(OVERLAY_DISP++, 0, 0, clamp8(r), clamp8(g), clamp8(b), clamp8(a));
+    gDPLoadMultiBlock_4b(OVERLAY_DISP++, gMagicMeterFillTex, 0, G_TX_RENDERTILE, G_IM_FMT_I, 16, 16, 0,
+                         G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD,
+                         G_TX_NOLOD);
+    gSPWideTextureRectangle(OVERLAY_DISP++, x << 2, y << 2, (x + w) << 2, (y + h) << 2, G_TX_RENDERTILE, 0, 0, 1 << 10,
+                            1 << 10);
+    CLOSE_DISPS(play->state.gfxCtx);
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+// ship.hud.draw_text(text, x, y, r, g, b, a, scale)
+int LuaHudDrawText(lua_State* state) {
+    PlayState* play = gPlayState;
+    if (!gHudDrawActive || play == nullptr) {
+        SPDLOG_WARN("ShipLua hud.draw_text: s\xC3\xB3 pode ser chamado de hook.oot.hud.draw");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    const char* text = luaL_checkstring(state, 1);
+    const int x = static_cast<int>(luaL_checkinteger(state, 2));
+    const int y = static_cast<int>(luaL_checkinteger(state, 3));
+    const int r = static_cast<int>(luaL_optinteger(state, 4, 255));
+    const int g = static_cast<int>(luaL_optinteger(state, 5, 255));
+    const int b = static_cast<int>(luaL_optinteger(state, 6, 255));
+    const int a = static_cast<int>(luaL_optinteger(state, 7, 255));
+    const double scale = luaL_optnumber(state, 8, 1.0);
+    if (text == nullptr) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    // Limite defensivo: o helper nativo desenha caractere a caractere e uma
+    // string enorme por frame encheria a display list.
+    std::string line(text);
+    if (line.size() > 128) {
+        line.resize(128);
+    }
+    const auto clamp8 = [](int v) { return static_cast<uint16_t>(std::clamp(v, 0, 255)); };
+    Interface_DrawTextLine(play->state.gfxCtx, line.data(), static_cast<int16_t>(x), static_cast<int16_t>(y),
+                           clamp8(r), clamp8(g), clamp8(b), clamp8(a),
+                           static_cast<float>(std::clamp(scale, 0.1, 4.0)), 1);
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+extern "C" void DrawHudOverlay(PlayState* play) {
+    if (gModHost == nullptr) {
+        return;
+    }
+    HudBeginOverlay(play);
+    gHudDrawActive = true;
+    DispatchHookEvent("hook.oot.hud.draw", ShipLua::EventPayload{});
+    gHudDrawActive = false;
+}
 
 extern "C" void DrawHeldItemModels(PlayState* play) {
     if (gHeldItemModelLeft.empty() && gHeldItemModelRight.empty()) {
@@ -3133,6 +3266,15 @@ void InstallOotApi(lua_State* state) {
     lua_pushcfunction(state, LuaPlayerSet);
     lua_setfield(state, -2, "set");
     lua_setfield(state, shipTable, "player");
+
+    // ship.hud: desenho genérico em overlay, válido só dentro de
+    // hook.oot.hud.draw. Comum aos dois jogos por design (o MM ganha o mesmo).
+    lua_newtable(state);
+    lua_pushcfunction(state, LuaHudDrawRect);
+    lua_setfield(state, -2, "draw_rect");
+    lua_pushcfunction(state, LuaHudDrawText);
+    lua_setfield(state, -2, "draw_text");
+    lua_setfield(state, shipTable, "hud");
 
     lua_pop(state, 1);
 }
@@ -3704,6 +3846,8 @@ void Initialize() {
             if (gPlayState != nullptr) {
                 DrawHeldItemModels(gPlayState);
                 DrawMaskTransitionFlash(gPlayState);
+                // Por último: o overlay do mod fica por cima de tudo.
+                DrawHudOverlay(gPlayState);
             }
         });
 
