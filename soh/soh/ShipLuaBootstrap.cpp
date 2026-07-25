@@ -2809,6 +2809,48 @@ void FrameInterpolation_RecordCloseChild(void);
 
 bool gHudDrawActive = false; // true só durante o dispatch do evento
 
+// Orçamento de desenho por frame. Cada retângulo custa comandos na display
+// list, e o pool gráfico do jogo é fixo: um mod que desenhe demais estoura o
+// buffer e derruba o host inteiro (Fault "região dinâmica destruída" em
+// graph.c). O host não pode depender do bom senso do mod — corta no teto e
+// avisa uma vez, em vez de crashar.
+constexpr int kHudMaxRectsPerFrame = 400;
+int gHudRectsThisFrame = 0;
+bool gHudBudgetWarned = false;
+// A textura de preenchimento é carregada UMA vez por frame, não por retângulo:
+// gDPLoadMultiBlock_4b sozinho expande para vários comandos GBI, e recarregá-la
+// a cada chamada foi o que estourou o pool. draw_text usa o caminho nativo de
+// texto (POLY_OPA) e mexe no tile, então marca para recarregar.
+bool gHudTileDirty = true;
+
+// Carrega a textura de preenchimento no tile, se necessário.
+void HudEnsureFillTexture(PlayState* play) {
+    if (!gHudTileDirty) {
+        return;
+    }
+    OPEN_DISPS(play->state.gfxCtx);
+    gDPLoadMultiBlock_4b(OVERLAY_DISP++, gMagicMeterFillTex, 0, G_TX_RENDERTILE, G_IM_FMT_I, 16, 16, 0,
+                         G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD,
+                         G_TX_NOLOD);
+    CLOSE_DISPS(play->state.gfxCtx);
+    gHudTileDirty = false;
+}
+
+// Reserva espaço no orçamento; false quando o teto já foi atingido.
+bool HudTakeBudget(int count) {
+    if (gHudRectsThisFrame + count > kHudMaxRectsPerFrame) {
+        if (!gHudBudgetWarned) {
+            gHudBudgetWarned = true;
+            SPDLOG_WARN("ShipLua hud: teto de {} retângulos por frame atingido — o excedente deste frame não "
+                        "será desenhado (evita estourar a display list)",
+                        kHudMaxRectsPerFrame);
+        }
+        return false;
+    }
+    gHudRectsThisFrame += count;
+    return true;
+}
+
 // Modelos anexados às mãos (ship.oot.player.set_held_item_model). Declarados
 // aqui porque DrawHeldItemModels, logo abaixo, os consome.
 std::string gHeldItemModelLeft;
@@ -2846,14 +2888,15 @@ int LuaHudDrawRect(lua_State* state) {
         lua_pushboolean(state, 0);
         return 1;
     }
+    if (!HudTakeBudget(1)) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
     const auto clamp8 = [](int v) { return static_cast<u8>(std::clamp(v, 0, 255)); };
 
+    HudEnsureFillTexture(play);
     OPEN_DISPS(play->state.gfxCtx);
-    gDPPipeSync(OVERLAY_DISP++);
     gDPSetPrimColor(OVERLAY_DISP++, 0, 0, clamp8(r), clamp8(g), clamp8(b), clamp8(a));
-    gDPLoadMultiBlock_4b(OVERLAY_DISP++, gMagicMeterFillTex, 0, G_TX_RENDERTILE, G_IM_FMT_I, 16, 16, 0,
-                         G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD,
-                         G_TX_NOLOD);
     gSPWideTextureRectangle(OVERLAY_DISP++, x << 2, y << 2, (x + w) << 2, (y + h) << 2, G_TX_RENDERTILE, 0, 0, 1 << 10,
                             1 << 10);
     CLOSE_DISPS(play->state.gfxCtx);
@@ -2893,16 +2936,25 @@ int LuaHudDrawRing(lua_State* state) {
         return 1;
     }
     const auto clamp8 = [](int v) { return static_cast<u8>(std::clamp(v, 0, 255)); };
-    const int seg = static_cast<int>(std::clamp(radius * 3.0, 16.0, 96.0));
+    // Densidade de segmentos: 1.5x o raio dá um anel visualmente contínuo sem
+    // torrar a display list (era 3x, e um anel grande sozinho consumia quase
+    // 100 retângulos por frame).
+    const int seg = static_cast<int>(std::clamp(radius * 1.5, 12.0, 48.0));
     const int drawn = static_cast<int>(seg * fraction + 0.5);
     const int dot = std::max(1, static_cast<int>(thickness + 0.5));
 
+    if (drawn <= 0) {
+        lua_pushboolean(state, 1);
+        return 1;
+    }
+    if (!HudTakeBudget(drawn)) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    HudEnsureFillTexture(play);
     OPEN_DISPS(play->state.gfxCtx);
-    gDPPipeSync(OVERLAY_DISP++);
     gDPSetPrimColor(OVERLAY_DISP++, 0, 0, clamp8(r), clamp8(g), clamp8(b), clamp8(a));
-    gDPLoadMultiBlock_4b(OVERLAY_DISP++, gMagicMeterFillTex, 0, G_TX_RENDERTILE, G_IM_FMT_I, 16, 16, 0,
-                         G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMIRROR | G_TX_WRAP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD,
-                         G_TX_NOLOD);
     // Constante local: M_PI não é garantido no MSVC sem _USE_MATH_DEFINES
     // antes dos headers de math, e mexer na ordem de includes deste arquivo
     // por causa disso não vale a pena.
@@ -2947,6 +2999,14 @@ int LuaHudDrawText(lua_State* state) {
         line.resize(128);
     }
     const auto clamp8 = [](int v) { return static_cast<uint16_t>(std::clamp(v, 0, 255)); };
+    // O caminho nativo de texto carrega as próprias texturas de fonte e mexe
+    // no tile, então o próximo retângulo precisa recarregar a de preenchimento.
+    // Cada caractere também consome display list — conta no orçamento.
+    if (!HudTakeBudget(static_cast<int>(line.size()))) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    gHudTileDirty = true;
     Interface_DrawTextLine(play->state.gfxCtx, line.data(), static_cast<int16_t>(x), static_cast<int16_t>(y),
                            clamp8(r), clamp8(g), clamp8(b), clamp8(a),
                            static_cast<float>(std::clamp(scale, 0.1, 4.0)), 1);
@@ -2965,6 +3025,9 @@ extern "C" void DrawHudOverlay(PlayState* play) {
     if (play == nullptr || GET_PLAYER(play) == nullptr || gSaveContext.gameMode != GAMEMODE_NORMAL) {
         return;
     }
+    // Orçamento e estado de tile são por frame.
+    gHudRectsThisFrame = 0;
+    gHudTileDirty = true;
     HudBeginOverlay(play);
     gHudDrawActive = true;
     DispatchHookEvent("hook.oot.hud.draw", ShipLua::EventPayload{});
