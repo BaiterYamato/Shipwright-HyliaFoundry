@@ -175,6 +175,43 @@ bool MmAudio_PlaySampleOneShot(const char* prefixedSamplePath) {
     return true;
 }
 
+bool MmAudio_PlayDecodedSample(void* soundFontSample, float tuning) {
+    SoundFontSample* sample = reinterpret_cast<SoundFontSample*>(soundFontSample);
+    if (sample == nullptr) {
+        return false;
+    }
+
+    std::vector<int16_t> pcm = DecodeVadpcm(sample);
+    if (pcm.empty()) {
+        SPDLOG_WARN("ShipLua/mmaudio: amostra de soundfont decodificou vazia (size={}B codec={})", sample->size,
+                    static_cast<uint32_t>(sample->codec));
+        return false;
+    }
+
+    // O tuning do TunedSample reamostra: 1.0 é a taxa original. Reamostragem de
+    // ordem zero, igual à do motor de sequência — suficiente para SFX curto.
+    if (tuning > 0.01f && (tuning < 0.99f || tuning > 1.01f)) {
+        const size_t outCount = static_cast<size_t>(pcm.size() / tuning);
+        std::vector<int16_t> resampled;
+        resampled.reserve(outCount);
+        for (size_t i = 0; i < outCount; i++) {
+            const size_t src = static_cast<size_t>(i * tuning);
+            resampled.push_back(src < pcm.size() ? pcm[src] : 0);
+        }
+        pcm.swap(resampled);
+    }
+
+    SPDLOG_INFO("ShipLua/mmaudio: sfx de soundfont — {}B -> {} amostras ({} ms) tuning={:.3f}", sample->size,
+                pcm.size(), pcm.size() * 1000 / 32000, tuning);
+
+    {
+        std::lock_guard<std::mutex> lock(gMutex);
+        gActive.push_back(OneShot{ std::move(pcm), 0 });
+    }
+    gHasPending.store(true, std::memory_order_release);
+    return true;
+}
+
 bool MmAudio_HasPending() {
     return gHasPending.load(std::memory_order_acquire);
 }

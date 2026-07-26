@@ -510,7 +510,7 @@ void AudioPlayback_SeqLayerDecayRelease(SequenceLayer* layer, s32 target) {
     SequenceChannel* channel;
     s32 i;
 
-    if (layer == NO_LAYER) {
+    if (layer == NO_LAYER || layer == NULL) {
         return;
     }
 

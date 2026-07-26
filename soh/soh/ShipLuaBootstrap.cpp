@@ -4615,6 +4615,18 @@ void Initialize() {
                     // NA_SE_SY_TRANSFORM_MASK_FLASH do MM, pelo interpretador —
                     // é o teste que a Fase 2 existe para permitir: tocar por ID,
                     // não por caminho de amostra.
+                    // Varredura: toca uma entrada de SFX do Soundfont_0 por
+                    // disparo, avançando o índice. Serve para localizar a trilha
+                    // da transformação — as amostras dela nao tem nome
+                    // descritivo no o2r, vivem como entradas indexadas do font.
+                    // D-pad esquerda avança para a próxima.
+                    static int sSfxIndex = 0;
+                    if (pressed) {
+                        sSfxIndex++;
+                    }
+                    SPDLOG_INFO("ShipLua/mmaudio: varredura Soundfont_0 sfx #{}", sSfxIndex);
+                    ShipLua::MmAudio_PlayFontSfx(0, sSfxIndex);
+
                     const bool sent = ShipLua::MmSeq_PlaySfx(0x4826);
                     SPDLOG_INFO("ShipLua/mmaudio: sfx por id 0x4826 -> {} (motor {})", sent ? "enfileirado" : "recusado",
                                 ShipLua::MmSeq_IsReady() ? "ligado" : "desligado");

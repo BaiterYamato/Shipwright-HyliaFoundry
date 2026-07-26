@@ -12,4 +12,14 @@ namespace ShipLua {
 // Fase 2 precisar dele, promova junto com os includes certos.
 void ProbeMmSoundFonts();
 
+// Toca a entrada de SFX de índice `sfxIndex` do soundfont `fontIndex` do MM,
+// decodificando a amostra e misturando pelo caminho da Fase 1.
+//
+// Por que existe: o interpretador de sequência (Fase 2) é o caminho "certo",
+// mas ainda não produz nota. As amostras de SFX, porém, estão no soundfont e
+// são alcançáveis por índice — é o MESMO áudio, resolvido pelo mesmo soundfont
+// do MM, só disparado direto em vez de pelo script. Não é substituto: é o som
+// real, por um caminho mais curto.
+bool MmAudio_PlayFontSfx(int fontIndex, int sfxIndex);
+
 } // namespace ShipLua

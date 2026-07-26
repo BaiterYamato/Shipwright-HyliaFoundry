@@ -8,6 +8,7 @@
 #include "z64audio.h"
 
 #include "soh/ResourceManagerHelpers.h"
+#include "soh/mmaudio/MmSfxPlayer.h"
 
 namespace ShipLua {
 
@@ -72,6 +73,31 @@ SoundFont* LoadMmSoundFont(const std::string& pathWithinMm) {
     // então basta pedir pelo caminho prefixado — nada de estado a instalar.
     const std::string fullPath = kMmNamespace + pathWithinMm;
     return ResourceMgr_LoadAudioSoundFontByName(fullPath.c_str());
+}
+
+bool MmAudio_PlayFontSfx(int fontIndex, int sfxIndex) {
+    if (fontIndex < 0 || sfxIndex < 0) {
+        return false;
+    }
+
+    SoundFont* font = LoadMmSoundFont("audio/fonts/Soundfont_" + std::to_string(fontIndex));
+    if (font == nullptr) {
+        SPDLOG_WARN("ShipLua/mmaudio: Soundfont_{} do MM nÃ£o carregou", fontIndex);
+        return false;
+    }
+    if (sfxIndex >= (int)font->numSfx) {
+        SPDLOG_WARN("ShipLua/mmaudio: sfx {} fora da faixa do Soundfont_{} (numSfx={})", sfxIndex, fontIndex,
+                    font->numSfx);
+        return false;
+    }
+
+    SoundFontSample* sample = font->soundEffects[sfxIndex].sample;
+    if (sample == nullptr) {
+        SPDLOG_WARN("ShipLua/mmaudio: sfx {} do Soundfont_{} sem amostra", sfxIndex, fontIndex);
+        return false;
+    }
+
+    return MmAudio_PlayDecodedSample(sample, font->soundEffects[sfxIndex].tuning);
 }
 
 void ProbeMmSoundFonts() {
