@@ -23,6 +23,7 @@ constexpr s32 kSfxSeqPlayer = 0;
 constexpr s32 kNumNotes = 32;         // simultaneidade; o MM usa mais, mas SFX cabe nisto
 constexpr s32 kUpdatesPerFrame = 4;   // divisões do tick de áudio por frame de vídeo
 constexpr s32 kOutputRate = 32000;
+constexpr s32 kNumFonts = 41; // audio/fonts/ do mm.o2r
 
 // DESLIGADO POR PADRAO. O interpretador ja roda, mas o script da Sequence_0
 // avanca o pc ate sair da regiao valida e derruba o jogo em ~350 ms
@@ -50,6 +51,10 @@ s32 gPeakNotes = 0;
 s32 gChannelsOn = 0;
 s32 gPlayerAlive = 0;
 s32 gPcOffset = -1;
+s32 gCh0Pc = -1;
+s32 gCh0Delay = 0;
+s32 gCh0Io0 = 0;
+s32 gCh0Io1 = 0;
 s32 gRenderedSamples = 0;
 // Diagnóstico: onde o pc estava quando escapou, relativo ao início da
 // sequência. Distingue "nunca foi válido" de "andou e passou do fim".
@@ -257,6 +262,13 @@ bool MmSeq_PcEscaped() {
     return gPcEscaped;
 }
 
+void MmSeq_GetChannel0(int* pc, int* delay, int* io0, int* io1) {
+    if (pc != nullptr) { *pc = (int)gCh0Pc; }
+    if (delay != nullptr) { *delay = (int)gCh0Delay; }
+    if (io0 != nullptr) { *io0 = (int)gCh0Io0; }
+    if (io1 != nullptr) { *io1 = (int)gCh0Io1; }
+}
+
 void MmSeq_GetScriptStats(int* channelsOn, int* playerAlive, int* pcOffset) {
     if (channelsOn != nullptr) { *channelsOn = (int)gChannelsOn; }
     if (playerAlive != nullptr) { *playerAlive = (int)gPlayerAlive; }
@@ -313,11 +325,24 @@ bool MmSeq_Init() {
     // O soundfont 0 do MM é o que carrega os SFX. Se ainda não estiver
     // disponível, sair sem marcar falha permite tentar de novo no próximo frame
     // — o mm.o2r pode não ter montado ainda.
-    SoundFont* font = ResourceMgr_LoadAudioSoundFontByName(gFontMap[0]);
-    if (font == nullptr) {
+    // soundFontList é um ARRAY indexado por fontId, não um ponteiro para um
+    // font só. A Sequence_0 declara numFonts=2 e fonts[0]=1 — ela usa o
+    // Soundfont_1. Carregar só o 0 e apontar soundFontList para ele fazia o
+    // canal procurar o instrumento no font errado (ou fora do array), e a nota
+    // nunca era montada mesmo com o pedido consumido corretamente.
+    static SoundFont sFontTable[kNumFonts];
+    s32 loadedFonts = 0;
+    for (s32 f = 0; f < kNumFonts; f++) {
+        SoundFont* font = ResourceMgr_LoadAudioSoundFontByName(gFontMap[f]);
+        if (font != nullptr) {
+            sFontTable[f] = *font; // cópia por valor: o array é de structs
+            loadedFonts++;
+        }
+    }
+    if (loadedFonts == 0) {
         return false;
     }
-    gAudioCtx.soundFontList = font;
+    gAudioCtx.soundFontList = sFontTable;
 
     // A sequência 0 do MM É o motor de SFX: cada efeito é um canal dela. Sem
     // carregar e iniciar isto o player fica desabilitado, ProcessSequences o
@@ -340,7 +365,10 @@ bool MmSeq_Init() {
     AudioScript_ResetSequencePlayer(seqPlayer);
 
     seqPlayer->seqId = 0;
-    seqPlayer->defaultFont = 0;
+    // O font padrão é o que a sequência declara, não 0. AudioLoad_SyncInit-
+    // SeqPlayerInternal (load.c) faz exatamente isto: percorre seqData.fonts[]
+    // e usa o último como defaultFont.
+    seqPlayer->defaultFont = (seq->numFonts > 0) ? seq->fonts[seq->numFonts - 1] : 0;
     gSeqStart = (const u8*)seq->seqData;
     gSeqSize = (size_t)seq->seqDataSize;
     seqPlayer->seqData = (u8*)seq->seqData;
@@ -368,38 +396,33 @@ bool MmSeq_PlaySfx(uint16_t sfxId) {
         return false;
     }
 
-    // É assim que o MM dispara um SFX: escreve o id nas portas de IO do canal e
-    // liga o canal. A sequência 0 lê essas portas e monta a nota.
-    //   porta 0 = enable, 4 = byte baixo do id, 5 = bits altos
+    // O sfxId do MM carrega o BANCO nos bits 12-14 e o índice nos bits 0-9.
+    // Na sequência de SFX cada banco tem seu próprio canal — o banco não é
+    // dado, é ENDEREÇO. A versão anterior escrevia o id inteiro partido em dois
+    // bytes num canal qualquer; o script consumia o pedido (io0 voltava a -1) e
+    // não achava instrumento nenhum, porque o índice recebido era lixo.
+    const s32 bank = (sfxId >> 12) & 0x7;
+    const s32 index = sfxId & 0x3FF;
+
     SequencePlayer* seqPlayer = &gAudioCtx.seqPlayers[kSfxSeqPlayer];
-    for (s32 ch = 0; ch < SEQ_NUM_CHANNELS; ch++) {
-        SequenceChannel* channel = seqPlayer->channels[ch];
-        if (channel == nullptr || !IS_SEQUENCE_CHANNEL_VALID(channel)) {
-            continue;
-        }
-        // Porta livre é SEQ_IO_VAL_NONE (-1), não 0 — AudioScript_InitSequenceChannel
-        // (seqplayer.c:312) inicializa as oito portas com esse valor. Testar
-        // contra 0 descartava TODOS os canais e a chamada sempre devolvia
-        // "recusado".
-        if (channel->seqScriptIO[0] != SEQ_IO_VAL_NONE) {
-            continue; // canal ocupado
-        }
-        // Contrato das portas de IO da sequência de SFX do MM:
-        //   0 = enable   1 = "pronto" (o script escreve de volta)
-        //   2 = volume   4 = byte baixo do sfxId   5 = bits altos
-        //
-        // A porta 2 importa: sem ela o canal fica com SEQ_IO_VAL_NONE (-1) e o
-        // script não monta a nota. Escrever só 4/5/0 fazia o sfx ser aceito e
-        // não produzir som nenhum — os 16 canais ligavam, o player seguia vivo
-        // e notas(pico) ficava em 0.
-        channel->seqScriptIO[2] = 127; // volume cheio (s8)
-        channel->seqScriptIO[4] = (s8)(sfxId & 0xFF);
-        channel->seqScriptIO[5] = (s8)(sfxId >> 8);
-        channel->seqScriptIO[0] = 1; // enable por último: destrava a leitura
-        gLastPlayedChannel = ch;
-        return true;
+    if (bank >= SEQ_NUM_CHANNELS) {
+        return false;
     }
-    return false; // sem canal livre
+
+    SequenceChannel* channel = seqPlayer->channels[bank];
+    if (channel == nullptr || !IS_SEQUENCE_CHANNEL_VALID(channel)) {
+        return false;
+    }
+
+    // Contrato das portas de IO:
+    //   0 = enable   1 = "pronto" (o script escreve de volta)
+    //   2 = volume   4 = byte baixo do índice   5 = bits altos
+    channel->seqScriptIO[2] = 127;
+    channel->seqScriptIO[4] = (s8)(index & 0xFF);
+    channel->seqScriptIO[5] = (s8)((index >> 8) & 0x3);
+    channel->seqScriptIO[0] = 1; // enable por último: destrava a leitura
+    gLastPlayedChannel = bank;
+    return true;
 }
 
 void MmSeq_RenderInto(int16_t* buffer, uint32_t frames) {
@@ -454,6 +477,17 @@ void MmSeq_RenderInto(int16_t* buffer, uint32_t frames) {
             }
         }
         gChannelsOn = chOn;
+        // pc e delay do canal 0 — o que recebeu o pedido. Se ele estaciona num
+        // offset fixo, esse offset aponta o opcode onde o script espera algo.
+        SequenceChannel* c0 = sp->channels[0];
+        if (c0 != nullptr && IS_SEQUENCE_CHANNEL_VALID(c0)) {
+            gCh0Pc = (gSeqStart != nullptr && c0->scriptState.pc != nullptr)
+                         ? (s32)((const u8*)c0->scriptState.pc - gSeqStart)
+                         : -1;
+            gCh0Delay = (s32)c0->delay;
+            gCh0Io0 = (s32)c0->seqScriptIO[0];
+            gCh0Io1 = (s32)c0->seqScriptIO[1];
+        }
         gPlayerAlive = sp->enabled ? 1 : 0;
         gPcOffset = (gSeqStart != nullptr && sp->scriptState.pc != nullptr)
                         ? (s32)((const u8*)sp->scriptState.pc - gSeqStart)

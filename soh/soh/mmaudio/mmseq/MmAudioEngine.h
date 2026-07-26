@@ -34,6 +34,12 @@ void MmSeq_GetRenderStats(int* peakNotes, int* renderedSamples);
 // mas nunca liga canal — problema antes da nota.
 void MmSeq_GetScriptStats(int* channelsOn, int* playerAlive, int* pcOffset);
 
+// Estado do canal 0, que recebe o pedido: onde o script dele está, se está em
+// delay, e o que as portas 0 (enable) e 1 (pronto) contêm. io0 voltando a -1
+// significa que o script consumiu o pedido; permanecer 1 significa que nunca o
+// leu.
+void MmSeq_GetChannel0(int* pc, int* delay, int* io0, int* io1);
+
 // Onde o pc estava ao escapar (offset relativo ao início da sequência), quantos
 // ticks rodaram antes, e o tamanho do bloco. Offset negativo ou >= seqSize logo
 // no primeiro tick significa que o ponteiro nunca foi válido; um offset dentro

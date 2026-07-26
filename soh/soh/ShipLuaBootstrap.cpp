@@ -4581,6 +4581,10 @@ void Initialize() {
                         SPDLOG_INFO("ShipLua/mmaudio: frame {} — canal={} canaisOn={} playerVivo={} pc={} "
                                     "notas(pico)={} amostras={}",
                                     sFrames, ShipLua::MmSeq_LastChannel(), chOn, alive, pcOff, peak, rendered);
+                        int c0pc = -1, c0d = 0, c0io0 = 0, c0io1 = 0;
+                        ShipLua::MmSeq_GetChannel0(&c0pc, &c0d, &c0io0, &c0io1);
+                        SPDLOG_INFO("ShipLua/mmaudio:   canal0: pc={} delay={} io0={} io1={}", c0pc, c0d, c0io0,
+                                    c0io1);
                     } else {
                         SPDLOG_INFO("ShipLua/mmaudio: aguardando disparo — frame {} gameMode={} disparado={}", sFrames,
                                     static_cast<int>(gSaveContext.gameMode), sAutoFired);
