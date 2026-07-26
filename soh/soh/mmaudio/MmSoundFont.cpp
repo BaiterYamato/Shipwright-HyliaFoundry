@@ -111,6 +111,27 @@ bool MmAudio_PlayVoiceSfx(int sfxId) {
     return MmAudio_PlayFontSfx(0, index);
 }
 
+void MmAudio_DumpSfxTable(int fontIndex, int first, int count) {
+    SoundFont* font = LoadMmSoundFont("audio/fonts/Soundfont_" + std::to_string(fontIndex));
+    if (font == nullptr) {
+        return;
+    }
+    const int last = (first + count < (int)font->numSfx) ? first + count : (int)font->numSfx;
+    SPDLOG_INFO("ShipLua/mmaudio: === sfx do Soundfont_{} ({}..{} de {}) ===", fontIndex, first, last - 1,
+                font->numSfx);
+    for (int i = first; i < last; i++) {
+        SoundFontSample* sample = font->soundEffects[i].sample;
+        if (sample == nullptr) {
+            continue;
+        }
+        // size e duracao sao o que permite reconhecer o som: o clarao da
+        // transformacao e curto, o grito e longo.
+        SPDLOG_INFO("  sfx[{:3d}] {:6d}B ~{:4d}ms tuning={:.3f}", i, sample->size,
+                    (sample->size / (sample->codec == CODEC_SMALL_ADPCM ? 5 : 9)) * 16 * 1000 / 32000,
+                    font->soundEffects[i].tuning);
+    }
+}
+
 void ProbeMmSoundFonts() {
     SoundFont* font = LoadMmSoundFont("audio/fonts/Soundfont_0");
     if (font == nullptr) {

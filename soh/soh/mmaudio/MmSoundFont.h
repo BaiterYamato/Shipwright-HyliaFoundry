@@ -28,4 +28,9 @@ bool MmAudio_PlayFontSfx(int fontIndex, int sfxIndex);
 // para o chamador cair na voz nativa em vez de ficar mudo.
 bool MmAudio_PlayVoiceSfx(int sfxId);
 
+// Lista no log as entradas de SFX de um soundfont com o nome da amostra de cada
+// uma. E como se descobre QUAL indice e qual som sem adivinhar: os ids do MM
+// (NA_SE_*) sao constantes do decomp, mas o indice dentro do font e outra coisa.
+void MmAudio_DumpSfxTable(int fontIndex, int first, int count);
+
 } // namespace ShipLua

@@ -1264,6 +1264,36 @@ extern "C" u8 ShipLua_TransformVoiceSfx(u16* sfxId) {
     return 1;
 }
 
+// ship.oot.audio.play_sfx(index, font) — toca uma entrada de SFX do soundfont
+// do MM. `font` é opcional e assume 0, que é onde vivem os efeitos do jogo.
+//
+// É o caminho curto: o interpretador de sequência seria o "certo", mas as
+// amostras estão no soundfont e são alcançáveis por índice. Mesmo áudio, mesmo
+// soundfont do MM — só disparado direto em vez de pelo script.
+int LuaPlayFontSfx(lua_State* state) {
+    const int index = static_cast<int>(luaL_checkinteger(state, 1));
+    const int font = static_cast<int>(luaL_optinteger(state, 2, 0));
+    if (index < 0 || index > 4095 || font < 0 || font > 40) {
+        SPDLOG_WARN("ShipLua play_sfx: indice ou font fora da faixa");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    lua_pushboolean(state, ShipLua::MmAudio_PlayFontSfx(font, index) ? 1 : 0);
+    return 1;
+}
+
+// ship.oot.audio.dump_sfx_table(first, count, font) — lista no log tamanho e
+// duração de cada entrada. Serve para descobrir QUAL índice é qual som sem
+// adivinhar; sai quando a trilha estiver mapeada.
+int LuaDumpSfxTable(lua_State* state) {
+    const int first = static_cast<int>(luaL_optinteger(state, 1, 0));
+    const int count = static_cast<int>(luaL_optinteger(state, 2, 64));
+    const int font = static_cast<int>(luaL_optinteger(state, 3, 0));
+    ShipLua::MmAudio_DumpSfxTable(font, first, count);
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
 // ship.oot.audio.set_voice_map(base, offset) — offset 0 ou nil desliga.
 int LuaSetVoiceMap(lua_State* state) {
     if (lua_isnoneornil(state, 1)) {
@@ -4209,6 +4239,10 @@ void InstallOotApi(lua_State* state) {
     lua_newtable(state);
     lua_pushcfunction(state, LuaSetVoiceMap);
     lua_setfield(state, -2, "set_voice_map");
+    lua_pushcfunction(state, LuaPlayFontSfx);
+    lua_setfield(state, -2, "play_sfx");
+    lua_pushcfunction(state, LuaDumpSfxTable);
+    lua_setfield(state, -2, "dump_sfx_table");
     lua_setfield(state, ootTable, "audio");
 
     // ship.oot.cutscene: assume a câmera por N frames. Genérica — serve para
