@@ -47,6 +47,9 @@ bool gInitFailed = false;
 bool gPcEscaped = false;
 s32 gLastPlayedChannel = -1;
 s32 gPeakNotes = 0;
+s32 gChannelsOn = 0;
+s32 gPlayerAlive = 0;
+s32 gPcOffset = -1;
 s32 gRenderedSamples = 0;
 // Diagnóstico: onde o pc estava quando escapou, relativo ao início da
 // sequência. Distingue "nunca foi válido" de "andou e passou do fim".
@@ -71,6 +74,18 @@ bool PcInBounds(const SequencePlayer* sp) {
 // Posição de leitura por nota. O NoteSampleState do MM descreve O QUE tocar
 // (amostra, pitch, volume) mas não ONDE está — isso vive no estado de síntese
 // do RSP, que não portamos. Como a síntese é nossa, o cursor também é.
+// Estado de SFX por canal, o equivalente do sSfxChannelState do MM. O script
+// do canal lê e escreve aqui pelos opcodes 0xA0..0xA3.
+u8 gSfxChannelState[16][16] = {};
+
+// Função customizada da sequência (opcode 0xBE). O script a chama para obter
+// frequência e bits de stereo da nota; devolver um valor sadio é o suficiente
+// para a nota ser montada com o volume e o pitch padrão do efeito.
+u32 SfxFreqAndStereo(s8 value, SequenceChannel* channel) {
+    (void)channel;
+    return (u32)(u8)value;
+}
+
 struct NoteCursor {
     const Sample* sample = nullptr;
     std::vector<s16> pcm; // amostra já decodificada
@@ -202,6 +217,32 @@ bool AllocateContext() {
         return false;
     }
 
+    // Tabela de decaimento do envelope ADSR. Instrument::adsrDecayIndex indexa
+    // nela, então sem ela nenhuma nota tem envelope — e é mais um campo que só
+    // o AudioHeap_Init preenche (heap.c:1055), justamente o arquivo que não
+    // portamos. Reprodução literal de AudioHeap_InitAdsrDecayTable (heap.c:32).
+    static f32 sAdsrDecay[256];
+    gAudioCtx.adsrDecayTable = sAdsrDecay;
+
+    auto decay = [](f32 scaleInv) {
+        return 256.0f * gAudioCtx.audioBufferParameters.updatesPerFrameInvScaled / scaleInv;
+    };
+    sAdsrDecay[255] = decay(0.25f);
+    sAdsrDecay[254] = decay(0.33f);
+    sAdsrDecay[253] = decay(0.5f);
+    sAdsrDecay[252] = decay(0.66f);
+    sAdsrDecay[251] = decay(0.75f);
+    for (s32 i = 128; i < 251; i++) {
+        sAdsrDecay[i] = decay((f32)(251 - i));
+    }
+    for (s32 i = 16; i < 128; i++) {
+        sAdsrDecay[i] = decay((f32)(4 * (143 - i)));
+    }
+    for (s32 i = 1; i < 16; i++) {
+        sAdsrDecay[i] = decay((f32)(60 * (23 - i)));
+    }
+    sAdsrDecay[0] = 0.0f;
+
     gCursors.assign(kNumNotes, NoteCursor{});
     return true;
 }
@@ -214,6 +255,12 @@ bool MmSeq_IsReady() {
 
 bool MmSeq_PcEscaped() {
     return gPcEscaped;
+}
+
+void MmSeq_GetScriptStats(int* channelsOn, int* playerAlive, int* pcOffset) {
+    if (channelsOn != nullptr) { *channelsOn = (int)gChannelsOn; }
+    if (playerAlive != nullptr) { *playerAlive = (int)gPlayerAlive; }
+    if (pcOffset != nullptr) { *pcOffset = (int)gPcOffset; }
 }
 
 void MmSeq_GetRenderStats(int* peakNotes, int* renderedSamples) {
@@ -337,9 +384,18 @@ bool MmSeq_PlaySfx(uint16_t sfxId) {
         if (channel->seqScriptIO[0] != SEQ_IO_VAL_NONE) {
             continue; // canal ocupado
         }
+        // Contrato das portas de IO da sequência de SFX do MM:
+        //   0 = enable   1 = "pronto" (o script escreve de volta)
+        //   2 = volume   4 = byte baixo do sfxId   5 = bits altos
+        //
+        // A porta 2 importa: sem ela o canal fica com SEQ_IO_VAL_NONE (-1) e o
+        // script não monta a nota. Escrever só 4/5/0 fazia o sfx ser aceito e
+        // não produzir som nenhum — os 16 canais ligavam, o player seguia vivo
+        // e notas(pico) ficava em 0.
+        channel->seqScriptIO[2] = 127; // volume cheio (s8)
         channel->seqScriptIO[4] = (s8)(sfxId & 0xFF);
         channel->seqScriptIO[5] = (s8)(sfxId >> 8);
-        channel->seqScriptIO[0] = 1;
+        channel->seqScriptIO[0] = 1; // enable por último: destrava a leitura
         gLastPlayedChannel = ch;
         return true;
     }
@@ -385,6 +441,25 @@ void MmSeq_RenderInto(int16_t* buffer, uint32_t frames) {
     // Diagnóstico: quantas notas o interpretador realmente habilitou. Separa
     // "a sequência não gerou nota" de "gerou mas o render não a tocou" — sem
     // isto, silêncio é ambíguo entre as duas coisas.
+    // Conta canais habilitados e se o player ainda esta vivo. Se o sfx foi
+    // aceito mas nenhum canal liga, o problema esta no script da sequencia
+    // antes de chegar a nota — nao no envelope nem na amostra.
+    {
+        SequencePlayer* sp = &gAudioCtx.seqPlayers[kSfxSeqPlayer];
+        s32 chOn = 0;
+        for (s32 c = 0; c < SEQ_NUM_CHANNELS; c++) {
+            SequenceChannel* ch = sp->channels[c];
+            if (ch != nullptr && IS_SEQUENCE_CHANNEL_VALID(ch) && ch->enabled) {
+                chOn++;
+            }
+        }
+        gChannelsOn = chOn;
+        gPlayerAlive = sp->enabled ? 1 : 0;
+        gPcOffset = (gSeqStart != nullptr && sp->scriptState.pc != nullptr)
+                        ? (s32)((const u8*)sp->scriptState.pc - gSeqStart)
+                        : -1;
+    }
+
     s32 enabledCount = 0;
     for (s32 i = 0; i < gAudioCtx.numNotes; i++) {
         if (gAudioCtx.sampleStateList[(kUpdatesPerFrame - 1) * kNumNotes + i].bitField0.enabled) {

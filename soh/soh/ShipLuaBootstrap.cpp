@@ -4576,8 +4576,11 @@ void Initialize() {
                         // virou nota e se a nota virou som.
                         int peak = 0, rendered = 0;
                         ShipLua::MmSeq_GetRenderStats(&peak, &rendered);
-                        SPDLOG_INFO("ShipLua/mmaudio: frame {} — canal={} notas(pico)={} amostras misturadas={}",
-                                    sFrames, ShipLua::MmSeq_LastChannel(), peak, rendered);
+                        int chOn = 0, alive = 0, pcOff = -1;
+                        ShipLua::MmSeq_GetScriptStats(&chOn, &alive, &pcOff);
+                        SPDLOG_INFO("ShipLua/mmaudio: frame {} — canal={} canaisOn={} playerVivo={} pc={} "
+                                    "notas(pico)={} amostras={}",
+                                    sFrames, ShipLua::MmSeq_LastChannel(), chOn, alive, pcOff, peak, rendered);
                     } else {
                         SPDLOG_INFO("ShipLua/mmaudio: aguardando disparo — frame {} gameMode={} disparado={}", sFrames,
                                     static_cast<int>(gSaveContext.gameMode), sAutoFired);

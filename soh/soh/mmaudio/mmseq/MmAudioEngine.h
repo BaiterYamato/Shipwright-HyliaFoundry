@@ -29,6 +29,11 @@ int MmSeq_LastChannel();
 // com amostras = 0 significa que o render não achou a amostra.
 void MmSeq_GetRenderStats(int* peakNotes, int* renderedSamples);
 
+// Estado do script: canais habilitados, se o player segue vivo, e onde o pc
+// está dentro da sequência. Canal 0 com player vivo significa que o script roda
+// mas nunca liga canal — problema antes da nota.
+void MmSeq_GetScriptStats(int* channelsOn, int* playerAlive, int* pcOffset);
+
 // Onde o pc estava ao escapar (offset relativo ao início da sequência), quantos
 // ticks rodaram antes, e o tamanho do bloco. Offset negativo ou >= seqSize logo
 // no primeiro tick significa que o ponteiro nunca foi válido; um offset dentro
