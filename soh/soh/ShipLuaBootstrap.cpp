@@ -866,6 +866,10 @@ extern "C" u8 ShipLua_ShouldBlockLedgeGrabs(void) {
 // ship.oot.player.set_roll_blocked(bool): veta o rolamento no portão nativo
 // (Player_TryRoll). Um sistema de stamina precisa disto — só drenar o medidor
 // não impede a ação; sem bloquear, rolar com a barra vazia continua saindo.
+// Angulo acumulado da bola durante o rolamento. Vive aqui, e nao numa estatica
+// dentro do draw, para poder ser zerado ao sair do rolamento.
+s16 gCustomBodyRollSpin = 0;
+
 bool gRollBlocked = false;
 
 // Estilo de câmera da cutscene.
@@ -2279,9 +2283,23 @@ extern "C" void CustomBodyActorUpdate(Actor* actor, PlayState* play) {
     // rolamento usamos esse transform para fazer a display list enrolada girar,
     // sem depender das macros de matriz que só existem no caminho C do engine.
     if (rolling && gCustomBodyWaterVoidPhase != CustomBodyWaterVoidPhase::Ball) {
-        actor->shape.rot.x = player->actor.shape.rot.x + static_cast<s16>(play->gameplayFrames * -0x1200);
+        // A rotacao acompanha a DISTANCIA PERCORRIDA, nao o contador global de
+        // frames. A versao anterior usava `gameplayFrames * -0x1200`: taxa fixa,
+        // sentido fixo, girando mesmo com o Link parado e no sentido contrario
+        // ao do movimento — era o "rolamento invertido" relatado.
+        //
+        // Uma bola de raio r que percorre d gira d/r radianos. Com a esfera do
+        // Goron em ~13 unidades, 470 por unidade de avanco da a mesma cadencia
+        // visual da taxa antiga em velocidade normal de rolamento, mas agora
+        // proporcional e no sentido certo.
+        gCustomBodyRollSpin += static_cast<s16>(player->linearVelocity * 470.0f);
+        actor->shape.rot.x = player->actor.shape.rot.x + gCustomBodyRollSpin;
     } else if (gCustomBodyWaterVoidPhase == CustomBodyWaterVoidPhase::Ball) {
         actor->shape.rot.x = 0;
+    } else {
+        // Fora do rolamento o acumulador zera, para a proxima bola comecar
+        // alinhada em vez de herdar o angulo da anterior.
+        gCustomBodyRollSpin = 0;
     }
 
     std::string wanted;
@@ -2322,7 +2340,14 @@ extern "C" void CustomBodyActorUpdate(Actor* actor, PlayState* play) {
                 {"door_direction", std::string(!handleDoorOpening ? "none"
                                                                      : player->doorDirection < 0 ? "left" : "right")},
                 {"chest_opening", chestOpening},
-                {"instrument", (player->stateFlags1 & PLAYER_STATE1_IN_ITEM_CS) != 0 &&
+                // PLAYER_STATE1_IN_ITEM_CS marca cutscene de ITEM, nao "tocando
+                // ocarina" — no OoT o Player_Action de ocarina e estatico e nao
+                // da para comparar de fora. O discriminador publico e o modo de
+                // ocarina no contexto de mensagem, que sai de OCARINA_MODE_00
+                // enquanto o instrumento esta na mao. Com a flag antiga o
+                // payload nunca vinha verdadeiro e a animacao de tambor jamais
+                // era escolhida, apesar de declarada no mod.
+                {"instrument", play->msgCtx.ocarinaMode != OCARINA_MODE_00 &&
                                    (player->heldItemAction == PLAYER_IA_OCARINA_FAIRY ||
                                     player->heldItemAction == PLAYER_IA_OCARINA_OF_TIME)},
                 // MM escolhe gakkiplayA/L/D/U/R por ocarinaButtonIndex. OoT
