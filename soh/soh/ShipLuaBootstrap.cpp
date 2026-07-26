@@ -4570,9 +4570,18 @@ void Initialize() {
                                 head[6], head[7]);
                 }
 
-                if (sFrames % 60 == 0 && sFrames <= 300) {
-                    SPDLOG_INFO("ShipLua/mmaudio: aguardando disparo — frame {} gameMode={} disparado={}", sFrames,
-                                static_cast<int>(gSaveContext.gameMode), sAutoFired);
+                if (sFrames % 60 == 0 && sFrames <= 420) {
+                    if (sAutoFired && ShipLua::MmSeq_IsReady()) {
+                        // Depois do disparo, o que interessa e se a sequencia
+                        // virou nota e se a nota virou som.
+                        int peak = 0, rendered = 0;
+                        ShipLua::MmSeq_GetRenderStats(&peak, &rendered);
+                        SPDLOG_INFO("ShipLua/mmaudio: frame {} — canal={} notas(pico)={} amostras misturadas={}",
+                                    sFrames, ShipLua::MmSeq_LastChannel(), peak, rendered);
+                    } else {
+                        SPDLOG_INFO("ShipLua/mmaudio: aguardando disparo — frame {} gameMode={} disparado={}", sFrames,
+                                    static_cast<int>(gSaveContext.gameMode), sAutoFired);
+                    }
                 }
 
                 const bool autoNow = !sAutoFired && sFrames > 120;
@@ -4602,6 +4611,7 @@ void Initialize() {
                     const bool sent = ShipLua::MmSeq_PlaySfx(0x4826);
                     SPDLOG_INFO("ShipLua/mmaudio: sfx por id 0x4826 -> {} (motor {})", sent ? "enfileirado" : "recusado",
                                 ShipLua::MmSeq_IsReady() ? "ligado" : "desligado");
+
                 }
             }
             // Avança a cutscene AQUI, não no update do Player: com atores

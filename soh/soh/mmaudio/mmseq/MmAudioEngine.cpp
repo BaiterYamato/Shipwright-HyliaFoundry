@@ -46,6 +46,8 @@ bool gReady = false;
 bool gInitFailed = false;
 bool gPcEscaped = false;
 s32 gLastPlayedChannel = -1;
+s32 gPeakNotes = 0;
+s32 gRenderedSamples = 0;
 // Diagnóstico: onde o pc estava quando escapou, relativo ao início da
 // sequência. Distingue "nunca foi válido" de "andou e passou do fim".
 ptrdiff_t gEscapeOffset = 0;
@@ -179,6 +181,18 @@ bool AllocateContext() {
     gAudioCtx.audioBufferParameters.updatesPerFrameScaled = kUpdatesPerFrame / 4.0f;
     gAudioCtx.audioBufferParameters.numSequencePlayers = 1;
 
+    // maxTempo governa o avanço do script: AudioScript_SequencePlayerProcessSequence
+    // (seqplayer.c:1899) só avança quando tempoAcc alcança este valor. Zerado —
+    // como ficaria pelo memset, já que não portamos o AudioHeap_Init que o
+    // preenche — o script correria a cada tick sem respeitar tempo nenhum.
+    //
+    // Fórmula de heap.c:982:
+    //   updatesPerFrame * 2880000 / gTatumsPerBeat / unk_2960
+    // gTatumsPerBeat é 48 (TATUMS_PER_BEAT) e unk_2960 é o divisor de refresh,
+    // 60 para NTSC.
+    gAudioCtx.unk_2960 = 60.0f;
+    gAudioCtx.refreshRate = 60;
+    gAudioCtx.maxTempo = (u32)(kUpdatesPerFrame * 2880000.0f / 48.0f / 60.0f);
     gAudioCtx.numNotes = kNumNotes;
     gAudioCtx.notes = (Note*)std::calloc(kNumNotes, sizeof(Note));
     gAudioCtx.sampleStateList =
@@ -200,6 +214,15 @@ bool MmSeq_IsReady() {
 
 bool MmSeq_PcEscaped() {
     return gPcEscaped;
+}
+
+void MmSeq_GetRenderStats(int* peakNotes, int* renderedSamples) {
+    if (peakNotes != nullptr) {
+        *peakNotes = (int)gPeakNotes;
+    }
+    if (renderedSamples != nullptr) {
+        *renderedSamples = (int)gRenderedSamples;
+    }
 }
 
 int MmSeq_LastChannel() {
@@ -359,6 +382,19 @@ void MmSeq_RenderInto(int16_t* buffer, uint32_t frames) {
     // primeira versão fazia, pegaria slots que ninguém preencheu.
     NoteSampleState* states = &gAudioCtx.sampleStateList[(kUpdatesPerFrame - 1) * kNumNotes];
 
+    // Diagnóstico: quantas notas o interpretador realmente habilitou. Separa
+    // "a sequência não gerou nota" de "gerou mas o render não a tocou" — sem
+    // isto, silêncio é ambíguo entre as duas coisas.
+    s32 enabledCount = 0;
+    for (s32 i = 0; i < gAudioCtx.numNotes; i++) {
+        if (gAudioCtx.sampleStateList[(kUpdatesPerFrame - 1) * kNumNotes + i].bitField0.enabled) {
+            enabledCount++;
+        }
+    }
+    if (enabledCount > gPeakNotes) {
+        gPeakNotes = enabledCount;
+    }
+
     for (s32 i = 0; i < gAudioCtx.numNotes; i++) {
         NoteSampleState* state = &states[i];
         if (!state->bitField0.enabled || state->tunedSample == nullptr) {
@@ -392,6 +428,7 @@ void MmSeq_RenderInto(int16_t* buffer, uint32_t frames) {
             buffer[f * 2] = Clamp16(buffer[f * 2] + (s32)(value * volLeft));
             buffer[f * 2 + 1] = Clamp16(buffer[f * 2 + 1] + (s32)(value * volRight));
             cursor.position += step;
+            gRenderedSamples++;
         }
     }
 }

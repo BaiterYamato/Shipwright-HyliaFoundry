@@ -24,6 +24,11 @@ bool MmSeq_PcEscaped();
 // Canal em que o último sfx foi escrito, ou -1. Diagnóstico.
 int MmSeq_LastChannel();
 
+// Pico de notas simultâneas habilitadas pelo interpretador e total de amostras
+// efetivamente misturadas. Zero notas = a sequência não produziu som; notas > 0
+// com amostras = 0 significa que o render não achou a amostra.
+void MmSeq_GetRenderStats(int* peakNotes, int* renderedSamples);
+
 // Onde o pc estava ao escapar (offset relativo ao início da sequência), quantos
 // ticks rodaram antes, e o tamanho do bloco. Offset negativo ou >= seqSize logo
 // no primeiro tick significa que o ponteiro nunca foi válido; um offset dentro
