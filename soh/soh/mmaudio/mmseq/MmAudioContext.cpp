@@ -151,20 +151,38 @@ SequenceData ResourceMgr_LoadSeqByName(const char* path) {
 // No 2S2H são preenchidas na inicialização a partir do índice do archive; aqui
 // os nomes são posicionais e previsíveis, então geramos direto.
 namespace {
-constexpr s32 kNumFonts = 41;     // audio/fonts/ do mm.o2r
+constexpr s32 kNumFonts = 41;      // audio/fonts/ do mm.o2r
 constexpr s32 kNumSequences = 128; // audio/sequences/ do mm.o2r
 
-char* MakePathTable(const char* prefix, s32 count, char*** out) {
-    static std::vector<std::string> storage;
-    static std::vector<char*> pointers;
-    storage.reserve(count);
-    pointers.reserve(count);
+// Armazenamento POR TABELA. A primeira versão usava `static` dentro da função
+// geradora, então as duas chamadas compartilhavam os mesmos vetores: a segunda
+// anexava aos dados da primeira e devolvia o mesmo ponteiro-base, fazendo
+// gSequenceMap[0] apontar para "audio/fonts/Soundfont_0". O interpretador
+// carregava um soundfont como se fosse script de sequência.
+struct PathTable {
+    std::vector<std::string> storage;
+    std::vector<char*> pointers;
+};
+
+PathTable gFontPaths;
+PathTable gSeqPaths;
+
+void BuildPathTable(PathTable& table, const char* prefix, s32 count, char*** out) {
+    table.storage.clear();
+    table.pointers.clear();
+    table.storage.reserve(count);
+    table.pointers.reserve(count);
+
+    // Duas passadas de propósito: push_back pode realocar o vetor de strings, e
+    // um c_str() capturado antes disso vira ponteiro pendurado. Só depois de
+    // todas as strings existirem é que os ponteiros são colhidos.
     for (s32 i = 0; i < count; i++) {
-        storage.push_back(std::string(prefix) + std::to_string(i));
-        pointers.push_back(const_cast<char*>(storage.back().c_str()));
+        table.storage.push_back(std::string(prefix) + std::to_string(i));
     }
-    *out = pointers.data();
-    return nullptr;
+    for (std::string& path : table.storage) {
+        table.pointers.push_back(const_cast<char*>(path.c_str()));
+    }
+    *out = table.pointers.data();
 }
 } // namespace
 
@@ -177,8 +195,8 @@ void MmAudio_InitPathTables(void) {
         return;
     }
     done = true;
-    MakePathTable("audio/fonts/Soundfont_", kNumFonts, &gFontMap);
-    MakePathTable("audio/sequences/Sequence_", kNumSequences, &gSequenceMap);
+    BuildPathTable(gFontPaths, "audio/fonts/Soundfont_", kNumFonts, &gFontMap);
+    BuildPathTable(gSeqPaths, "audio/sequences/Sequence_", kNumSequences, &gSequenceMap);
 }
 
 // Do mixer do SoH, para amostras Opus. O mm.o2r não traz nenhuma (todas as 682

@@ -21,6 +21,18 @@ bool MmSeq_IsReady();
 // sozinho. Diagnóstico: distingue "não tocou" de "se perdeu no script".
 bool MmSeq_PcEscaped();
 
+// Canal em que o último sfx foi escrito, ou -1. Diagnóstico.
+int MmSeq_LastChannel();
+
+// Onde o pc estava ao escapar (offset relativo ao início da sequência), quantos
+// ticks rodaram antes, e o tamanho do bloco. Offset negativo ou >= seqSize logo
+// no primeiro tick significa que o ponteiro nunca foi válido; um offset dentro
+// da faixa após muitos ticks significa que o script andou e se perdeu.
+void MmSeq_GetEscapeInfo(long long* offset, int* ticks, unsigned int* seqSize);
+
+// Primeiros 8 bytes da sequência carregada, para conferir se são script mesmo.
+void MmSeq_GetSeqHead(unsigned char* out8);
+
 // Dispara um sfxId do MM escrevendo nas portas de channel IO da sequência,
 // que é como o próprio MM toca seus efeitos.
 bool MmSeq_PlaySfx(uint16_t sfxId);

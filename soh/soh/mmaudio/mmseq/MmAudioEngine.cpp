@@ -45,11 +45,18 @@ bool EngineEnabled() {
 bool gReady = false;
 bool gInitFailed = false;
 bool gPcEscaped = false;
+s32 gLastPlayedChannel = -1;
+// Diagnóstico: onde o pc estava quando escapou, relativo ao início da
+// sequência. Distingue "nunca foi válido" de "andou e passou do fim".
+ptrdiff_t gEscapeOffset = 0;
+s32 gTicksBeforeEscape = 0;
+s32 gTickCount = 0;
 
 // O pc do script tem que estar dentro do bloco de bytes da sequência. Se sair,
 // o decomp continuaria lendo memória arbitrária.
 const u8* gSeqStart = nullptr;
 size_t gSeqSize = 0;
+u8 gSeqHead[8] = { 0 };
 
 bool PcInBounds(const SequencePlayer* sp) {
     if (gSeqStart == nullptr || sp->scriptState.pc == nullptr) {
@@ -195,6 +202,28 @@ bool MmSeq_PcEscaped() {
     return gPcEscaped;
 }
 
+int MmSeq_LastChannel() {
+    return (int)gLastPlayedChannel;
+}
+
+void MmSeq_GetSeqHead(unsigned char* out8) {
+    for (s32 i = 0; i < 8; i++) {
+        out8[i] = gSeqHead[i];
+    }
+}
+
+void MmSeq_GetEscapeInfo(long long* offset, int* ticks, unsigned int* seqSize) {
+    if (offset != nullptr) {
+        *offset = (long long)gEscapeOffset;
+    }
+    if (ticks != nullptr) {
+        *ticks = (int)gTicksBeforeEscape;
+    }
+    if (seqSize != nullptr) {
+        *seqSize = (unsigned int)gSeqSize;
+    }
+}
+
 bool MmSeq_Init() {
     if (gReady || gInitFailed) {
         return gReady;
@@ -254,6 +283,12 @@ bool MmSeq_Init() {
 
     AudioScript_InitSequencePlayerChannels(kSfxSeqPlayer);
 
+    // Guarda os primeiros bytes para o host poder logar: se a sequência não
+    // for bytes de script de verdade, o pc se perde já no primeiro comando.
+    for (s32 i = 0; i < 8 && i < (s32)gSeqSize; i++) {
+        gSeqHead[i] = gSeqStart[i];
+    }
+
     gReady = true;
     return true;
 }
@@ -272,12 +307,17 @@ bool MmSeq_PlaySfx(uint16_t sfxId) {
         if (channel == nullptr || !IS_SEQUENCE_CHANNEL_VALID(channel)) {
             continue;
         }
-        if (channel->seqScriptIO[0] != 0) {
+        // Porta livre é SEQ_IO_VAL_NONE (-1), não 0 — AudioScript_InitSequenceChannel
+        // (seqplayer.c:312) inicializa as oito portas com esse valor. Testar
+        // contra 0 descartava TODOS os canais e a chamada sempre devolvia
+        // "recusado".
+        if (channel->seqScriptIO[0] != SEQ_IO_VAL_NONE) {
             continue; // canal ocupado
         }
         channel->seqScriptIO[4] = (s8)(sfxId & 0xFF);
         channel->seqScriptIO[5] = (s8)(sfxId >> 8);
         channel->seqScriptIO[0] = 1;
+        gLastPlayedChannel = ch;
         return true;
     }
     return false; // sem canal livre
@@ -304,8 +344,11 @@ void MmSeq_RenderInto(int16_t* buffer, uint32_t frames) {
             if (sp->enabled && !PcInBounds(sp)) {
                 sp->enabled = false;
                 gPcEscaped = true;
+                gEscapeOffset = (const u8*)sp->scriptState.pc - gSeqStart;
+                gTicksBeforeEscape = gTickCount;
                 break;
             }
+            gTickCount++;
             AudioScript_ProcessSequences(rev - 1);
         }
     }
