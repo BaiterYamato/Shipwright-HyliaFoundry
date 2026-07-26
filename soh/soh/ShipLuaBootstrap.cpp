@@ -865,6 +865,23 @@ extern "C" u8 ShipLua_ShouldBlockLedgeGrabs(void) {
 // não impede a ação; sem bloquear, rolar com a barra vazia continua saindo.
 bool gRollBlocked = false;
 
+// Estilo de câmera da cutscene.
+//
+// "jump" replica o que Majora's Mask faz na troca de máscara: NÃO cria
+// subcâmera; troca o MODO da câmera ativa para CAM_MODE_JUMP e gira o Link
+// para encarar a câmera todo frame (z_player.c, Player_Action_86):
+//
+//     Camera_ChangeMode(GET_ACTIVE_CAM(play), CAM_MODE_JUMP);
+//     this->actor.shape.rot.y = Camera_GetCamDirYaw(GET_ACTIVE_CAM(play)) + 0x8000;
+//
+// "orbit" é a primeira implementação daqui: subcâmera girando em volta do
+// jogador com sin/cos. Funciona, mas o enquadramento artificial destoa do
+// resto do jogo — foi descrito em teste como "esquisita". Fica disponível para
+// quem quiser um giro dramático de propósito.
+enum class CutsceneStyle { Jump, Orbit };
+CutsceneStyle gCutsceneStyle = CutsceneStyle::Jump;
+s16 gCutsceneSavedCamMode = 0;
+
 extern "C" u8 ShipLua_ShouldBlockRoll(void) {
     return gRollBlocked ? 1 : 0;
 }
@@ -914,7 +931,13 @@ void CutsceneStop(PlayState* play) {
         gCutsceneFroze = false;
         return;
     }
-    if (gCutsceneCamId != 0) {
+    if (gCutsceneStyle == CutsceneStyle::Jump) {
+        // Devolve o modo que estava antes. MM volta para CAM_MODE_NORMAL, mas
+        // restaurar o modo salvo respeita quem já estivesse num modo especial.
+        if (Camera* active = GET_ACTIVE_CAM(play); active != nullptr) {
+            Camera_ChangeMode(active, gCutsceneSavedCamMode);
+        }
+    } else if (gCutsceneCamId != 0) {
         // Devolve o controle à câmera principal antes de descartar a nossa.
         func_800C08AC(play, gCutsceneCamId, 0);
         gCutsceneCamId = 0;
@@ -963,12 +986,19 @@ int LuaCutsceneStart(lua_State* state) {
         lua_getfield(state, 2, "freeze_player");
         gCutsceneFroze = lua_toboolean(state, -1) != 0;
         lua_pop(state, 1);
+        lua_getfield(state, 2, "style");
+        {
+            const char* style = luaL_optstring(state, -1, "jump");
+            gCutsceneStyle = (std::strcmp(style, "orbit") == 0) ? CutsceneStyle::Orbit : CutsceneStyle::Jump;
+        }
+        lua_pop(state, 1);
     } else {
         gCutsceneStartDist = 160.0f;
         gCutsceneEndDist = 62.0f;
         gCutsceneHeight = 28.0f;
         gCutsceneSpin = 0.0f;
         gCutsceneFroze = false;
+        gCutsceneStyle = CutsceneStyle::Jump;
     }
 
     // Por padrão a primitiva é SÓ câmera. Congelar o jogador aqui atropelaria
@@ -980,6 +1010,28 @@ int LuaCutsceneStart(lua_State* state) {
         func_80064520(play, &play->csCtx);
         Player_SetCsActionWithHaltedActors(play, &player->actor, 1);
     }
+    if (gCutsceneStyle == CutsceneStyle::Jump) {
+        // Caminho do MM: sem subcâmera. Só troca o modo da câmera ativa; o
+        // enquadramento passa a ser o nativo do jogo, e é por isso que em MM a
+        // transformação "encaixa" enquanto a nossa órbita destoava.
+        Camera* active = GET_ACTIVE_CAM(play);
+        if (active == nullptr) {
+            SPDLOG_WARN("ShipLua cutscene.start: sem cÃ¢mera ativa");
+            lua_pushboolean(state, 0);
+            return 1;
+        }
+        gCutsceneSavedCamMode = active->mode;
+        Camera_ChangeMode(active, CAM_MODE_JUMP);
+        gCutsceneCamId = 0;
+        gCutsceneFrames = frames;
+        gCutsceneElapsed = 0;
+        gCutsceneActive = true;
+        CutsceneUpdate(play);
+        SPDLOG_INFO("ShipLua cutscene.start: modo de cÃ¢mera JUMP por {} frames", frames);
+        lua_pushboolean(state, 1);
+        return 1;
+    }
+
     Play_ClearAllSubCameras(play);
     gCutsceneCamId = Play_CreateSubCamera(play);
     if (gCutsceneCamId == SUBCAM_NONE) {
@@ -1019,6 +1071,152 @@ int LuaCutsceneActive(lua_State* state) {
     return 1;
 }
 
+
+// ---------------------------------------------------------------------------
+// Iluminação de cena e luz pontual no jogador.
+//
+// É o que falta para a transformação de máscara parecer a de MM. O que se
+// costuma chamar de "efeito de partículas" ali é, no decomp, quase todo uma
+// rampa de fog e ambiente mais uma luz pontual no Link (func_808550D0,
+// z_player.c). Não há partícula nenhuma.
+//
+// Primitivas genéricas de propósito: o host não sabe o que é transformação.
+// Um mod de tempestade, de caverna ou de poção usa as mesmas.
+// ---------------------------------------------------------------------------
+
+bool gEnvOverrideActive = false;
+EnvLightSettings gEnvSaved{};
+
+// ship.oot.env.set_light_override({ fog_near, fog_color = {r,g,b},
+//                                  ambient_color = {r,g,b}, light1_color = {r,g,b} })
+// Campos omitidos ficam como estão. A primeira chamada guarda o estado atual
+// para clear_light_override() poder devolver.
+int LuaEnvSetLightOverride(lua_State* state) {
+    PlayState* play = gPlayState;
+    if (play == nullptr) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    if (!gEnvOverrideActive) {
+        gEnvSaved = play->envCtx.lightSettings;
+        gEnvOverrideActive = true;
+    }
+
+    auto readColor = [&](const char* field, u8* dst) {
+        lua_getfield(state, 1, field);
+        if (lua_istable(state, -1)) {
+            for (int i = 0; i < 3; i++) {
+                lua_rawgeti(state, -1, i + 1);
+                const int v = static_cast<int>(luaL_optinteger(state, -1, dst[i]));
+                dst[i] = static_cast<u8>(v < 0 ? 0 : (v > 255 ? 255 : v));
+                lua_pop(state, 1);
+            }
+        }
+        lua_pop(state, 1);
+    };
+
+    if (lua_istable(state, 1)) {
+        readColor("fog_color", play->envCtx.lightSettings.fogColor);
+        readColor("ambient_color", play->envCtx.lightSettings.ambientColor);
+        readColor("light1_color", play->envCtx.lightSettings.light1Color);
+        lua_getfield(state, 1, "fog_near");
+        if (!lua_isnil(state, -1)) {
+            const int nearValue = static_cast<int>(luaL_checkinteger(state, -1));
+            play->envCtx.lightSettings.fogNear = static_cast<s16>(nearValue < 0 ? 0 : (nearValue > 1000 ? 1000 : nearValue));
+        }
+        lua_pop(state, 1);
+    }
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+int LuaEnvClearLightOverride(lua_State* state) {
+    if (gEnvOverrideActive && gPlayState != nullptr) {
+        gPlayState->envCtx.lightSettings = gEnvSaved;
+    }
+    gEnvOverrideActive = false;
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+// Luz pontual acompanhando o jogador. O Player do MM carrega um LightInfo
+// embutido; o do OoT não, então mantemos o nosso e o registramos no contexto
+// de luzes da cena.
+bool gPointLightActive = false;
+LightInfo gPointLightInfo{};
+LightNode* gPointLightNode = nullptr;
+f32 gPointLightOffY = 0.0f;
+u8 gPointLightColor[3] = { 255, 255, 255 };
+s16 gPointLightRadius = 0;
+
+void PointLightDetach(PlayState* play) {
+    if (gPointLightNode != nullptr && play != nullptr) {
+        LightContext_RemoveLight(play, &play->lightCtx, gPointLightNode);
+    }
+    gPointLightNode = nullptr;
+    gPointLightActive = false;
+}
+
+// ship.oot.player.set_point_light({ r, g, b, radius, offset_y }) — radius 0 apaga.
+int LuaPlayerSetPointLight(lua_State* state) {
+    PlayState* play = gPlayState;
+    if (play == nullptr) {
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+
+    s16 radius = 0;
+    if (lua_istable(state, 1)) {
+        lua_getfield(state, 1, "radius");
+        radius = static_cast<s16>(luaL_optinteger(state, -1, 0));
+        lua_pop(state, 1);
+        const char* keys[3] = { "r", "g", "b" };
+        for (int i = 0; i < 3; i++) {
+            lua_getfield(state, 1, keys[i]);
+            const int v = static_cast<int>(luaL_optinteger(state, -1, gPointLightColor[i]));
+            gPointLightColor[i] = static_cast<u8>(v < 0 ? 0 : (v > 255 ? 255 : v));
+            lua_pop(state, 1);
+        }
+        lua_getfield(state, 1, "offset_y");
+        gPointLightOffY = static_cast<f32>(luaL_optnumber(state, -1, 0.0));
+        lua_pop(state, 1);
+    }
+
+    if (radius <= 0) {
+        PointLightDetach(play);
+        lua_pushboolean(state, 1);
+        return 1;
+    }
+
+    gPointLightRadius = radius > 5000 ? 5000 : radius;
+    if (!gPointLightActive) {
+        gPointLightNode = LightContext_InsertLight(play, &play->lightCtx, &gPointLightInfo);
+        if (gPointLightNode == nullptr) {
+            SPDLOG_WARN("ShipLua set_point_light: sem slot de luz disponÃ­vel");
+            lua_pushboolean(state, 0);
+            return 1;
+        }
+        gPointLightActive = true;
+    }
+    lua_pushboolean(state, 1);
+    return 1;
+}
+
+// Reposiciona a luz por frame. Sem isto ela ficaria parada onde foi criada.
+void PointLightUpdate(PlayState* play) {
+    if (!gPointLightActive || play == nullptr) {
+        return;
+    }
+    Player* player = GET_PLAYER(play);
+    if (player == nullptr) {
+        return;
+    }
+    Lights_PointNoGlowSetInfo(&gPointLightInfo, static_cast<s16>(player->actor.world.pos.x),
+                              static_cast<s16>(player->actor.world.pos.y + gPointLightOffY),
+                              static_cast<s16>(player->actor.world.pos.z), gPointLightColor[0], gPointLightColor[1],
+                              gPointLightColor[2], gPointLightRadius);
+}
+
 // Roda por frame: aproxima a câmera e encerra sozinha ao fim.
 void CutsceneUpdate(PlayState* play) {
     if (!gCutsceneActive || play == nullptr) {
@@ -1031,6 +1229,19 @@ void CutsceneUpdate(PlayState* play) {
     }
     if (gCutsceneElapsed >= gCutsceneFrames) {
         CutsceneStop(play);
+        return;
+    }
+
+    if (gCutsceneStyle == CutsceneStyle::Jump) {
+        // Todo frame, como Player_Action_86 faz: reforça o modo (o jogo pode
+        // reverter sozinho em transições) e gira o Link para encarar a câmera.
+        // O +0x8000 é meia volta: Camera_GetCamDirYaw devolve a direção para
+        // onde a câmera OLHA, e o Link precisa ficar de frente para ela.
+        if (Camera* active = GET_ACTIVE_CAM(play); active != nullptr) {
+            Camera_ChangeMode(active, CAM_MODE_JUMP);
+            player->actor.shape.rot.y = Camera_GetCamDirYaw(active) + 0x8000;
+        }
+        ++gCutsceneElapsed;
         return;
     }
 
@@ -3909,6 +4120,8 @@ void InstallOotApi(lua_State* state) {
     lua_setfield(state, -2, "set_roll_mode");
     lua_pushcfunction(state, LuaSetRollBlocked);
     lua_setfield(state, -2, "set_roll_blocked");
+    lua_pushcfunction(state, LuaPlayerSetPointLight);
+    lua_setfield(state, -2, "set_point_light");
     lua_setfield(state, ootTable, "player");
 
     // ship.oot.env: estado do ambiente (hora do dia, cena). Separado de
@@ -3916,6 +4129,10 @@ void InstallOotApi(lua_State* state) {
     lua_newtable(state);
     lua_pushcfunction(state, LuaEnvGet);
     lua_setfield(state, -2, "get");
+    lua_pushcfunction(state, LuaEnvSetLightOverride);
+    lua_setfield(state, -2, "set_light_override");
+    lua_pushcfunction(state, LuaEnvClearLightOverride);
+    lua_setfield(state, -2, "clear_light_override");
     lua_setfield(state, ootTable, "env");
 
     // ship.oot.cutscene: assume a câmera por N frames. Genérica — serve para
@@ -4341,8 +4558,16 @@ void Initialize() {
                 static bool sReportedEscape = false;
                 if (!sReportedEscape && ShipLua::MmSeq_PcEscaped()) {
                     sReportedEscape = true;
-                    SPDLOG_WARN("ShipLua/mmaudio: o script da sequÃªncia saiu do bloco vÃ¡lido; "
-                                "motor desligado pela guarda em vez de derrubar o jogo");
+                    long long offset = 0;
+                    int ticks = 0;
+                    unsigned int seqSize = 0;
+                    unsigned char head[8] = { 0 };
+                    ShipLua::MmSeq_GetEscapeInfo(&offset, &ticks, &seqSize);
+                    ShipLua::MmSeq_GetSeqHead(head);
+                    SPDLOG_WARN("ShipLua/mmaudio: pc escapou apos {} ticks — offset={} de {} bytes | "
+                                "1os bytes da seq: {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x}",
+                                ticks, offset, seqSize, head[0], head[1], head[2], head[3], head[4], head[5],
+                                head[6], head[7]);
                 }
 
                 if (sFrames % 60 == 0 && sFrames <= 300) {
@@ -4384,6 +4609,9 @@ void Initialize() {
             // câmera ficaria parada e sem nunca ser devolvida.
             if (gPlayState != nullptr) {
                 CutsceneUpdate(gPlayState);
+                // A luz pontual precisa seguir o jogador; sem isto ficaria
+                // parada onde foi criada.
+                PointLightUpdate(gPlayState);
             }
             // Avança os timers de mod uma vez por frame. Sem isto, ship.timer
             // nunca dispara e qualquer mod que sequencie ações (animação e
@@ -4635,6 +4863,12 @@ void Initialize() {
     gPlayDestroyHook = GameInteractor::Instance->RegisterGameHook<GameInteractor::OnPlayDestroy>([]() {
         ShipLuaPuppet_Reset();
         CustomBodyResetForSceneChange();
+        // O contexto de luzes é reconstruído na cena nova: manter o nó antigo
+        // deixaria um ponteiro pendurado, e o override de ambiente apontaria
+        // para settings que já não existem. Solta os dois aqui.
+        gPointLightNode = nullptr;
+        gPointLightActive = false;
+        gEnvOverrideActive = false;
         if (gActorProvider == nullptr) {
             return;
         }
