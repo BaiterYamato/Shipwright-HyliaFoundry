@@ -22,4 +22,10 @@ void ProbeMmSoundFonts();
 // real, por um caminho mais curto.
 bool MmAudio_PlayFontSfx(int fontIndex, int sfxIndex);
 
+// Toca um sfx do MM por ID, decompondo banco e índice como o próprio MM faz:
+// banco nos bits 12-14, índice nos bits 0-9. Cada banco tem seu soundfont.
+// Usado pelo redirecionamento de voz — devolve false se a amostra não existir,
+// para o chamador cair na voz nativa em vez de ficar mudo.
+bool MmAudio_PlayVoiceSfx(int sfxId);
+
 } // namespace ShipLua

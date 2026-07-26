@@ -1729,7 +1729,15 @@ void Player_RequestRumble(Player* this, s32 sourceStrength, s32 duration, s32 de
     }
 }
 
+// ShipLua: um mod pode redirecionar a voz do jogador para outro banco — e o
+// que permite a uma forma customizada (Goron, Zora, Deku) deixar de soar como
+// o Link. Devolve 1 quando consumiu; 0 mantem o caminho nativo.
+extern u8 ShipLua_TransformVoiceSfx(u16* sfxId);
+
 void Player_PlayVoiceSfx(Player* this, u16 sfxId) {
+    if (ShipLua_TransformVoiceSfx(&sfxId) != 0) {
+        return;
+    }
     if (this->actor.category == ACTORCAT_PLAYER) {
         Player_PlaySfx(this, sfxId + this->ageProperties->unk_92);
     } else {

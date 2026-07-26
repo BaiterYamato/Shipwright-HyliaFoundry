@@ -100,6 +100,17 @@ bool MmAudio_PlayFontSfx(int fontIndex, int sfxIndex) {
     return MmAudio_PlayDecodedSample(sample, font->soundEffects[sfxIndex].tuning);
 }
 
+bool MmAudio_PlayVoiceSfx(int sfxId) {
+    // Mesma decomposição do MM: o banco é endereço, não dado.
+    const int bank = (sfxId >> 12) & 0x7;
+    const int index = sfxId & 0x3FF;
+
+    // O banco 3 (voz) mora no Soundfont_0 junto com os demais SFX do jogo; se um
+    // dia a correspondência banco->font mudar, é aqui que se ajusta.
+    (void)bank;
+    return MmAudio_PlayFontSfx(0, index);
+}
+
 void ProbeMmSoundFonts() {
     SoundFont* font = LoadMmSoundFont("audio/fonts/Soundfont_0");
     if (font == nullptr) {

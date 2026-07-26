@@ -441,6 +441,7 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
                              "oot.player.custom_body",  "oot.player.held_item_model",
                              "hud.draw",                "hud.icons",          "game.state",
                              "input.actions",           "oot.env",
+                             "oot.audio",
                              "oot.cutscene" };
     context.hotkeys = gHotkeys;
     context.capabilityRegistry = gCapabilityRegistry;
@@ -476,6 +477,8 @@ ShipLua::Result<ShipLua::LuaApiHostContext> CreateHostContext() {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
     registered = RegisterHostCapability("oot.env", "Read ambient world state: time of day, night flag and scene id.");
+    registered = RegisterHostCapability("oot.audio",
+                                        "Redirect the player voice sfx block to another form's voices.");
     if (!registered.isOk()) {
         return ShipLua::Result<ShipLua::LuaApiHostContext>::err(registered.code, registered.message);
     }
@@ -1215,6 +1218,72 @@ void PointLightUpdate(PlayState* play) {
                               static_cast<s16>(player->actor.world.pos.y + gPointLightOffY),
                               static_cast<s16>(player->actor.world.pos.z), gPointLightColor[0], gPointLightColor[1],
                               gPointLightColor[2], gPointLightRadius);
+}
+
+
+// ---------------------------------------------------------------------------
+// Redirecionamento de voz do jogador.
+//
+// O Link tem um bloco de sfx de voz a partir de 0x6800 (NA_SE_VO_LI_SWORD_N), e
+// cada ação — atacar, levar dano, cair, gritar — é um offset dentro dele. As
+// formas do MM têm blocos próprios no MESMO formato, deslocados:
+//
+//   Fierce Deity 0x00   Garo 0x60   Deku 0x80   Zora 0xA0   GORON 0xC0
+//
+// Então trocar a voz inteira de uma forma é somar um offset — não é preciso
+// mapear som por som. Os offsets foram levantados do fork skijer
+// (transformation_masks.c:157-215) e estão na wiki, seção 10.
+//
+// Primitiva genérica de propósito: o host não sabe o que é "Goron". Quem fizer
+// Zora ou Deku troca um número no Lua, sem C++ novo.
+// ---------------------------------------------------------------------------
+
+bool gVoiceMapActive = false;
+u16 gVoiceBase = 0x6800;
+s32 gVoiceOffset = 0;
+
+extern "C" u8 ShipLua_TransformVoiceSfx(u16* sfxId) {
+    if (!gVoiceMapActive || sfxId == nullptr) {
+        return 0;
+    }
+    // Só redireciona o que está DENTRO do bloco de voz. Fora dele o id é outra
+    // coisa (passo, roupa, item) e mexer nele daria som aleatório.
+    if (*sfxId < gVoiceBase || *sfxId >= gVoiceBase + 0x100) {
+        return 0;
+    }
+
+    const s32 action = *sfxId - gVoiceBase;
+    const s32 mapped = gVoiceBase + gVoiceOffset + action;
+
+    // O caminho pelo soundfont do MM: a voz da forma é uma entrada de SFX como
+    // qualquer outra. Se a amostra não existir, devolvemos 0 e o jogo toca a voz
+    // normal do Link — degradação silenciosa, não crash.
+    if (!ShipLua::MmAudio_PlayVoiceSfx(mapped)) {
+        return 0;
+    }
+    return 1;
+}
+
+// ship.oot.audio.set_voice_map(base, offset) — offset 0 ou nil desliga.
+int LuaSetVoiceMap(lua_State* state) {
+    if (lua_isnoneornil(state, 1)) {
+        gVoiceMapActive = false;
+        lua_pushboolean(state, 1);
+        return 1;
+    }
+    const int base = static_cast<int>(luaL_checkinteger(state, 1));
+    const int offset = static_cast<int>(luaL_checkinteger(state, 2));
+    if (base < 0 || base > 0xFFFF || offset < 0 || offset > 0xFF) {
+        SPDLOG_WARN("ShipLua set_voice_map: base ou offset fora da faixa");
+        lua_pushboolean(state, 0);
+        return 1;
+    }
+    gVoiceBase = static_cast<u16>(base);
+    gVoiceOffset = offset;
+    gVoiceMapActive = (offset != 0);
+    SPDLOG_INFO("ShipLua: voz mapeada para base 0x{:04x} offset 0x{:02x}", base, offset);
+    lua_pushboolean(state, 1);
+    return 1;
 }
 
 // Roda por frame: aproxima a câmera e encerra sozinha ao fim.
@@ -4134,6 +4203,13 @@ void InstallOotApi(lua_State* state) {
     lua_pushcfunction(state, LuaEnvClearLightOverride);
     lua_setfield(state, -2, "clear_light_override");
     lua_setfield(state, ootTable, "env");
+
+    // ship.oot.audio: hoje só o mapa de voz. play_sfx entra quando a Fase 4
+    // fechar o contrato no schema.
+    lua_newtable(state);
+    lua_pushcfunction(state, LuaSetVoiceMap);
+    lua_setfield(state, -2, "set_voice_map");
+    lua_setfield(state, ootTable, "audio");
 
     // ship.oot.cutscene: assume a câmera por N frames. Genérica — serve para
     // transformação, item dramático, revelação de porta, o que o mod quiser.
