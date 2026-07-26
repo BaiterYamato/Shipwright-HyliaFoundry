@@ -40,6 +40,11 @@ void MmSeq_GetScriptStats(int* channelsOn, int* playerAlive, int* pcOffset);
 // leu.
 void MmSeq_GetChannel0(int* pc, int* delay, int* io0, int* io1);
 
+// waveId fora da faixa: quantos e o primeiro visto. Se contar > 0, a resolução
+// de instrumento está devolvendo valor inválido.
+void MmSeq_NoteBadWave(int waveId);
+void MmSeq_GetBadWave(int* count, int* last);
+
 // Onde o pc estava ao escapar (offset relativo ao início da sequência), quantos
 // ticks rodaram antes, e o tamanho do bloco. Offset negativo ou >= seqSize logo
 // no primeiro tick significa que o ponteiro nunca foi válido; um offset dentro

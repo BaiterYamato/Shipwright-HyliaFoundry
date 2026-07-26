@@ -637,6 +637,10 @@ s32 AudioPlayback_BuildSyntheticWave(Note* note, SequenceLayer* layer, s32 waveI
     if (waveId < 128) {
         waveId = 128;
     }
+    if (waveId > 136) { // ARRAY_COUNT(gWaveSamples) - 1 + 128
+        MmSeq_ReportBadWaveId((s32)waveId);
+        waveId = 128;
+    }
 
     freqScale = layer->freqScale;
     if ((layer->portamento.mode != PORTAMENTO_MODE_OFF) && (layer->portamento.extent > 0.0f)) {

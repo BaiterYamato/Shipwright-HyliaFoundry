@@ -116,4 +116,9 @@ extern char** gFontMap;
 extern char** gSequenceMap;
 void MmAudio_InitPathTables(void);
 
+// Relata um waveId fora da faixa de gWaveSamples. Implementada no motor: o
+// decomp nunca precisou disto porque o valor vinha da ROM; aqui pode vir de um
+// lookup de instrumento que falhou, e sem o aviso o sintoma seria so um crash.
+void MmSeq_ReportBadWaveId(s32 waveId);
+
 } // namespace mmsfx

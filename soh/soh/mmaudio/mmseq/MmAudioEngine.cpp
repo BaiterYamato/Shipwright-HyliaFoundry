@@ -55,6 +55,8 @@ s32 gCh0Pc = -1;
 s32 gCh0Delay = 0;
 s32 gCh0Io0 = 0;
 s32 gCh0Io1 = 0;
+s32 gBadWaveCount = 0;
+s32 gBadWaveLast = 0;
 s32 gRenderedSamples = 0;
 // Diagnóstico: onde o pc estava quando escapou, relativo ao início da
 // sequência. Distingue "nunca foi válido" de "andou e passou do fim".
@@ -253,6 +255,18 @@ bool AllocateContext() {
 }
 
 } // namespace
+
+void MmSeq_NoteBadWave(int waveId) {
+    gBadWaveCount++;
+    if (gBadWaveLast == 0) {
+        gBadWaveLast = waveId;
+    }
+}
+
+void MmSeq_GetBadWave(int* count, int* last) {
+    if (count != nullptr) { *count = (int)gBadWaveCount; }
+    if (last != nullptr) { *last = (int)gBadWaveLast; }
+}
 
 bool MmSeq_IsReady() {
     return gReady;
@@ -543,3 +557,11 @@ void MmSeq_RenderInto(int16_t* buffer, uint32_t frames) {
 }
 
 } // namespace ShipLua
+
+namespace mmsfx {
+// Conta e guarda o pior caso, sem logar por nota — isto roda na thread de
+// áudio e um SPDLOG por nota afogaria o log.
+void MmSeq_ReportBadWaveId(s32 waveId) {
+    ShipLua::MmSeq_NoteBadWave(waveId);
+}
+} // namespace mmsfx
